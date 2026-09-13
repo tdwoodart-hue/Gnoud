@@ -138,6 +138,19 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'lich_song_';
+const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
+
+function removeCachedDemoData(): void {
+  try {
+    if (localStorage.getItem(DEMO_DATA_REMOVED_KEY)) return;
+    ['tasks', 'projects', 'events', 'habits', 'goals', 'suggestions', 'life_metrics'].forEach((key) => {
+      localStorage.removeItem(STORAGE_KEY_PREFIX + key);
+    });
+    localStorage.setItem(DEMO_DATA_REMOVED_KEY, 'true');
+  } catch (e) {
+    console.warn('Could not clear cached demo data:', e);
+  }
+}
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -158,6 +171,8 @@ function saveToStorage<T>(key: string, value: T): void {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  removeCachedDemoData();
+
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentView, setCurrentView] = useState<string>('today');
   const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
@@ -177,7 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     {
       id: 'msg-welcome',
       sender: 'assistant',
-      text: 'Chào bạn! Tôi là trợ lý Lịch Sống. Hôm nay bạn có 6 việc, 2 việc ưu tiên cao và khoảng 5 giờ làm việc tập trung. Tôi có thể giúp bạn sắp xếp hoặc giảm tải bất cứ lúc nào.',
+      text: 'Chào bạn! Tôi là trợ lý Lịch Sống. Hãy thêm việc đầu tiên, tôi sẽ giúp bạn sắp xếp và theo dõi tiến độ.',
       timestamp: '08:00',
     },
   ]);
@@ -220,6 +235,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser(currentUser);
       if (currentUser) {
         try {
+          await firestoreService.removeDemoData(currentUser.uid);
           await firestoreService.initUserData(currentUser.uid);
           const data = await firestoreService.fetchUserData(currentUser.uid);
           if (data && data.tasks.length > 0) {

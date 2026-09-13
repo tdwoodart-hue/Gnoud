@@ -19,7 +19,29 @@ import {
   INITIAL_AI_SUGGESTIONS,
 } from '../data/mockData';
 
+const DEMO_DOCUMENTS: Record<string, string[]> = {
+  tasks: ['task-1', 'task-2', 'task-3', 'task-4', 'task-5', 'task-6', 'task-7', 'task-8'],
+  projects: ['proj-senko', 'proj-lego', 'proj-luvin', 'proj-content', 'proj-personal'],
+  calendarEvents: ['ev-1', 'ev-2', 'ev-3', 'ev-4', 'ev-5', 'ev-6'],
+  habits: ['hab-1', 'hab-2', 'hab-3', 'hab-4'],
+  goals: ['goal-1', 'goal-2', 'goal-3', 'goal-4'],
+  aiSuggestions: ['sug-1', 'sug-2', 'sug-3'],
+};
+
 export const firestoreService = {
+  // Delete only the document IDs that belonged to the original demo seed.
+  async removeDemoData(userId: string) {
+    try {
+      const batch = writeBatch(db);
+      Object.entries(DEMO_DOCUMENTS).forEach(([collectionName, ids]) => {
+        ids.forEach((id) => batch.delete(doc(db, 'users', userId, collectionName, id)));
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn('Could not remove legacy demo data from Firestore:', err);
+    }
+  },
+
   // Check and seed initial data for a brand new user
   async initUserData(userId: string) {
     try {

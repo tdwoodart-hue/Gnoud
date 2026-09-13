@@ -1,19 +1,15 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
-import { fileURLToPath } from "url";
-import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { createNotificationRouter, startNotificationScheduler } from "./notificationServer";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use('/api/notifications', createNotificationRouter());
 
 // Lazy-initialize Gemini client
 let genAIClient: GoogleGenAI | null = null;
@@ -482,6 +478,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Lịch Sống server is running on http://localhost:${PORT}`);
+    startNotificationScheduler();
   });
 }
 

@@ -24,6 +24,7 @@ import {
 import { auth, googleProvider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
 import { firestoreService } from '../services/firestoreService';
+import { syncNotificationTasks } from '../services/notificationService';
 
 export interface ToastMessage {
   id: string;
@@ -228,6 +229,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('habits', habits); }, [habits]);
   useEffect(() => { saveToStorage('goals', goals); }, [goals]);
   useEffect(() => { saveToStorage('suggestions', aiSuggestions); }, [aiSuggestions]);
+  useEffect(() => {
+    const sync = () => void syncNotificationTasks(tasks).catch((error) => {
+        console.warn('Could not sync notification schedule:', error);
+      });
+    sync();
+    window.addEventListener('lich-song-notifications-enabled', sync);
+    return () => window.removeEventListener('lich-song-notifications-enabled', sync);
+  }, [tasks]);
 
   // Firebase auth state tracking
   useEffect(() => {

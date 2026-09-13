@@ -25,7 +25,14 @@ export const TodayView: React.FC = () => {
     setEditingTask,
     setIsCommandMenuOpen,
   } = useApp();
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('task'),
+  );
+
+  const closeFocusPage = () => {
+    setSelectedTaskId(null);
+    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
+  };
 
   const today = getFormattedToday(0);
   const todayTasks = useMemo(
@@ -58,7 +65,7 @@ export const TodayView: React.FC = () => {
         <div className="mx-auto min-h-screen max-w-3xl px-5 py-6 sm:px-8 sm:py-10">
           <button
             type="button"
-            onClick={() => setSelectedTaskId(null)}
+            onClick={closeFocusPage}
             className="mb-10 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-stone-500 transition-colors hover:bg-white hover:text-stone-950"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -183,7 +190,7 @@ export const TodayView: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setSelectedTaskId(null)}
+              onClick={closeFocusPage}
               className="inline-flex items-center gap-2 text-sm font-semibold text-stone-900"
             >
               Việc tiếp theo <ArrowRight className="h-4 w-4" />

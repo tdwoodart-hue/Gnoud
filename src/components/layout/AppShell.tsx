@@ -50,8 +50,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-[#faf9f5] text-stone-900 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
-      {/* Top Header (Shared for Desktop & Mobile) */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-stone-200/80 px-4 sm:px-6 py-3 flex items-center justify-between">
+      {/* Desktop header. Mobile uses the bottom navigation and safe-area spacing only. */}
+      <header className="hidden md:flex sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-stone-200/80 px-6 py-3 items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Mobile menu trigger */}
           <button
@@ -154,7 +154,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </aside>
 
         {/* Central Workspace Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto px-4 pb-24 pt-[max(env(safe-area-inset-top),12px)] sm:px-6 md:p-8 md:pt-8 md:pb-8">
           {children}
         </main>
       </div>

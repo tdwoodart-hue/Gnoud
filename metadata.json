@@ -1,0 +1,6 @@
+{
+  "name": "Lịch Sống",
+  "description": "Trợ lý AI cá nhân quản lý công việc, thời gian, mục tiêu, thói quen và cuộc sống.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

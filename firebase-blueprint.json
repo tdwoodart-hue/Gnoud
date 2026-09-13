@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, work preferences and configurations",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "workStart": { "type": "string" },
+        "workEnd": { "type": "string" },
+        "timezone": { "type": "string" },
+        "aiRecommendationLevel": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "User task item with subtasks, priority and duration",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "projectId": { "type": "string" },
+        "status": { "type": "string" },
+        "priority": { "type": "string" },
+        "deadline": { "type": "string" },
+        "plannedDate": { "type": "string" },
+        "startTime": { "type": "string" },
+        "estimatedMinutes": { "type": "number" },
+        "actualMinutes": { "type": "number" },
+        "subtasks": { "type": "array" },
+        "notes": { "type": "string" },
+        "tags": { "type": "array" },
+        "isTopPriority": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "category", "status", "priority", "userId"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "User project containing milestones and activity",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "color": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "milestones": { "type": "array" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "category", "userId"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "Calendar time block event or scheduled task",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "type": { "type": "string" },
+        "color": { "type": "string" },
+        "location": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "date", "startTime", "endTime", "userId"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Medium or long term goal with Key Results",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "progress": { "type": "number" },
+        "keyResults": { "type": "array" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "targetDate", "userId"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "Daily habit tracking with streaks and completion history",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "frequency": { "type": "string" },
+        "targetTime": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "streak": { "type": "number" },
+        "bestStreak": { "type": "number" },
+        "completedDates": { "type": "array" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "userId"]
+    },
+    "AiSuggestion": {
+      "title": "AiSuggestion",
+      "description": "AI recommendation for scheduling, workload or task breakdown",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "reason": { "type": "string" },
+        "expectedImpact": { "type": "string" },
+        "actionType": { "type": "string" },
+        "payload": { "type": "object" },
+        "status": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "reason", "status", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and preference settings"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks created and managed by the user"
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User projects with milestones"
+    },
+    "/users/{userId}/calendarEvents/{eventId}": {
+      "schema": "CalendarEvent",
+      "description": "Calendar events and appointments"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User work, personal, and long-term goals"
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "User daily habits"
+    },
+    "/users/{userId}/aiSuggestions/{suggestionId}": {
+      "schema": "AiSuggestion",
+      "description": "AI suggestions proposed to the user"
+    }
+  }
+}

@@ -148,7 +148,8 @@ export function createNotificationRouter(): Router {
   });
   router.post('/test', async (req, res) => {
     const device = devices.get(req.body?.deviceId);
-    if (!device || !PUBLIC_KEY || !PRIVATE_KEY) return res.status(400).json({ error: 'Notifications are not ready' });
+    if (!PUBLIC_KEY || !PRIVATE_KEY) return res.status(503).json({ error: 'VAPID is not configured' });
+    if (!device) return res.status(400).json({ error: 'Device is not subscribed' });
     try {
       await webpush.sendNotification(device.subscription, JSON.stringify({
         title: 'Thông báo đã hoạt động',

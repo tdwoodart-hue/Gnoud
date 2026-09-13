@@ -1,0 +1,2 @@
+import React from 'react';
+export const PageHeader: React.FC<{ title: string; meta?: string; action?: React.ReactNode }> = ({ title, meta, action }) => <header className="mb-5 flex min-h-12 items-end justify-between gap-4 border-b border-slate-200 pb-4"><div className="min-w-0">{meta && <p className="mb-1 text-xs font-medium text-slate-400">{meta}</p>}<h1 className="truncate text-2xl font-bold tracking-tight text-slate-950">{title}</h1></div>{action}</header>;

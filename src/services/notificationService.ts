@@ -1,5 +1,6 @@
 import { Task } from '../types';
 import { getReminderPolicy } from './notificationPolicy';
+import { NotificationState, notificationErrorMessage, resolveNotificationState } from './notificationStatus';
 
 const DEVICE_ID_KEY = 'lich_song_push_device_id';
 
@@ -25,10 +26,17 @@ export function supportsPushNotifications(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
-export async function getNotificationState(): Promise<NotificationPermission | 'unsupported' | 'needs_install'> {
+async function serverIsReady(): Promise<boolean> {
+  try { return (await fetch('/api/notifications/public-key')).ok; } catch { return false; }
+}
+
+export async function getNotificationState(): Promise<NotificationState> {
   if (!supportsPushNotifications()) return 'unsupported';
   if (!isInstalledPwa() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) return 'needs_install';
-  return Notification.permission;
+  if (Notification.permission !== 'granted') return Notification.permission;
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  return resolveNotificationState(Notification.permission, Boolean(subscription), await serverIsReady());
 }
 
 export async function enablePushNotifications(): Promise<void> {
@@ -41,7 +49,7 @@ export async function enablePushNotifications(): Promise<void> {
 
   const registration = await navigator.serviceWorker.register('/sw.js');
   const response = await fetch('/api/notifications/public-key');
-  if (!response.ok) throw new Error('Server chưa được cấu hình khóa thông báo.');
+  if (!response.ok) throw new Error(await notificationErrorMessage(response));
   const { publicKey } = await response.json();
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
@@ -52,7 +60,7 @@ export async function enablePushNotifications(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId(), subscription }),
   });
-  if (!registerResponse.ok) throw new Error('Không thể đăng ký thiết bị nhận thông báo.');
+  if (!registerResponse.ok) throw new Error(await notificationErrorMessage(registerResponse));
   window.dispatchEvent(new Event('lich-song-notifications-enabled'));
 }
 
@@ -92,5 +100,5 @@ export async function sendTestNotification(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId() }),
   });
-  if (!response.ok) throw new Error('Không thể gửi thông báo thử.');
+  if (!response.ok) throw new Error(await notificationErrorMessage(response));
 }

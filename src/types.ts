@@ -6,7 +6,7 @@ export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low';
 
 export type GoalCategory = 'work' | 'personal' | 'long_term';
 
-export type NavTab = 'today' | 'tasks' | 'calendar' | 'goals' | 'habits' | 'life' | 'reports';
+export type NavTab = 'today' | 'tasks' | 'calendar' | 'personal' | 'reports';
 
 export interface Subtask {
   id: string;

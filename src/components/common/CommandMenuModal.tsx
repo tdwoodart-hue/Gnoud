@@ -5,15 +5,13 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
-  Target,
+  UserRound,
   Sparkles,
   Play,
   Plus,
   ArrowRight,
   Sun,
   ListTodo,
-  Flame,
-  Heart,
   BarChart3,
   X,
 } from 'lucide-react';
@@ -63,9 +61,7 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
     { label: 'Đi tới Hôm nay', tab: 'today' as NavTab, icon: Sun },
     { label: 'Đi tới Công việc', tab: 'tasks' as NavTab, icon: ListTodo },
     { label: 'Đi tới Lịch', tab: 'calendar' as NavTab, icon: Calendar },
-    { label: 'Đi tới Mục tiêu', tab: 'goals' as NavTab, icon: Target },
-    { label: 'Đi tới Thói quen', tab: 'habits' as NavTab, icon: Flame },
-    { label: 'Đi tới Cuộc sống', tab: 'life' as NavTab, icon: Heart },
+    { label: 'Đi tới Cá nhân', tab: 'personal' as NavTab, icon: UserRound },
     { label: 'Đi tới Báo cáo', tab: 'reports' as NavTab, icon: BarChart3 },
   ].filter((a) => a.label.toLowerCase().includes(query.toLowerCase()));
 

@@ -9,9 +9,7 @@ import { AppShell } from './components/layout/AppShell';
 import { TodayView } from './components/today/TodayView';
 import { TasksView } from './components/tasks/TasksView';
 import { CalendarView } from './components/calendar/CalendarView';
-import { GoalsView } from './components/goals/GoalsView';
-import { HabitsView } from './components/habits/HabitsView';
-import { LifeView } from './components/life/LifeView';
+import { PersonalView } from './components/personal/PersonalView';
 import { ReportsView } from './components/reports/ReportsView';
 import { AiAssistantPanel } from './components/assistant/AiAssistantPanel';
 import { TaskEditModal } from './components/common/TaskEditModal';
@@ -29,9 +27,7 @@ const MainContent: React.FC = () => {
       {activeTab === 'today' && <TodayView />}
       {activeTab === 'tasks' && <TasksView />}
       {activeTab === 'calendar' && <CalendarView />}
-      {activeTab === 'goals' && <GoalsView />}
-      {activeTab === 'habits' && <HabitsView />}
-      {activeTab === 'life' && <LifeView />}
+      {activeTab === 'personal' && <PersonalView />}
       {activeTab === 'reports' && <ReportsView />}
     </>
   );

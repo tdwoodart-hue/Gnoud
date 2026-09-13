@@ -1,304 +1,32 @@
 import React, { useEffect, useState } from 'react';
+import { Bell, ChevronRight, Download, LogIn, LogOut, Send, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { X, User, Clock, ShieldCheck, Sparkles, Download, RotateCcw, LogIn, LogOut, Check, Bell, BellOff, Smartphone } from 'lucide-react';
 import { disablePushNotifications, enablePushNotifications, getNotificationState, sendTestNotification } from '../../services/notificationService';
-import {
-  INITIAL_TASKS,
-  INITIAL_PROJECTS,
-  INITIAL_CALENDAR_EVENTS,
-  INITIAL_HABITS,
-  INITIAL_GOALS,
-  INITIAL_AI_SUGGESTIONS,
-} from '../../data/mockData';
+import { NotificationState } from '../../services/notificationStatus';
 
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { user, signInWithGoogle, logout, addToast } = useApp();
-  const [userName, setUserName] = useState('Trần Đăng (TD Woodart)');
-  const [workStart, setWorkStart] = useState('08:30');
-  const [workEnd, setWorkEnd] = useState('18:00');
-  const [breakMinutes, setBreakMinutes] = useState(15);
-  const [aiLevel, setAiLevel] = useState<'Ít đề xuất' | 'Cân bằng' | 'Chủ động'>('Cân bằng');
-  const [notificationState, setNotificationState] = useState<string>('default');
-  const [notificationBusy, setNotificationBusy] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) void getNotificationState().then(setNotificationState);
-  }, [isOpen]);
-
-  const handleEnableNotifications = async () => {
-    setNotificationBusy(true);
-    try {
-      await enablePushNotifications();
-      setNotificationState('granted');
-      addToast('Đã bật thông báo nhắc việc trên iPhone', 'success');
-    } catch (error) {
-      addToast(error instanceof Error ? error.message : 'Không thể bật thông báo', 'error');
-      setNotificationState(await getNotificationState());
-    } finally {
-      setNotificationBusy(false);
-    }
-  };
-
-  const handleDisableNotifications = async () => {
-    setNotificationBusy(true);
-    await disablePushNotifications();
-    setNotificationState('default');
-    setNotificationBusy(false);
-    addToast('Đã tắt thông báo nhắc việc', 'info');
-  };
-
+  const [state, setState] = useState<NotificationState>('default');
+  const [busy, setBusy] = useState(false);
+  const refresh = async () => setState(await getNotificationState());
+  useEffect(() => { if (isOpen) void refresh(); }, [isOpen]);
   if (!isOpen) return null;
 
-  const handleExport = () => {
-    const data = {
-      user: {
-        name: user?.displayName || userName,
-        email: user?.email || 'tdwoodart@gmail.com',
-        uid: user?.uid || 'guest',
-      },
-      exportedAt: new Date().toISOString(),
-      tasks: JSON.parse(localStorage.getItem('lich_song_tasks') || '[]'),
-      projects: JSON.parse(localStorage.getItem('lich_song_projects') || '[]'),
-      events: JSON.parse(localStorage.getItem('lich_song_events') || '[]'),
-      habits: JSON.parse(localStorage.getItem('lich_song_habits') || '[]'),
-      goals: JSON.parse(localStorage.getItem('lich_song_goals') || '[]'),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lich-song-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    addToast('Đã xuất dữ liệu Lịch Sống thành công', 'success');
-  };
+  const enable = async () => { setBusy(true); try { await enablePushNotifications(); await refresh(); addToast('Thông báo đã hoạt động', 'success'); } catch (error) { await refresh(); addToast(error instanceof Error ? error.message : 'Không thể bật thông báo', 'error'); } finally { setBusy(false); } };
+  const disable = async () => { setBusy(true); try { await disablePushNotifications(); await refresh(); addToast('Đã tắt thông báo', 'info'); } finally { setBusy(false); } };
+  const test = async () => { setBusy(true); try { await sendTestNotification(); addToast('Đã gửi tới iPhone', 'success'); } catch (error) { await refresh(); addToast(error instanceof Error ? error.message : 'Không thể gửi', 'error'); } finally { setBusy(false); } };
+  const exportData = () => { const keys = ['tasks','projects','events','habits','goals']; const data = Object.fromEntries(keys.map((key) => [key, JSON.parse(localStorage.getItem(`lich_song_${key}`) || '[]')])); const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'})); const a = document.createElement('a'); a.href=url; a.download=`lich-song-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url); };
 
-  const handleResetData = () => {
-    if (confirm('Bạn có chắc muốn khôi phục dữ liệu mẫu ban đầu? Các thay đổi gần đây sẽ được thiết lập lại.')) {
-      localStorage.setItem('lich_song_tasks', JSON.stringify(INITIAL_TASKS));
-      localStorage.setItem('lich_song_projects', JSON.stringify(INITIAL_PROJECTS));
-      localStorage.setItem('lich_song_events', JSON.stringify(INITIAL_CALENDAR_EVENTS));
-      localStorage.setItem('lich_song_habits', JSON.stringify(INITIAL_HABITS));
-      localStorage.setItem('lich_song_goals', JSON.stringify(INITIAL_GOALS));
-      localStorage.setItem('lich_song_suggestions', JSON.stringify(INITIAL_AI_SUGGESTIONS));
-      window.location.reload();
-    }
-  };
+  const active = state === 'active';
+  const stateText: Record<NotificationState, string> = { active:'Đang hoạt động', needs_registration:'Cần đăng ký lại', server_unavailable:'Server chưa cấu hình', needs_install:'Cần cài lên màn hình chính', denied:'Đã bị chặn', unsupported:'Không hỗ trợ', default:'Chưa bật', granted:'Cần kiểm tra lại' };
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4"><section className="flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#f7f8fa] pt-[env(safe-area-inset-top)] shadow-2xl sm:max-h-[88vh] sm:rounded-3xl sm:pt-0">
+    <header className="flex min-h-16 items-center border-b border-slate-200 bg-white px-5"><h2 className="flex-1 text-lg font-bold">Cài đặt</h2><button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-500" aria-label="Đóng"><X className="h-4 w-4" /></button></header>
+    <div className="space-y-6 overflow-y-auto p-4 pb-[max(24px,env(safe-area-inset-bottom))]">
+      <section><p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Tài khoản</p><div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200"><div className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 font-bold text-white">{user?.displayName?.slice(0,1) || 'T'}</span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{user?.displayName || 'Khách'}</p><p className="truncate text-xs text-slate-400">{user?.email || 'Dữ liệu lưu trên máy'}</p></div><button onClick={() => void (user ? logout() : signInWithGoogle())} className="rounded-xl bg-slate-100 p-2 text-slate-500">{user ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}</button></div></div></section>
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto text-stone-800 flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 z-10 px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-white/95 backdrop-blur-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center">
-              <User className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-stone-900 text-base">Cài đặt cá nhân</h3>
-              <p className="text-xs text-stone-500">Tùy biến lịch làm việc & tài khoản Firebase</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+      <section><p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Thông báo</p><div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200"><div className="flex items-center gap-3 p-4"><span className={`grid h-10 w-10 place-items-center rounded-xl ${active ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}><Bell className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold">Nhắc từng việc</p><p className={`text-xs font-medium ${state === 'server_unavailable' ? 'text-rose-500' : active ? 'text-emerald-600' : 'text-slate-400'}`}>{stateText[state]}</p></div></div><div className="flex gap-2 border-t border-slate-100 p-3">{active ? <><button onClick={test} disabled={busy} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" />Gửi thử</button><button onClick={disable} disabled={busy} className="rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-500">Tắt</button></> : <button onClick={enable} disabled={busy || state === 'denied' || state === 'unsupported' || state === 'server_unavailable'} className="w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400">{busy ? 'Đang xử lý…' : state === 'server_unavailable' ? 'Cần cấu hình VAPID trên server' : state === 'needs_install' ? 'Cài app rồi bật thông báo' : 'Bật thông báo'}</button>}</div></div></section>
 
-        {/* Content */}
-        <div className="p-6 space-y-5 text-sm flex-1">
-          {/* User profile & Firebase Auth */}
-          <div className="p-4 bg-stone-50 rounded-xl border border-stone-200/70 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center text-sm shadow-xs overflow-hidden">
-                  {user?.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName || 'Avatar'} className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{user?.displayName ? user.displayName.slice(0, 2).toUpperCase() : 'TD'}</span>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-stone-900">
-                    {user?.displayName || userName}
-                  </h4>
-                  <p className="text-xs text-stone-500">{user?.email || 'tdwoodart@gmail.com'}</p>
-                </div>
-              </div>
-
-              {user ? (
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-red-50 text-xs font-semibold text-stone-700 hover:text-red-600 hover:border-red-200 flex items-center gap-1 transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" /> Đăng xuất
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
-                >
-                  <LogIn className="w-3.5 h-3.5" /> Đăng nhập Google
-                </button>
-              )}
-            </div>
-
-            <div className="text-[11px] text-stone-500 flex items-center gap-1.5 pt-1 border-t border-stone-200/60">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>
-                {user
-                  ? 'Đã kết nối Firestore: dữ liệu được đồng bộ hóa tức thời trên đám mây.'
-                  : 'Chế độ khách: dữ liệu lưu an toàn trên trình duyệt, đăng nhập để lưu trữ bền vững.'}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex gap-3">
-                <div className="rounded-lg bg-blue-600 p-2 text-white"><Bell className="h-4 w-4" /></div>
-                <div>
-                  <h4 className="font-semibold text-stone-900">Thông báo thúc việc</h4>
-                  <p className="mt-1 text-xs leading-5 text-stone-500">Tự điều chỉnh mức nhắc theo độ quan trọng và dừng khi hoàn thành.</p>
-                </div>
-              </div>
-              {notificationState === 'granted' ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">ĐANG BẬT</span> : null}
-            </div>
-
-            {notificationState === 'needs_install' ? (
-              <div className="mt-4 rounded-lg bg-white p-3 text-xs leading-5 text-stone-600">
-                <p className="flex items-center gap-2 font-semibold text-stone-800"><Smartphone className="h-4 w-4 text-blue-600" /> Cài lên iPhone trước</p>
-                <p className="mt-1">Mở bằng Safari → Chia sẻ → Thêm vào Màn hình chính. Sau đó mở app vừa cài và bật thông báo.</p>
-              </div>
-            ) : notificationState === 'granted' ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => void sendTestNotification().then(() => addToast('Đã gửi thông báo thử', 'success')).catch((error) => addToast(error.message, 'error'))} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Gửi thử</button>
-                <button type="button" onClick={handleDisableNotifications} disabled={notificationBusy} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-stone-600"><BellOff className="h-3.5 w-3.5" /> Tắt</button>
-              </div>
-            ) : (
-              <button type="button" onClick={handleEnableNotifications} disabled={notificationBusy || notificationState === 'denied' || notificationState === 'unsupported'} className="mt-4 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{notificationBusy ? 'Đang bật…' : notificationState === 'denied' ? 'Quyền đã bị từ chối' : 'Bật thông báo'}</button>
-            )}
-          </div>
-
-          {/* Timezone & Working Hours */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-stone-400" /> Khung giờ sinh hoạt & Làm việc
-            </h4>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-stone-600 mb-1">Bắt đầu ngày làm việc</label>
-                <input
-                  type="time"
-                  value={workStart}
-                  onChange={(e) => setWorkStart(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-hidden focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-stone-600 mb-1">Kết thúc ngày làm việc</label>
-                <input
-                  type="time"
-                  value={workEnd}
-                  onChange={(e) => setWorkEnd(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-hidden focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-stone-600 mb-1">Múi giờ</label>
-                <div className="px-3 py-2 text-xs bg-stone-100/70 border border-stone-200 rounded-lg text-stone-700 font-mono">
-                  Asia/Ho_Chi_Minh (GMT+7)
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-stone-600 mb-1">Khoảng nghỉ giữa các phiên</label>
-                <select
-                  value={breakMinutes}
-                  onChange={(e) => setBreakMinutes(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-hidden"
-                >
-                  <option value={10}>10 phút</option>
-                  <option value={15}>15 phút (khuyên dùng)</option>
-                  <option value={20}>20 phút</option>
-                  <option value={30}>30 phút</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Recommendation Level */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Mức độ chủ động của Trợ lý AI
-            </h4>
-            <div className="grid grid-cols-3 gap-2">
-              {(['Ít đề xuất', 'Cân bằng', 'Chủ động'] as const).map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setAiLevel(level)}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
-                    aiLevel === level
-                      ? 'bg-blue-50 border-blue-500 text-blue-900 font-bold shadow-2xs'
-                      : 'bg-white border-stone-200 text-stone-600 hover:border-stone-300'
-                  }`}
-                >
-                  <span className="text-xs block">{level}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-stone-500">
-              {aiLevel === 'Ít đề xuất' && 'Chỉ đưa ra gợi ý khi được yêu cầu trực tiếp qua khung chat.'}
-              {aiLevel === 'Cân bằng' && 'Đề xuất khi phát hiện quá tải, trùng giờ hoặc mục tiêu bị ngưng trệ (khuyên dùng).'}
-              {aiLevel === 'Chủ động' && 'Chủ động tìm kiếm các khung giờ trống và tự động dự thảo lịch làm việc hàng ngày.'}
-            </p>
-          </div>
-
-          {/* Data Management Actions */}
-          <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleExport}
-              className="text-xs text-stone-600 hover:text-stone-900 font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-stone-100 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" /> Xuất dữ liệu sao lưu
-            </button>
-
-            <button
-              type="button"
-              onClick={handleResetData}
-              className="text-xs text-stone-500 hover:text-amber-700 font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-amber-50 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Khôi phục dữ liệu mẫu
-            </button>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="sticky bottom-0 px-6 py-3 border-t border-stone-100 bg-white/95 backdrop-blur-xs flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-colors shadow-xs"
-          >
-            Đã lưu & Đóng
-          </button>
-        </div>
-      </div>
+      <section><p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Dữ liệu</p><button onClick={exportData} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left ring-1 ring-slate-200"><Download className="h-5 w-5 text-blue-600" /><span className="flex-1 font-semibold">Xuất bản sao lưu</span><ChevronRight className="h-4 w-4 text-slate-300" /></button></section>
     </div>
-  );
+  </section></div>;
 };

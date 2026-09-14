@@ -1,6 +1,6 @@
-import type { VercelRequest, VercelResponse } from '../_lib/http';
-import { requireMethod } from '../_lib/http';
-import { publicKeyResult } from '../_lib/notificationConfig';
+import type { VercelRequest, VercelResponse } from '../_lib/http.js';
+import { requireMethod } from '../_lib/http.js';
+import { publicKeyResult } from '../_lib/notificationConfig.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireMethod(req, res, 'GET')) return;

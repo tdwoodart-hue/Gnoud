@@ -84,10 +84,8 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
             <button
               type="button"
               onClick={() => {
-                if (confirm(`Xóa “${task.title}”?`)) {
-                  deleteTask(task.id);
-                  setEditingTask(null);
-                }
+                deleteTask(task.id);
+                setEditingTask(null);
               }}
               className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-500"
               aria-label="Xóa"

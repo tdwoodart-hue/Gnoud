@@ -1,14 +1,13 @@
 import type { VercelRequest, VercelResponse } from '../_lib/http';
-import webpush from 'web-push';
-import { adminDb } from '../_lib/firebaseAdmin';
 import { requireMethod, serverError } from '../_lib/http';
 import { notificationForTask } from '../_lib/notificationCore';
-import { configureWebPush, DeviceDocument } from '../_lib/pushStore';
+import type { DeviceDocument } from '../_lib/pushStore';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireMethod(req, res, 'GET')) return;
   if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
   try {
+    const [{ default: webpush }, { adminDb }, { configureWebPush }] = await Promise.all([import('web-push'), import('../_lib/firebaseAdmin'), import('../_lib/pushStore')]);
     configureWebPush();
     const snapshot = await adminDb().collection('pushDevices').limit(500).get();
     const now = Date.now();

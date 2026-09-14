@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/notifications/cron.ts": {
-      "maxDuration": 60
-    }
-  }
-}

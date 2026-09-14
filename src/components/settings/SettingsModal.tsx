@@ -3,6 +3,7 @@ import { Bell, ChevronDown, ChevronRight, Download, LogIn, LogOut, RotateCcw, Se
 import { useApp } from '../../context/AppContext';
 import { disablePushNotifications, enablePushNotifications, getNotificationSchedulerReady, getNotificationState, sendTestNotification } from '../../services/notificationService';
 import { NotificationState } from '../../services/notificationStatus';
+import { formatDisplayDate } from '../../data/mockData';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const {
@@ -177,7 +178,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                         <div key={task.id} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
                           <p className="truncate text-sm font-semibold text-slate-800">{task.title}</p>
                           <p className="mt-1 text-[11px] text-slate-400">
-                            Đã xóa {new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(task.deletedAt))}
+                            Đã xóa {formatDisplayDate(task.deletedAt)}
                           </p>
                           <div className="mt-3 grid grid-cols-2 gap-2">
                             <button type="button" onClick={() => restoreTask(task.id)} className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-xs font-bold text-blue-700">

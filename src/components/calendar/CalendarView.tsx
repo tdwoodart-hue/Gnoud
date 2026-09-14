@@ -3,10 +3,13 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
+import { formatDisplayDate } from '../../data/mockData';
 
 const iso = (date: Date) => date.toISOString().slice(0, 10);
-const dateLabel = (date: Date) =>
-  new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+const dateLabel = (date: Date) => {
+  const weekday = new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(date);
+  return `${weekday} · ${formatDisplayDate(iso(date))}`;
+};
 
 export const CalendarView: React.FC = () => {
   const { calendarEvents, tasks, openTaskModal } = useApp();

@@ -13,6 +13,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { TaskStatus } from '../../types';
 import { parseProjectPlanFile } from '../../services/taskDraft';
+import { formatDisplayDate } from '../../data/mockData';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
 
@@ -277,7 +278,7 @@ export const TasksView: React.FC = () => {
                     </div>
                     <p className="mt-1 truncate text-xs text-slate-400">
                       {[
-                        task.plannedDate,
+                        formatDisplayDate(task.plannedDate),
                         task.startTime,
                         projectNameById(task.projectId) || statusLabel[task.status],
                       ]
@@ -335,6 +336,7 @@ export const TasksView: React.FC = () => {
                   <CalendarDays className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
                   <input
                     type="date"
+                    lang="vi-VN"
                     value={projectTargetDate}
                     onChange={(event) => setProjectTargetDate(event.target.value)}
                     aria-label="Hạn dự kiến"
@@ -398,7 +400,7 @@ export const TasksView: React.FC = () => {
                         <h3 className="truncate font-bold text-slate-950">{project.name}</h3>
                         <p className="mt-1 text-xs text-slate-400">
                           {remainingTasks} việc còn lại
-                          {project.targetDate ? ` · Hạn ${project.targetDate}` : ''}
+                          {project.targetDate ? ` · Hạn ${formatDisplayDate(project.targetDate)}` : ''}
                         </p>
                       </button>
                       <button

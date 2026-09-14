@@ -257,6 +257,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
                   </span>
                   <input
                     type="date"
+                    lang="vi-VN"
                     value={task.plannedDate || ''}
                     onChange={(event) =>
                       setTask({ ...task, plannedDate: event.target.value || undefined })
@@ -297,6 +298,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
               <div className="grid grid-cols-2 gap-2.5">
                 <input
                   type="date"
+                  lang="vi-VN"
                   value={task.deadline || ''}
                   onChange={(event) =>
                     setTask({ ...task, deadline: event.target.value || undefined })

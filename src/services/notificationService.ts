@@ -30,6 +30,14 @@ async function serverIsReady(): Promise<boolean> {
   try { return (await fetch('/api/notifications/public-key')).ok; } catch { return false; }
 }
 
+export async function getNotificationSchedulerReady(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/notifications/public-key');
+    if (!response.ok) return false;
+    return (await response.json()).schedulerReady === true;
+  } catch { return false; }
+}
+
 export async function getNotificationState(): Promise<NotificationState> {
   if (!supportsPushNotifications()) return 'unsupported';
   if (!isInstalledPwa() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) return 'needs_install';
@@ -60,7 +68,7 @@ export async function enablePushNotifications(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId(), subscription }),
   });
-  if (!registerResponse.ok) throw new Error(await notificationErrorMessage(registerResponse));
+  if (!registerResponse.ok) console.warn('Automatic reminders are not ready:', await notificationErrorMessage(registerResponse));
   window.dispatchEvent(new Event('lich-song-notifications-enabled'));
 }
 
@@ -95,10 +103,16 @@ export async function syncNotificationTasks(tasks: Task[]): Promise<void> {
 }
 
 export async function sendTestNotification(): Promise<void> {
+  const currentSubscription = async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration?.pushManager.getSubscription();
+  };
+  let subscription = await currentSubscription();
+  if (!subscription) throw new Error('iPhone chưa đăng ký nhận thông báo. Hãy bật lại.');
   const request = () => fetch('/api/notifications/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deviceId: getDeviceId() }),
+    body: JSON.stringify({ subscription }),
   });
   let response = await request();
   if (!response.ok) {
@@ -108,6 +122,8 @@ export async function sendTestNotification(): Promise<void> {
     if (shouldRenewPushSubscription(response.status, serverError)) {
       await disablePushNotifications();
       await enablePushNotifications();
+      subscription = await currentSubscription();
+      if (!subscription) throw new Error('Không thể đăng ký lại thông báo trên iPhone.');
       response = await request();
     }
   }

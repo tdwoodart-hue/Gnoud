@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, ChevronRight, Download, LogIn, LogOut, Send, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { disablePushNotifications, enablePushNotifications, getNotificationState, sendTestNotification } from '../../services/notificationService';
+import { disablePushNotifications, enablePushNotifications, getNotificationSchedulerReady, getNotificationState, sendTestNotification } from '../../services/notificationService';
 import { NotificationState } from '../../services/notificationStatus';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { user, signInWithGoogle, logout, addToast } = useApp();
   const [state, setState] = useState<NotificationState>('default');
   const [busy, setBusy] = useState(false);
-  const refresh = async () => setState(await getNotificationState());
+  const [schedulerReady, setSchedulerReady] = useState(false);
+  const refresh = async () => { const [nextState, ready] = await Promise.all([getNotificationState(), getNotificationSchedulerReady()]); setState(nextState); setSchedulerReady(ready); };
   useEffect(() => { if (isOpen) void refresh(); }, [isOpen]);
   if (!isOpen) return null;
 
@@ -18,7 +19,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const exportData = () => { const keys = ['tasks','projects','events','habits','goals']; const data = Object.fromEntries(keys.map((key) => [key, JSON.parse(localStorage.getItem(`lich_song_${key}`) || '[]')])); const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'})); const a = document.createElement('a'); a.href=url; a.download=`lich-song-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url); };
 
   const active = state === 'active';
-  const stateText: Record<NotificationState, string> = { active:'Đang hoạt động', needs_registration:'Cần đăng ký lại', server_unavailable:'Server chưa cấu hình', needs_install:'Cần cài lên màn hình chính', denied:'Đã bị chặn', unsupported:'Không hỗ trợ', default:'Chưa bật', granted:'Cần kiểm tra lại' };
+  const stateText: Record<NotificationState, string> = { active: schedulerReady ? 'Nhắc tự động đang hoạt động' : 'Gửi thử được · Lịch tự động chưa kết nối', needs_registration:'Cần đăng ký lại', server_unavailable:'Server chưa cấu hình', needs_install:'Cần cài lên màn hình chính', denied:'Đã bị chặn', unsupported:'Không hỗ trợ', default:'Chưa bật', granted:'Cần kiểm tra lại' };
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4"><section className="flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#f7f8fa] pt-[env(safe-area-inset-top)] shadow-2xl sm:max-h-[88vh] sm:rounded-3xl sm:pt-0">
     <header className="flex min-h-16 items-center border-b border-slate-200 bg-white px-5"><h2 className="flex-1 text-lg font-bold">Cài đặt</h2><button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-500" aria-label="Đóng"><X className="h-4 w-4" /></button></header>
     <div className="space-y-6 overflow-y-auto p-4 pb-[max(24px,env(safe-area-inset-bottom))]">

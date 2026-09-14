@@ -94,7 +94,7 @@ export const TasksView: React.FC = () => {
   const openCount = tasks.filter((task) => task.status !== 'done').length;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="mx-auto min-w-0 w-full max-w-3xl overflow-x-hidden">
       <PageHeader
         title="Công việc"
         meta={viewMode === 'tasks' ? `${openCount} việc đang mở` : `${projects.length} dự án`}
@@ -241,12 +241,12 @@ export const TasksView: React.FC = () => {
           {creatingProject ? (
             <form
               onSubmit={createProject}
-              className="mb-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm shadow-blue-100/50"
+              className="mb-4 min-w-0 max-w-full overflow-hidden rounded-2xl border border-blue-100 bg-white p-4 shadow-sm shadow-blue-100/50"
             >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
+              <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
                   <p className="font-bold text-slate-950">Tạo dự án</p>
-                  <p className="mt-0.5 text-xs text-slate-400">Chỉ cần tên, các thông tin khác có thể bổ sung sau.</p>
+                  <p className="mt-0.5 break-words text-xs text-slate-400">Chỉ cần tên, các thông tin khác có thể bổ sung sau.</p>
                 </div>
                 <button
                   type="button"
@@ -267,23 +267,23 @@ export const TasksView: React.FC = () => {
                 className="h-12 w-full rounded-xl border border-slate-200 px-3.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
               />
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
                 <select
                   value={projectCategory}
                   onChange={(event) => setProjectCategory(event.target.value as 'work' | 'personal')}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none"
+                  className="h-11 min-w-0 w-full max-w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none"
                 >
                   <option value="work">Công việc</option>
                   <option value="personal">Cá nhân</option>
                 </select>
-                <label className="relative">
+                <label className="relative min-w-0 max-w-full overflow-hidden">
                   <CalendarDays className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
                   <input
                     type="date"
                     value={projectTargetDate}
                     onChange={(event) => setProjectTargetDate(event.target.value)}
                     aria-label="Hạn dự kiến"
-                    className="h-11 w-full rounded-xl border border-slate-200 pl-9 pr-2 text-xs font-medium text-slate-700 outline-none"
+                    className="h-11 min-w-0 w-full max-w-full rounded-xl border border-slate-200 pl-9 pr-2 text-xs font-medium text-slate-700 outline-none"
                   />
                 </label>
               </div>

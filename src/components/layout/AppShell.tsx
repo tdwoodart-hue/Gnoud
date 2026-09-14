@@ -24,8 +24,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa] font-sans text-slate-950">
-      <div className="mx-auto flex min-h-screen max-w-6xl">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#f7f8fa] font-sans text-slate-950">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl overflow-x-hidden">
         <aside className="hidden w-52 shrink-0 border-r border-slate-200 bg-white px-3 py-6 md:block">
           <div className="mb-8 px-3 text-lg font-bold tracking-tight">Lịch Sống</div>
           <nav className="space-y-1">
@@ -49,7 +49,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 pb-[calc(102px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-10 md:pt-8">
+        <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-4 pb-[calc(102px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-10 md:pt-8">
           {children}
         </main>
       </div>

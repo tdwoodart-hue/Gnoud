@@ -122,6 +122,32 @@ const STORAGE_KEY_PREFIX = 'lich_song_';
 const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
+export const cascadeProjectDeletion = (
+  projectId: string,
+  projects: Project[],
+  tasks: Task[],
+  trashTasks: DeletedTask[],
+  calendarEvents: CalendarEvent[],
+  deletedAt: string,
+) => {
+  const projectTasks = tasks.filter((task) => task.projectId === projectId);
+  const projectTaskIds = new Set(projectTasks.map((task) => task.id));
+  const deletedRecords: DeletedTask[] = projectTasks.map((task) => ({ ...task, deletedAt }));
+
+  return {
+    projects: projects.filter((project) => project.id !== projectId),
+    tasks: tasks.filter((task) => task.projectId !== projectId),
+    trashTasks: [
+      ...deletedRecords,
+      ...trashTasks.filter((task) => !projectTaskIds.has(task.id)),
+    ],
+    calendarEvents: calendarEvents.filter(
+      (event) => event.projectId !== projectId && !(event.taskId && projectTaskIds.has(event.taskId)),
+    ),
+    affectedTaskCount: projectTasks.length,
+  };
+};
+
 function removeCachedDemoData(): void {
   try {
     if (localStorage.getItem(DEMO_DATA_REMOVED_KEY)) return;
@@ -722,9 +748,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deleteProject = useCallback((id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
-    addToast('Đã xóa dự án', 'info');
-  }, [addToast]);
+    const project = projects.find((item) => item.id === id);
+    if (!project) return;
+
+    const next = cascadeProjectDeletion(
+      id,
+      projects,
+      tasks,
+      trashTasks,
+      calendarEvents,
+      new Date().toISOString(),
+    );
+
+    setProjects(next.projects);
+    setTasks(next.tasks);
+    setTrashTasks(next.trashTasks);
+    setCalendarEvents(next.calendarEvents);
+    addToast(
+      next.affectedTaskCount > 0
+        ? `Đã xóa “${project.name}” và ${next.affectedTaskCount} công việc`
+        : `Đã xóa dự án “${project.name}”`,
+      'info',
+    );
+  }, [projects, tasks, trashTasks, calendarEvents, addToast]);
 
   const toggleMilestone = useCallback((projectId: string, milestoneId: string) => {
     setProjects((prev) =>

@@ -67,6 +67,9 @@ export const TasksView: React.FC = () => {
 
   const projectNameById = (id?: string) => projects.find((project) => project.id === id)?.name;
   const selectedProject = projects.find((project) => project.id === projectFilter);
+  const pendingProjectTaskCount = pendingProjectDeleteId
+    ? tasks.filter((task) => task.projectId === pendingProjectDeleteId).length
+    : 0;
   const statusLabel: Record<TaskStatus, string> = {
     todo: 'Chưa làm',
     in_progress: 'Đang làm',
@@ -436,7 +439,11 @@ export const TasksView: React.FC = () => {
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-bold text-slate-950">Xóa dự án?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Công việc trong dự án sẽ được giữ lại và không bị xóa.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              {pendingProjectTaskCount > 0
+                ? `Xóa dự án này và ${pendingProjectTaskCount} công việc bên trong? Các công việc sẽ được chuyển vào Thùng rác.`
+                : 'Dự án này không có công việc. Bạn có chắc muốn xóa?'}
+            </p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" onClick={() => setPendingProjectDeleteId(null)} className="h-12 rounded-xl bg-slate-100 text-sm font-bold text-slate-600">Hủy</button>
               <button

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -7,10 +7,12 @@ import {
   FolderKanban,
   Plus,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { TaskStatus } from '../../types';
+import { parseProjectPlanFile } from '../../services/taskDraft';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
 
@@ -30,6 +32,8 @@ export const TasksView: React.FC = () => {
     projects,
     toggleTaskComplete,
     openTaskModal,
+    addTask,
+    addToast,
     addProject,
     deleteProject,
     calculateProjectProgress,
@@ -41,6 +45,7 @@ export const TasksView: React.FC = () => {
   const [projectName, setProjectName] = useState('');
   const [projectCategory, setProjectCategory] = useState<'work' | 'personal'>('work');
   const [projectTargetDate, setProjectTargetDate] = useState('');
+  const projectPlanInputRef = useRef<HTMLInputElement>(null);
 
   const visible = useMemo(
     () =>
@@ -91,6 +96,31 @@ export const TasksView: React.FC = () => {
     setViewMode('tasks');
   };
 
+  const importProjectPlan = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedProject) return;
+
+    try {
+      const importedTasks = parseProjectPlanFile(file.name, await file.text());
+      for (const task of importedTasks) {
+        addTask({
+          ...task,
+          projectId: selectedProject.id,
+          category: selectedProject.category,
+          status: 'todo',
+        });
+        // addTask currently builds ids from Date.now(); a tiny yield keeps bulk-import ids unique.
+        await new Promise((resolve) => window.setTimeout(resolve, 2));
+      }
+      setFilter('open');
+      addToast(`Đã nhập ${importedTasks.length} việc vào “${selectedProject.name}”`, 'success');
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'Không thể đọc file lộ trình.', 'error');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const openCount = tasks.filter((task) => task.status !== 'done').length;
 
   return (
@@ -136,23 +166,44 @@ export const TasksView: React.FC = () => {
       {viewMode === 'tasks' ? (
         <>
           {selectedProject ? (
-            <div className="mb-4 flex min-h-11 items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3">
-              <FolderKanban className="h-4 w-4 shrink-0 text-blue-600" />
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-blue-900">
-                {selectedProject.name}
-              </p>
+            <div className="mb-4 min-w-0 space-y-2">
+              <div className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3">
+                <FolderKanban className="h-4 w-4 shrink-0 text-blue-600" />
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-blue-900">
+                  {selectedProject.name}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProjectFilter(null)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-blue-500 hover:bg-blue-100"
+                  aria-label="Bỏ lọc dự án"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <input
+                ref={projectPlanInputRef}
+                type="file"
+                accept=".ics,text/calendar,.json,application/json"
+                onChange={importProjectPlan}
+                className="hidden"
+                aria-hidden="true"
+                tabIndex={-1}
+              />
               <button
                 type="button"
-                onClick={() => setProjectFilter(null)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-blue-500 hover:bg-blue-100"
-                aria-label="Bỏ lọc dự án"
+                onClick={() => projectPlanInputRef.current?.click()}
+                className="flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-700 shadow-sm active:scale-[0.99]"
               >
-                <X className="h-4 w-4" />
+                <Upload className="h-4 w-4 shrink-0" />
+                <span className="truncate">Nhập lộ trình</span>
+                <span className="shrink-0 text-xs font-medium text-blue-400">.json / .ics</span>
               </button>
             </div>
           ) : null}
 
-          <div className="mb-4 flex gap-1 rounded-xl bg-slate-200/70 p-1">
+          <div className="mb-4 flex min-w-0 gap-1 rounded-xl bg-slate-200/70 p-1">
             {(
               [
                 ['open', 'Đang làm'],

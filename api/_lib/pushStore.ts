@@ -1,6 +1,6 @@
 import webpush, { PushSubscription } from 'web-push';
-import { adminDb } from './firebaseAdmin.js';
-import { ScheduledTask } from './notificationCore.js';
+import { adminDb } from './firebaseAdmin.ts';
+import { ScheduledTask } from './notificationCore.ts';
 
 export interface DeviceDocument {
   subscription: PushSubscription;

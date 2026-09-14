@@ -1,10 +1,10 @@
-import type { VercelRequest, VercelResponse } from '../_lib/http.js';
-import { requireMethod, serverError } from '../_lib/http.js';
+import type { VercelRequest, VercelResponse } from '../_lib/http.ts';
+import { requireMethod, serverError } from '../_lib/http.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireMethod(req, res, 'POST')) return;
   try {
-    const [{ default: webpush }, { configureWebPush, getDevice }] = await Promise.all([import('web-push'), import('../_lib/pushStore.js')]);
+    const [{ default: webpush }, { configureWebPush, getDevice }] = await Promise.all([import('web-push'), import('../_lib/pushStore.ts')]);
     configureWebPush();
     const device = await getDevice(req.body?.deviceId || '');
     if (!device) return res.status(400).json({ error: 'Device is not subscribed' });

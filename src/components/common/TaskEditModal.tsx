@@ -1,476 +1,86 @@
 import React, { useState } from 'react';
+import { Calendar, ChevronDown, Clock, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Task, TaskCategory, TaskPriority, TaskStatus } from '../../types';
-import {
-  X,
-  Trash2,
-  Calendar,
-  Clock,
-  Tag as TagIcon,
-  Sparkles,
-  Plus,
-  Star,
-  CheckSquare,
-  Square,
-  FileText,
-} from 'lucide-react';
+import { Task, TaskPriority } from '../../types';
 import { isTaskDraft } from '../../services/taskDraft';
 
 export const TaskEditModal: React.FC = () => {
   const { editingTask } = useApp();
-  return editingTask ? <TaskEditForm key={editingTask.id} editingTask={editingTask} /> : null;
+  return editingTask ? <TaskForm key={editingTask.id} initialTask={editingTask} /> : null;
 };
 
-const TaskEditForm: React.FC<{ editingTask: Task }> = ({ editingTask }) => {
-  const {
-    setEditingTask,
-    addTask,
-    updateTask,
-    deleteTask,
-    projects,
-    breakdownTaskWithAi,
-  } = useApp();
+const priorities: Array<{ value: TaskPriority; label: string; active: string }> = [
+  { value: 'medium', label: 'Bình thường', active: 'border-blue-200 bg-blue-50 text-blue-700' },
+  { value: 'high', label: 'Quan trọng', active: 'border-amber-200 bg-amber-50 text-amber-700' },
+  { value: 'urgent', label: 'Khẩn cấp', active: 'border-rose-200 bg-rose-50 text-rose-700' },
+];
 
-  const [task, setTask] = useState<Task>({ ...editingTask });
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [tagInput, setTagInput] = useState('');
-  const [isBreakingDown, setIsBreakingDown] = useState(false);
+const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
+  const { setEditingTask, addTask, updateTask, deleteTask, projects } = useApp();
+  const [task, setTask] = useState({ ...initialTask });
+  const [newSubtask, setNewSubtask] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [breakingDown, setBreakingDown] = useState(false);
+  const draft = isTaskDraft(task);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isTaskDraft(task)) addTask(task);
-    else updateTask(task.id, task);
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (draft) addTask(task); else updateTask(task.id, task);
     setEditingTask(null);
   };
 
-  const handleDelete = () => {
-    if (confirm(`Bạn có chắc muốn xóa nhiệm vụ "${task.title}" không?`)) {
-      deleteTask(task.id);
-      setEditingTask(null);
-    }
+  const addSubtask = () => {
+    const title = newSubtask.trim();
+    if (!title) return;
+    setTask((current) => ({ ...current, subtasks: [...current.subtasks, { id: `sub-${Date.now()}`, title, completed: false, estimatedMinutes: 20 }] }));
+    setNewSubtask('');
   };
 
-  const handleAddSubtask = () => {
-    if (!newSubtaskTitle.trim()) return;
-    const newSub = {
-      id: `sub-${Date.now()}`,
-      title: newSubtaskTitle.trim(),
-      completed: false,
-      estimatedMinutes: 20,
-    };
-    setTask({ ...task, subtasks: [...task.subtasks, newSub] });
-    setNewSubtaskTitle('');
+  const breakdown = async () => {
+    if (!task.title.trim()) return;
+    setBreakingDown(true);
+    try {
+      const response = await fetch('/api/gemini/breakdown-task', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskTitle: task.title, taskDescription: task.description, estimatedMinutes: task.estimatedMinutes }) });
+      const data = await response.json();
+      if (Array.isArray(data.subtasks)) setTask((current) => ({ ...current, subtasks: [...current.subtasks, ...data.subtasks] }));
+    } finally { setBreakingDown(false); }
   };
 
-  const handleToggleSubtask = (subId: string) => {
-    setTask({
-      ...task,
-      subtasks: task.subtasks.map((st) =>
-        st.id === subId ? { ...st, completed: !st.completed } : st
-      ),
-    });
-  };
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
+    <section className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-100 px-5">
+        <button type="button" onClick={() => setTask({ ...task, isTopPriority: !task.isTopPriority })} className={`grid h-9 w-9 place-items-center rounded-xl ${task.isTopPriority ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`} aria-label="Đánh dấu quan trọng"><Star className="h-4 w-4 fill-current" /></button>
+        <h2 className="flex-1 text-base font-bold">{draft ? 'Thêm việc' : 'Sửa việc'}</h2>
+        {!draft && <button type="button" onClick={() => { if (confirm(`Xóa “${task.title}”?`)) { deleteTask(task.id); setEditingTask(null); } }} className="p-2 text-slate-400" aria-label="Xóa"><Trash2 className="h-4 w-4" /></button>}
+        <button type="button" onClick={() => setEditingTask(null)} className="rounded-full bg-slate-100 p-2 text-slate-500" aria-label="Đóng"><X className="h-4 w-4" /></button>
+      </header>
 
-  const handleDeleteSubtask = (subId: string) => {
-    setTask({
-      ...task,
-      subtasks: task.subtasks.filter((st) => st.id !== subId),
-    });
-  };
+      <form onSubmit={save} className="flex-1 overflow-y-auto px-5 py-5">
+        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">Tên việc</label>
+        <input autoFocus required value={task.title} onChange={(event) => setTask({ ...task, title: event.target.value })} placeholder="Bạn cần làm gì?" className="h-14 w-full rounded-2xl border border-slate-200 px-4 text-lg font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50" />
 
-  const handleAddTag = () => {
-    if (!tagInput.trim()) return;
-    if (!task.tags.includes(tagInput.trim())) {
-      setTask({ ...task, tags: [...task.tags, tagInput.trim()] });
-    }
-    setTagInput('');
-  };
-
-  const handleRemoveTag = (tag: string) => {
-    setTask({ ...task, tags: task.tags.filter((t) => t !== tag) });
-  };
-
-  const handleAiBreakdown = async () => {
-    setIsBreakingDown(true);
-    await breakdownTaskWithAi(task.id);
-    setIsBreakingDown(false);
-    // Reload updated subtasks from context or fetch directly
-    const res = await fetch('/api/gemini/breakdown-task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        taskTitle: task.title,
-        taskDescription: task.description,
-        estimatedMinutes: task.estimatedMinutes,
-      }),
-    });
-    const data = await res.json();
-    if (data.subtasks) {
-      setTask((prev) => ({
-        ...prev,
-        subtasks: [...prev.subtasks, ...data.subtasks],
-      }));
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTask({ ...task, isTopPriority: !task.isTopPriority })}
-              className={`p-1.5 rounded-lg border transition-colors ${
-                task.isTopPriority
-                  ? 'bg-amber-50 border-amber-200 text-amber-600'
-                  : 'bg-white border-stone-200 text-stone-400 hover:text-stone-600'
-              }`}
-              title={task.isTopPriority ? 'Việc quan trọng nhất hôm nay' : 'Đặt làm việc quan trọng nhất'}
-            >
-              <Star className="w-4 h-4 fill-current" />
-            </button>
-            <span className="text-xs font-medium text-stone-500">
-              {task.isTopPriority ? 'Việc quan trọng nhất trong ngày' : 'Chi tiết công việc'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {!isTaskDraft(task) && <button type="button" onClick={handleDelete} className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Xóa công việc"><Trash2 className="w-4 h-4" /></button>}
-            <button
-              type="button"
-              onClick={() => setEditingTask(null)}
-              className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="mt-5 grid grid-cols-[1fr_1.6fr] gap-3">
+          <label className="rounded-2xl border border-slate-200 px-3 py-2"><span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Clock className="h-3 w-3" />Giờ bắt đầu</span><input type="time" value={task.startTime || ''} onChange={(event) => setTask({ ...task, startTime: event.target.value || undefined })} className="w-full bg-transparent text-sm font-semibold outline-none" /></label>
+          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1">{priorities.map((option) => <button key={option.value} type="button" onClick={() => setTask({ ...task, priority: option.value })} className={`rounded-xl border border-transparent px-1 py-2 text-[11px] font-semibold ${task.priority === option.value ? option.active : 'text-slate-400'}`}>{option.label}</button>)}</div>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1 text-stone-800">
-          {/* Title */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1 uppercase tracking-wide">
-              Tiêu đề nhiệm vụ
-            </label>
-            <input
-              type="text"
-              required
-              value={task.title}
-              onChange={(e) => setTask({ ...task, title: e.target.value })}
-              className="w-full px-3.5 py-2.5 text-base font-medium bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900"
-            />
-          </div>
+        <section className="mt-6">
+          <div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">Nhiệm vụ nhỏ ({task.subtasks.length})</h3><button type="button" onClick={breakdown} disabled={breakingDown || !task.title.trim()} className="flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-600 disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />{breakingDown ? 'Đang chia…' : 'AI chia nhỏ'}</button></div>
+          <div className="space-y-2">{task.subtasks.map((subtask) => <div key={subtask.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><button type="button" onClick={() => setTask({ ...task, subtasks: task.subtasks.map((item) => item.id === subtask.id ? { ...item, completed: !item.completed } : item) })} className={`h-5 w-5 rounded-full border-2 ${subtask.completed ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} /><span className={`min-w-0 flex-1 truncate text-sm ${subtask.completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{subtask.title}</span><button type="button" onClick={() => setTask({ ...task, subtasks: task.subtasks.filter((item) => item.id !== subtask.id) })} className="p-1 text-slate-300"><X className="h-3.5 w-3.5" /></button></div>)}</div>
+          <div className="mt-2 flex gap-2"><input value={newSubtask} onChange={(event) => setNewSubtask(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSubtask(); } }} placeholder="Thêm một bước…" className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-blue-500" /><button type="button" onClick={addSubtask} className="grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-600" aria-label="Thêm bước"><Plus className="h-4 w-4" /></button></div>
+        </section>
 
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1 uppercase tracking-wide">
-              Mô tả chi tiết
-            </label>
-            <textarea
-              rows={2}
-              value={task.description || ''}
-              onChange={(e) => setTask({ ...task, description: e.target.value })}
-              placeholder="Thêm mô tả hoặc hướng dẫn..."
-              className="w-full px-3.5 py-2 text-sm bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-800"
-            />
-          </div>
+        <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="mt-5 flex w-full items-center justify-between border-t border-slate-100 py-4 text-sm font-semibold text-slate-500"><span>Tùy chọn thêm</span><ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} /></button>
+        {showAdvanced && <section className="space-y-4 pb-3">
+          <textarea rows={2} value={task.description || ''} onChange={(event) => setTask({ ...task, description: event.target.value })} placeholder="Mô tả" className="w-full rounded-xl border border-slate-200 p-3 text-sm outline-none" />
+          <div className="grid grid-cols-2 gap-3"><label className="rounded-xl border border-slate-200 p-3 text-xs text-slate-400"><span className="mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />Ngày làm</span><input type="date" value={task.plannedDate || ''} onChange={(event) => setTask({ ...task, plannedDate: event.target.value || undefined })} className="w-full bg-transparent font-semibold text-slate-700 outline-none" /></label><label className="rounded-xl border border-slate-200 p-3 text-xs text-slate-400"><span className="mb-1 block">Thời lượng (phút)</span><input type="number" min="5" step="5" value={task.estimatedMinutes} onChange={(event) => setTask({ ...task, estimatedMinutes: Number(event.target.value) })} className="w-full bg-transparent font-semibold text-slate-700 outline-none" /></label></div>
+          <select value={task.projectId || ''} onChange={(event) => setTask({ ...task, projectId: event.target.value || undefined })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"><option value="">Không thuộc dự án</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+          <div className="grid grid-cols-2 gap-3"><input type="date" value={task.deadline || ''} onChange={(event) => setTask({ ...task, deadline: event.target.value || undefined })} aria-label="Hạn chót" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" /><select value={task.recurrence || 'none'} onChange={(event) => setTask({ ...task, recurrence: event.target.value as Task['recurrence'] })} className="h-11 rounded-xl border border-slate-200 px-3 text-sm"><option value="none">Không lặp</option><option value="daily">Hằng ngày</option><option value="weekdays">Ngày làm việc</option><option value="weekly">Hằng tuần</option><option value="monthly">Hằng tháng</option></select></div>
+          <textarea rows={2} value={task.notes || ''} onChange={(event) => setTask({ ...task, notes: event.target.value })} placeholder="Ghi chú, đường link…" className="w-full rounded-xl border border-slate-200 p-3 text-sm outline-none" />
+        </section>}
 
-          {/* Category, Project, Status, Priority */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Phân loại</label>
-              <select
-                value={task.category}
-                onChange={(e) => setTask({ ...task, category: e.target.value as TaskCategory })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:border-blue-500 text-stone-800"
-              >
-                <option value="work">Công việc</option>
-                <option value="personal">Cá nhân</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Dự án</label>
-              <select
-                value={task.projectId || ''}
-                onChange={(e) => setTask({ ...task, projectId: e.target.value || undefined })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:border-blue-500 text-stone-800"
-              >
-                <option value="">(Không thuộc dự án)</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Trạng thái</label>
-              <select
-                value={task.status}
-                onChange={(e) => setTask({ ...task, status: e.target.value as TaskStatus })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:border-blue-500 text-stone-800"
-              >
-                <option value="todo">Chưa làm</option>
-                <option value="in_progress">Đang làm</option>
-                <option value="waiting">Chờ phản hồi</option>
-                <option value="done">Hoàn thành</option>
-                <option value="deferred">Tạm hoãn</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Mức ưu tiên</label>
-              <select
-                value={task.priority}
-                onChange={(e) => setTask({ ...task, priority: e.target.value as TaskPriority })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:border-blue-500 text-stone-800"
-              >
-                <option value="urgent">Khẩn cấp</option>
-                <option value="high">Quan trọng</option>
-                <option value="medium">Bình thường</option>
-                <option value="low">Có thể làm sau</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Planned Date, Start Time, Deadline, Duration */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-stone-50 p-3.5 rounded-xl border border-stone-200/70">
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-stone-400" /> Ngày làm
-              </label>
-              <input
-                type="date"
-                value={task.plannedDate || ''}
-                onChange={(e) => setTask({ ...task, plannedDate: e.target.value || undefined })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-stone-400" /> Giờ bắt đầu
-              </label>
-              <input
-                type="time"
-                value={task.startTime || ''}
-                onChange={(e) => setTask({ ...task, startTime: e.target.value || undefined })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Hạn chót</label>
-              <input
-                type="date"
-                value={task.deadline || ''}
-                onChange={(e) => setTask({ ...task, deadline: e.target.value || undefined })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Dự kiến (phút)</label>
-              <input
-                type="number"
-                min="5"
-                step="5"
-                value={task.estimatedMinutes}
-                onChange={(e) => setTask({ ...task, estimatedMinutes: Number(e.target.value) })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-            </div>
-          </div>
-
-          {/* Subtasks Section */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide flex items-center gap-1.5">
-                Các bước thực hiện ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
-              </label>
-              <button
-                type="button"
-                onClick={handleAiBreakdown}
-                disabled={isBreakingDown}
-                className="text-xs text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 font-medium px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {isBreakingDown ? 'Đang chia nhỏ...' : 'Chia nhỏ bằng AI'}
-              </button>
-            </div>
-
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {task.subtasks.map((st) => (
-                <div
-                  key={st.id}
-                  className="flex items-center gap-2 p-2 rounded-lg bg-stone-50 border border-stone-200/60 hover:bg-stone-100/70 transition-colors"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSubtask(st.id)}
-                    className="text-stone-400 hover:text-stone-600"
-                  >
-                    {st.completed ? (
-                      <CheckSquare className="w-4 h-4 text-emerald-600" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
-                  </button>
-                  <span
-                    className={`text-xs flex-1 ${
-                      st.completed ? 'line-through text-stone-400' : 'text-stone-800'
-                    }`}
-                  >
-                    {st.title}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteSubtask(st.id)}
-                    className="text-stone-300 hover:text-red-500 p-1 rounded"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add subtask input */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Thêm một bước thực hiện mới..."
-                value={newSubtaskTitle}
-                onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSubtask();
-                  }
-                }}
-                className="flex-1 px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddSubtask}
-                className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" /> Thêm
-              </button>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1 uppercase tracking-wide flex items-center gap-1">
-              <FileText className="w-3.5 h-3.5 text-stone-400" /> Ghi chú thêm
-            </label>
-            <textarea
-              rows={2}
-              value={task.notes || ''}
-              onChange={(e) => setTask({ ...task, notes: e.target.value })}
-              placeholder="Thông tin liên hệ, đường link hoặc lưu ý quan trọng..."
-              className="w-full px-3.5 py-2 text-xs bg-white border border-stone-200 rounded-xl focus:outline-none focus:border-blue-500 text-stone-800"
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1 uppercase tracking-wide flex items-center gap-1">
-              <TagIcon className="w-3.5 h-3.5 text-stone-400" /> Thẻ nhãn (Tags)
-            </label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {task.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-2 py-0.5 text-xs bg-stone-100 text-stone-700 rounded-md flex items-center gap-1"
-                >
-                  #{tag}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-red-600"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nhập tên nhãn rồi nhấn Thêm..."
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddTag();
-                  }
-                }}
-                className="w-48 px-2.5 py-1 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs"
-              >
-                Thêm tag
-              </button>
-            </div>
-          </div>
-
-          {/* Recurrence & Reminder */}
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-stone-100">
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Lặp lại</label>
-              <select
-                value={task.recurrence || 'none'}
-                onChange={(e) => setTask({ ...task, recurrence: e.target.value as any })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              >
-                <option value="none">Không lặp lại</option>
-                <option value="daily">Hằng ngày</option>
-                <option value="weekdays">Ngày làm việc (T2 - T6)</option>
-                <option value="weekly">Hằng tuần</option>
-                <option value="monthly">Hằng tháng</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Thông báo nhắc nhở</label>
-              <input
-                type="text"
-                placeholder="Ví dụ: 15 phút trước"
-                value={task.reminder || ''}
-                onChange={(e) => setTask({ ...task, reminder: e.target.value })}
-                className="w-full px-2.5 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
-              />
-            </div>
-          </div>
-
-          {/* Footer Buttons */}
-          <div className="pt-4 border-t border-stone-100 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={() => setEditingTask(null)}
-              className="px-4 py-2 text-sm text-stone-600 hover:text-stone-800 hover:bg-stone-100 rounded-xl font-medium transition-colors"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-xs"
-            >
-              {isTaskDraft(task) ? 'Thêm công việc' : 'Lưu thay đổi'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+        <div className="sticky bottom-0 -mx-5 mt-2 flex gap-2 border-t border-slate-100 bg-white px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3"><button type="button" onClick={() => setEditingTask(null)} className="h-12 flex-1 rounded-xl bg-slate-100 text-sm font-semibold text-slate-500">Hủy</button><button type="submit" className="h-12 flex-[2] rounded-xl bg-blue-600 text-sm font-bold text-white">{draft ? 'Thêm việc' : 'Lưu'}</button></div>
+      </form>
+    </section>
+  </div>;
 };

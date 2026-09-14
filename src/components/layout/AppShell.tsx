@@ -17,9 +17,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className="mb-8 px-3 text-lg font-bold tracking-tight">Lịch Sống</div>
         <nav className="space-y-1">{PRIMARY_NAV_ITEMS.map((item) => { const Icon = icons[item.id]; const active = activeTab === item.id; return <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${active ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</nav>
       </aside>
-      <main className="min-w-0 flex-1 px-4 pb-[calc(76px+env(safe-area-inset-bottom))] pt-[max(14px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-10 md:pt-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pb-[calc(88px+env(safe-area-inset-bottom))] pt-[max(14px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-10 md:pt-8">{children}</main>
     </div>
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">{PRIMARY_NAV_ITEMS.map((item) => { const Icon = icons[item.id]; const active = activeTab === item.id; return <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? 'text-blue-600' : 'text-slate-400'}`}><Icon className="h-[18px] w-[18px]" /><span>{item.label}</span></button>; })}</nav>
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white/95 px-1 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur md:hidden">{PRIMARY_NAV_ITEMS.map((item) => { const Icon = icons[item.id]; const active = activeTab === item.id; return <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? 'text-blue-600' : 'text-slate-400'}`}><Icon className="h-[18px] w-[18px]" /><span>{item.label}</span></button>; })}</nav>
     <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
   </div>;
 };

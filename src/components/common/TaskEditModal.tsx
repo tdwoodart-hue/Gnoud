@@ -21,6 +21,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
   const [newSubtask, setNewSubtask] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [breakingDown, setBreakingDown] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const draft = isTaskDraft(task);
 
   const save = (event: React.FormEvent) => {
@@ -83,10 +84,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
           {!draft ? (
             <button
               type="button"
-              onClick={() => {
-                deleteTask(task.id);
-                setEditingTask(null);
-              }}
+              onClick={() => setPendingDelete(true)}
               className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-500"
               aria-label="Xóa"
             >
@@ -348,6 +346,25 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
           </div>
         </form>
       </section>
+
+      {pendingDelete ? (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-slate-950">Xóa nhiệm vụ?</h2>
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500">“{task.title}” sẽ được chuyển vào Thùng rác và có thể khôi phục trong 30 ngày.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={() => setPendingDelete(false)} className="h-12 rounded-xl bg-slate-100 text-sm font-bold text-slate-600">Hủy</button>
+              <button
+                type="button"
+                onClick={() => { deleteTask(task.id); setPendingDelete(false); setEditingTask(null); }}
+                className="h-12 rounded-xl bg-rose-600 text-sm font-bold text-white active:bg-rose-700"
+              >
+                Xóa việc
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

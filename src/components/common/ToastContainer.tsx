@@ -1,45 +1,46 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
 export const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useApp();
+  const toast = toasts[toasts.length - 1];
 
-  if (toasts.length === 0) return null;
+  if (!toast) return null;
+
+  let icon = <Info className="h-4 w-4 text-blue-600" />;
+  if (toast.type === 'success') icon = <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
+  if (toast.type === 'warning') icon = <AlertTriangle className="h-4 w-4 text-amber-600" />;
+  if (toast.type === 'error') icon = <AlertCircle className="h-4 w-4 text-rose-600" />;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full">
-      {toasts.map((toast) => {
-        let icon = <Info className="w-4 h-4 text-blue-600" />;
-        let borderClass = 'border-stone-200 bg-white text-stone-900';
-
-        if (toast.type === 'success') {
-          icon = <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-          borderClass = 'border-emerald-200 bg-white text-stone-900';
-        } else if (toast.type === 'warning') {
-          icon = <AlertTriangle className="w-4 h-4 text-amber-600" />;
-          borderClass = 'border-amber-200 bg-white text-stone-900';
-        } else if (toast.type === 'error') {
-          icon = <AlertCircle className="w-4 h-4 text-red-600" />;
-          borderClass = 'border-red-200 bg-white text-stone-900';
-        }
-
-        return (
-          <div
-            key={toast.id}
-            className={`pointer-events-auto flex items-start gap-2.5 p-3 rounded-xl border shadow-lg transition-all duration-200 text-xs font-medium ${borderClass}`}
+    <div className="pointer-events-none fixed left-1/2 top-[max(12px,env(safe-area-inset-top))] z-[140] w-[calc(100%-24px)] max-w-md -translate-x-1/2">
+      <div className="pointer-events-auto flex h-11 items-center gap-2 rounded-2xl border border-stone-200 bg-white/95 px-3 shadow-lg shadow-black/10 backdrop-blur">
+        <span className="shrink-0">{icon}</span>
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-stone-800">
+          {toast.message}
+        </span>
+        {toast.actionLabel && toast.onAction ? (
+          <button
+            type="button"
+            onClick={() => {
+              toast.onAction?.();
+              removeToast(toast.id);
+            }}
+            className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 active:bg-blue-50"
           >
-            <span className="shrink-0 mt-0.5">{icon}</span>
-            <span className="flex-1 leading-relaxed">{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="shrink-0 text-stone-400 hover:text-stone-600 p-0.5"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        );
-      })}
+            {toast.actionLabel}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => removeToast(toast.id)}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-stone-400 active:bg-stone-100"
+          aria-label="Đóng thông báo"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 };

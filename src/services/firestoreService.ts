@@ -9,6 +9,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Task, Project, CalendarEvent, Goal, Habit, AiSuggestion } from '../types';
+
+export type DeletedTask = Task & { deletedAt: string };
 import {
   INITIAL_TASKS,
   INITIAL_PROJECTS,
@@ -29,6 +31,7 @@ const DEMO_DOCUMENTS: Record<string, string[]> = {
 
 export interface UserSyncData {
   tasks: Task[];
+  deletedTasks: DeletedTask[];
   projects: Project[];
   events: CalendarEvent[];
   goals: Goal[];
@@ -105,9 +108,10 @@ export const firestoreService = {
 
   async fetchUserData(userId: string): Promise<UserSyncData | null> {
     try {
-      const [tasksSnap, projectsSnap, eventsSnap, goalsSnap, habitsSnap, suggestionsSnap] =
+      const [tasksSnap, deletedTasksSnap, projectsSnap, eventsSnap, goalsSnap, habitsSnap, suggestionsSnap] =
         await Promise.all([
           getDocs(collection(db, 'users', userId, 'tasks')),
+          getDocs(collection(db, 'users', userId, 'deletedTasks')),
           getDocs(collection(db, 'users', userId, 'projects')),
           getDocs(collection(db, 'users', userId, 'calendarEvents')),
           getDocs(collection(db, 'users', userId, 'goals')),
@@ -117,6 +121,7 @@ export const firestoreService = {
 
       return {
         tasks: tasksSnap.docs.map((d) => fromFirestore<Task>(d.data())),
+        deletedTasks: deletedTasksSnap.docs.map((d) => fromFirestore<DeletedTask>(d.data())),
         projects: projectsSnap.docs.map((d) => fromFirestore<Project>(d.data())),
         events: eventsSnap.docs.map((d) => fromFirestore<CalendarEvent>(d.data())),
         goals: goalsSnap.docs.map((d) => fromFirestore<Goal>(d.data())),
@@ -136,6 +141,7 @@ export const firestoreService = {
   ): () => void {
     const data: UserSyncData = {
       tasks: [],
+      deletedTasks: [],
       projects: [],
       events: [],
       goals: [],
@@ -145,9 +151,10 @@ export const firestoreService = {
     const ready = new Set<keyof UserSyncData>();
 
     const publish = () => {
-      if (ready.size !== 6) return;
+      if (ready.size !== 7) return;
       onData({
         tasks: [...data.tasks],
+        deletedTasks: [...data.deletedTasks],
         projects: [...data.projects],
         events: [...data.events],
         goals: [...data.goals],
@@ -167,6 +174,15 @@ export const firestoreService = {
         (snapshot) => {
           data.tasks = snapshot.docs.map((d) => fromFirestore<Task>(d.data()));
           ready.add('tasks');
+          publish();
+        },
+        fail,
+      ),
+      onSnapshot(
+        collection(db, 'users', userId, 'deletedTasks'),
+        (snapshot) => {
+          data.deletedTasks = snapshot.docs.map((d) => fromFirestore<DeletedTask>(d.data()));
+          ready.add('deletedTasks');
           publish();
         },
         fail,
@@ -225,6 +241,7 @@ export const firestoreService = {
     try {
       await Promise.all([
         ...data.tasks.map((item) => saveEntity(userId, 'tasks', item)),
+        ...data.deletedTasks.map((item) => saveEntity(userId, 'deletedTasks', item)),
         ...data.projects.map((item) => saveEntity(userId, 'projects', item)),
         ...data.events.map((item) => saveEntity(userId, 'calendarEvents', item)),
         ...data.goals.map((item) => saveEntity(userId, 'goals', item)),
@@ -250,6 +267,22 @@ export const firestoreService = {
       await deleteEntity(userId, 'tasks', taskId);
     } catch (e) {
       console.warn('Error deleting task from Firestore:', e);
+    }
+  },
+
+  async saveDeletedTask(userId: string, task: DeletedTask) {
+    try {
+      await saveEntity(userId, 'deletedTasks', task);
+    } catch (e) {
+      console.warn('Error saving deleted task to Firestore:', e);
+    }
+  },
+
+  async deleteDeletedTask(userId: string, taskId: string) {
+    try {
+      await deleteEntity(userId, 'deletedTasks', taskId);
+    } catch (e) {
+      console.warn('Error permanently deleting task from Firestore:', e);
     }
   },
 

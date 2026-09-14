@@ -45,6 +45,7 @@ export const TasksView: React.FC = () => {
   const [projectName, setProjectName] = useState('');
   const [projectCategory, setProjectCategory] = useState<'work' | 'personal'>('work');
   const [projectTargetDate, setProjectTargetDate] = useState('');
+  const [pendingProjectDeleteId, setPendingProjectDeleteId] = useState<string | null>(null);
   const projectPlanInputRef = useRef<HTMLInputElement>(null);
 
   const visible = useMemo(
@@ -399,10 +400,7 @@ export const TasksView: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          deleteProject(project.id);
-                          if (projectFilter === project.id) setProjectFilter(null);
-                        }}
+                        onClick={() => setPendingProjectDeleteId(project.id)}
                         className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-500"
                         aria-label={`Xóa dự án ${project.name}`}
                       >
@@ -433,6 +431,29 @@ export const TasksView: React.FC = () => {
           )}
         </section>
       )}
+
+      {pendingProjectDeleteId ? (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-slate-950">Xóa dự án?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Công việc trong dự án sẽ được giữ lại và không bị xóa.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={() => setPendingProjectDeleteId(null)} className="h-12 rounded-xl bg-slate-100 text-sm font-bold text-slate-600">Hủy</button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteProject(pendingProjectDeleteId);
+                  if (projectFilter === pendingProjectDeleteId) setProjectFilter(null);
+                  setPendingProjectDeleteId(null);
+                }}
+                className="h-12 rounded-xl bg-rose-600 text-sm font-bold text-white active:bg-rose-700"
+              >
+                Xóa dự án
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

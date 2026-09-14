@@ -24,7 +24,7 @@ import {
 import { auth, googleProvider } from '../lib/firebase';
 import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User as FirebaseUser } from 'firebase/auth';
 import { authErrorMessage, shouldUseRedirect } from '../services/authFlow';
-import { firestoreService } from '../services/firestoreService';
+import { firestoreService, type DeletedTask } from '../services/firestoreService';
 import { syncNotificationTasks } from '../services/notificationService';
 import { createTaskDraft } from '../services/taskDraft';
 
@@ -32,6 +32,8 @@ export interface ToastMessage {
   id: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface AppContextType {
@@ -54,6 +56,7 @@ interface AppContextType {
   openTaskModal: (task?: Task) => void;
   openFocusSession: (task: Task) => void;
   tasks: Task[];
+  trashTasks: DeletedTask[];
   projects: Project[];
   calendarEvents: CalendarEvent[];
   habits: Habit[];
@@ -64,6 +67,8 @@ interface AppContextType {
   addTask: (taskData: Partial<Task>) => Task;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
+  restoreTask: (id: string) => void;
+  permanentlyDeleteTask: (id: string) => void;
   toggleTaskComplete: (id: string) => void;
   toggleTopPriority: (id: string) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
@@ -103,7 +108,11 @@ interface AppContextType {
   editingTask: Task | null;
   setEditingTask: (task: Task | null) => void;
   toasts: ToastMessage[];
-  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  addToast: (
+    message: string,
+    type?: 'info' | 'success' | 'warning' | 'error',
+    action?: { label: string; onClick: () => void },
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -111,6 +120,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'lich_song_';
 const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function removeCachedDemoData(): void {
   try {
@@ -190,6 +200,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isEveningReviewOpen, setIsEveningReviewOpen] = useState<boolean>(false);
 
   const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('tasks', INITIAL_TASKS));
+  const [trashTasks, setTrashTasks] = useState<DeletedTask[]>(() => loadFromStorage('deleted_tasks', []));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage('projects', INITIAL_PROJECTS));
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadFromStorage('events', INITIAL_CALENDAR_EVENTS));
   const [habits, setHabits] = useState<Habit[]>(() => loadFromStorage('habits', INITIAL_HABITS));
@@ -215,18 +226,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const cloudReadyRef = useRef(false);
   const tasksSyncRef = useRef<Task[]>(tasks);
+  const trashTasksSyncRef = useRef<DeletedTask[]>(trashTasks);
   const projectsSyncRef = useRef<Project[]>(projects);
   const eventsSyncRef = useRef<CalendarEvent[]>(calendarEvents);
   const habitsSyncRef = useRef<Habit[]>(habits);
   const goalsSyncRef = useRef<Goal[]>(goals);
   const suggestionsSyncRef = useRef<AiSuggestion[]>(aiSuggestions);
 
-  const addToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  const addToast = useCallback((
+    message: string,
+    type: 'info' | 'success' | 'warning' | 'error' = 'info',
+    action?: { label: string; onClick: () => void },
+  ) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    setToasts([{
+      id,
+      message,
+      type,
+      actionLabel: action?.label,
+      onAction: action?.onClick,
+    }]);
+    window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, action ? 6000 : 3200);
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -234,6 +256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
+  useEffect(() => { saveToStorage('deleted_tasks', trashTasks); }, [trashTasks]);
   useEffect(() => { saveToStorage('projects', projects); }, [projects]);
   useEffect(() => { saveToStorage('events', calendarEvents); }, [calendarEvents]);
   useEffect(() => { saveToStorage('habits', habits); }, [habits]);
@@ -274,12 +297,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (cloud) {
           const cloudHasData =
-            cloud.tasks.length + cloud.projects.length + cloud.events.length +
+            cloud.tasks.length + cloud.deletedTasks.length + cloud.projects.length + cloud.events.length +
             cloud.goals.length + cloud.habits.length + cloud.suggestions.length > 0;
 
           if (!cloudHasData) {
             const localSnapshot = {
               tasks: withoutSeed(tasks, INITIAL_TASKS),
+              deletedTasks: trashTasks,
               projects: withoutSeed(projects, INITIAL_PROJECTS),
               events: withoutSeed(calendarEvents, INITIAL_CALENDAR_EVENTS),
               goals: withoutSeed(goals, INITIAL_GOALS),
@@ -300,6 +324,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!sameEntities(tasksSyncRef.current, data.tasks)) {
               tasksSyncRef.current = data.tasks;
               setTasks(data.tasks);
+            }
+            if (!sameEntities(trashTasksSyncRef.current, data.deletedTasks)) {
+              trashTasksSyncRef.current = data.deletedTasks;
+              setTrashTasks(data.deletedTasks);
             }
             if (!sameEntities(projectsSyncRef.current, data.projects)) {
               projectsSyncRef.current = data.projects;
@@ -342,6 +370,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const previous = tasksSyncRef.current;
     void syncEntityDiff(user.uid, previous, tasks, firestoreService.saveTask, firestoreService.deleteTask);
   }, [tasks, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(trashTasksSyncRef.current, trashTasks)) return;
+    const previous = trashTasksSyncRef.current;
+    void syncEntityDiff(
+      user.uid,
+      previous,
+      trashTasks,
+      firestoreService.saveDeletedTask,
+      firestoreService.deleteDeletedTask,
+    );
+  }, [trashTasks, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(projectsSyncRef.current, projects)) return;
@@ -472,15 +512,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, []);
 
-  const deleteTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const target = prev.find((t) => t.id === id);
-      if (target) {
-        addToast(`Đã xóa nhiệm vụ "${target.title}"`, 'info');
-      }
-      return prev.filter((t) => t.id !== id);
-    });
+  const restoreTaskRecord = useCallback((record: DeletedTask, notify = true) => {
+    const { deletedAt: _deletedAt, ...restored } = record;
+    setTrashTasks((prev) => prev.filter((task) => task.id !== record.id));
+    setTasks((prev) => [restored, ...prev.filter((task) => task.id !== record.id)]);
+    if (notify) addToast(`Đã khôi phục “${record.title}”`, 'success');
   }, [addToast]);
+
+  const restoreTask = useCallback((id: string) => {
+    const record = trashTasks.find((task) => task.id === id);
+    if (record) restoreTaskRecord(record);
+  }, [trashTasks, restoreTaskRecord]);
+
+  const permanentlyDeleteTask = useCallback((id: string) => {
+    const record = trashTasks.find((task) => task.id === id);
+    if (!record) return;
+    setTrashTasks((prev) => prev.filter((task) => task.id !== id));
+    addToast(`Đã xóa vĩnh viễn “${record.title}”`, 'info');
+  }, [trashTasks, addToast]);
+
+  const deleteTask = useCallback((id: string) => {
+    const target = tasks.find((task) => task.id === id);
+    if (!target) return;
+
+    const deletedRecord: DeletedTask = {
+      ...target,
+      deletedAt: new Date().toISOString(),
+    };
+
+    setTasks((prev) => prev.filter((task) => task.id !== id));
+    setTrashTasks((prev) => [deletedRecord, ...prev.filter((task) => task.id !== id)]);
+    addToast(`Đã xóa “${target.title}”`, 'info', {
+      label: 'Hoàn tác',
+      onClick: () => restoreTaskRecord(deletedRecord, false),
+    });
+  }, [tasks, addToast, restoreTaskRecord]);
+
+  useEffect(() => {
+    const cutoff = Date.now() - TRASH_RETENTION_MS;
+    const expiredIds = new Set(
+      trashTasks
+        .filter((task) => new Date(task.deletedAt).getTime() < cutoff)
+        .map((task) => task.id),
+    );
+    if (expiredIds.size === 0) return;
+    setTrashTasks((prev) => prev.filter((task) => !expiredIds.has(task.id)));
+  }, [trashTasks]);
 
   const toggleTaskComplete = useCallback((id: string) => {
     setTasks((prev) =>
@@ -1075,6 +1152,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openTaskModal: (task?: Task) => setEditingTask(task || createTaskDraft(getFormattedToday(0))),
         openFocusSession: (task: Task) => startFocusSession(task),
         tasks,
+        trashTasks,
         projects,
         calendarEvents,
         habits,
@@ -1085,6 +1163,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTask,
         updateTask,
         deleteTask,
+        restoreTask,
+        permanentlyDeleteTask,
         toggleTaskComplete,
         toggleTopPriority,
         toggleSubtask,

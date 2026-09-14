@@ -465,7 +465,7 @@ export const TodayView: React.FC = () => {
               Bạn có chắc muốn xóa việc này?
             </h2>
             <p className="mt-2 break-words text-sm leading-6 text-slate-500">
-              “{pendingDeleteTask.title}” sẽ bị xóa khỏi tài khoản và các thiết bị đang đồng bộ.
+              “{pendingDeleteTask.title}” sẽ được chuyển vào Thùng rác và có thể khôi phục trong 30 ngày.
             </p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button

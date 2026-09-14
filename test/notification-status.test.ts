@@ -21,3 +21,8 @@ test('server error text is preserved for an actionable toast', async () => {
   });
   assert.equal(await notificationErrorMessage(response), 'Server chưa cấu hình khóa VAPID.');
 });
+
+test('missing Firebase Admin credentials are explained', async () => {
+  const response = new Response(JSON.stringify({ error: 'Firebase Admin is not configured' }), { status: 503 });
+  assert.equal(await notificationErrorMessage(response), 'Server chưa kết nối Firestore Admin.');
+});

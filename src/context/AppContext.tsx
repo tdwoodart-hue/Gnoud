@@ -22,7 +22,8 @@ import {
   getFormattedToday,
 } from '../data/mockData';
 import { auth, googleProvider } from '../lib/firebase';
-import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
+import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User as FirebaseUser } from 'firebase/auth';
+import { authErrorMessage, shouldUseRedirect } from '../services/authFlow';
 import { firestoreService } from '../services/firestoreService';
 import { syncNotificationTasks } from '../services/notificationService';
 
@@ -240,6 +241,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Firebase auth state tracking
   useEffect(() => {
+    void getRedirectResult(auth).then((result) => {
+      if (result?.user) addToast('Đăng nhập Google thành công', 'success');
+    }).catch((error) => {
+      console.warn('Redirect sign-in error:', error);
+      addToast(authErrorMessage(error), 'error');
+    });
+  }, [addToast]);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -277,11 +287,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signInWithGoogle = async () => {
     try {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+      if (shouldUseRedirect(navigator.userAgent, standalone)) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
       await signInWithPopup(auth, googleProvider);
-      addToast('Đăng nhập thành công với Google!', 'success');
-    } catch (err: any) {
-      console.warn('Sign-in error:', err);
-      addToast('Không thể hoàn tất đăng nhập Google: ' + (err.message || ''), 'error');
+      addToast('Đăng nhập Google thành công', 'success');
+    } catch (error) {
+      console.warn('Sign-in error:', error);
+      addToast(authErrorMessage(error), 'error');
     }
   };
 

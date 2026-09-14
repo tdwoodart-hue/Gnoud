@@ -14,6 +14,7 @@ export async function notificationErrorMessage(response: Response): Promise<stri
   let error = '';
   try { error = (await response.json())?.error || ''; } catch { /* response is not JSON */ }
   if (error === 'VAPID is not configured') return 'Server chưa cấu hình khóa VAPID.';
+  if (error === 'Firebase Admin is not configured') return 'Server chưa kết nối Firestore Admin.';
   if (error === 'Device is not subscribed' || error === 'Notifications are not ready') return 'iPhone chưa đăng ký nhận thông báo. Hãy bật lại.';
   if (error === 'Push delivery failed') return 'Apple không nhận được thông báo. Hãy bật lại thông báo.';
   return 'Không thể gửi thông báo lúc này.';

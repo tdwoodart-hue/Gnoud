@@ -1,20 +1,16 @@
-import type { VercelRequest, VercelResponse } from '../_lib/http.ts';
-import { requireMethod, serverError } from '../_lib/http.ts';
-import { notificationForTask } from '../_lib/notificationCore.ts';
-import type { DeviceDocument } from '../_lib/pushStore.ts';
+import { adminDb, configureWebPush, notificationForTask, requireMethod, sendNotification, serverError } from '../_lib/runtime.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (!requireMethod(req, res, 'GET')) return;
   if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const [{ default: webpush }, { adminDb }, { configureWebPush }] = await Promise.all([import('web-push'), import('../_lib/firebaseAdmin.ts'), import('../_lib/pushStore.ts')]);
     configureWebPush();
     const snapshot = await adminDb().collection('pushDevices').limit(500).get();
     const now = Date.now();
     let delivered = 0;
     let expired = 0;
     for (const document of snapshot.docs) {
-      const device = document.data() as DeviceDocument;
+      const device = document.data() as any;
       if (!device.subscription?.endpoint) continue;
       const sent = new Set(Array.isArray(device.sent) ? device.sent : []);
       let changed = false;
@@ -22,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const message = notificationForTask(task, now, sent);
         if (!message || sent.has(message.key)) continue;
         try {
-          await webpush.sendNotification(device.subscription, JSON.stringify({ ...message, tag: message.key, url: `/?task=${encodeURIComponent(task.id)}` }));
+          await sendNotification(device.subscription, { ...message, tag: message.key, url: `/?task=${encodeURIComponent(task.id)}` });
           sent.add(message.key);
           delivered += 1;
           changed = true;

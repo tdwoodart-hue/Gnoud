@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Task,
   Project,
@@ -35,12 +35,9 @@ export interface ToastMessage {
 }
 
 interface AppContextType {
-  // Authentication
   user: FirebaseUser | null;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-
-  // Navigation & View
   currentView: string;
   setCurrentView: (view: string) => void;
   activeTab: NavTab;
@@ -48,20 +45,14 @@ interface AppContextType {
   isAssistantOpen: boolean;
   setIsAssistantOpen: (open: boolean) => void;
   toggleAssistant: () => void;
-
-  // Modals & Flows
   isCommandMenuOpen: boolean;
   setIsCommandMenuOpen: (open: boolean) => void;
   isMorningPlanningOpen: boolean;
   setIsMorningPlanningOpen: (open: boolean) => void;
   isEveningReviewOpen: boolean;
   setIsEveningReviewOpen: (open: boolean) => void;
-
-  // Task editor helper alias
   openTaskModal: (task?: Task) => void;
   openFocusSession: (task: Task) => void;
-
-  // Data
   tasks: Task[];
   projects: Project[];
   calendarEvents: CalendarEvent[];
@@ -70,8 +61,6 @@ interface AppContextType {
   aiSuggestions: AiSuggestion[];
   lifeMetrics: LifeMetric[];
   chatMessages: ChatMessage[];
-
-  // Task methods
   addTask: (taskData: Partial<Task>) => Task;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
@@ -80,45 +69,29 @@ interface AppContextType {
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   addSubtask: (taskId: string, title: string, estimatedMinutes?: number) => void;
   breakdownTaskWithAi: (taskId: string) => Promise<void>;
-
-  // Project methods
   addProject: (proj: Partial<Project>) => Project;
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   toggleMilestone: (projectId: string, milestoneId: string) => void;
   calculateProjectProgress: (projectId: string) => number;
-
-  // Calendar methods
   addCalendarEvent: (event: Partial<CalendarEvent>) => CalendarEvent;
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   deleteCalendarEvent: (id: string) => void;
   scheduleTaskIntoCalendar: (taskId: string, date: string, startTime: string, durationMinutes?: number) => void;
   autoScheduleWithAi: (date: string) => Promise<{ proposedSchedule: any[]; summary: string }>;
-
-  // Habit methods
   toggleHabitForDate: (habitId: string, date: string) => void;
   addHabit: (habit: Partial<Habit>) => Habit;
   updateHabit: (id: string, updates: Partial<Habit>) => void;
   deleteHabit: (id: string) => void;
-
-  // Goal methods
   addGoal: (goal: Partial<Goal>) => Goal;
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => void;
-
-  // AI Suggestions
   applyAiSuggestion: (suggestionId: string) => void;
   dismissAiSuggestion: (suggestionId: string) => void;
-
-  // AI Assistant Chat
   sendChatMessage: (text: string) => Promise<void>;
   applyAssistantAction: (messageId: string) => void;
-
-  // Natural language parsing modal
   parseAndConfirmInput: (prompt: string) => Promise<ParsedInputResult>;
   confirmParsedInput: (parsed: ParsedInputResult) => void;
-
-  // Focus Timer
   focusTask: Task | null;
   isFocusRunning: boolean;
   focusSecondsLeft: number;
@@ -127,12 +100,8 @@ interface AppContextType {
   pauseFocusSession: () => void;
   resumeFocusSession: () => void;
   stopFocusSession: (markComplete?: boolean) => void;
-
-  // Active Task Editor Modal state
   editingTask: Task | null;
   setEditingTask: (task: Task | null) => void;
-
-  // Toast
   toasts: ToastMessage[];
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   removeToast: (id: string) => void;
@@ -173,6 +142,43 @@ function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
+type SyncEntity = { id: string };
+
+function sameEntities<T extends SyncEntity>(left: T[], right: T[]): boolean {
+  if (left.length !== right.length) return false;
+  const normalize = (items: T[]) => [...items].sort((a, b) => a.id.localeCompare(b.id));
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+}
+
+function withoutSeed<T extends SyncEntity>(items: T[], seed: T[]): T[] {
+  const seedIds = new Set(seed.map((item) => item.id));
+  return items.filter((item) => !seedIds.has(item.id));
+}
+
+async function syncEntityDiff<T extends SyncEntity>(
+  userId: string,
+  previous: T[],
+  next: T[],
+  save: (userId: string, item: T) => Promise<void>,
+  remove: (userId: string, id: string) => Promise<void>,
+): Promise<void> {
+  const previousById = new Map(previous.map((item) => [item.id, item]));
+  const nextById = new Map(next.map((item) => [item.id, item]));
+  const writes: Promise<void>[] = [];
+
+  next.forEach((item) => {
+    const before = previousById.get(item.id);
+    if (!before || JSON.stringify(before) !== JSON.stringify(item)) {
+      writes.push(save(userId, item));
+    }
+  });
+  previous.forEach((item) => {
+    if (!nextById.has(item.id)) writes.push(remove(userId, item.id));
+  });
+
+  await Promise.all(writes);
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   removeCachedDemoData();
 
@@ -200,17 +206,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   ]);
 
-  // Editing task modal
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-
-  // Focus session state
   const [focusTask, setFocusTask] = useState<Task | null>(null);
   const [isFocusRunning, setIsFocusRunning] = useState<boolean>(false);
   const [focusSecondsLeft, setFocusSecondsLeft] = useState<number>(25 * 60);
   const [focusTotalSeconds, setFocusTotalSeconds] = useState<number>(25 * 60);
-
-  // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const cloudReadyRef = useRef(false);
+  const tasksSyncRef = useRef<Task[]>(tasks);
+  const projectsSyncRef = useRef<Project[]>(projects);
+  const eventsSyncRef = useRef<CalendarEvent[]>(calendarEvents);
+  const habitsSyncRef = useRef<Habit[]>(habits);
+  const goalsSyncRef = useRef<Goal[]>(goals);
+  const suggestionsSyncRef = useRef<AiSuggestion[]>(aiSuggestions);
 
   const addToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -224,7 +233,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Save changes to localStorage
   useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
   useEffect(() => { saveToStorage('projects', projects); }, [projects]);
   useEffect(() => { saveToStorage('events', calendarEvents); }, [calendarEvents]);
@@ -240,7 +248,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('lich-song-notifications-enabled', sync);
   }, [tasks]);
 
-  // Firebase auth state tracking
   useEffect(() => {
     void getRedirectResult(auth).then((result) => {
       if (result?.user) addToast('Đăng nhập Google thành công', 'success');
@@ -251,30 +258,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [addToast]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeCloud: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      unsubscribeCloud?.();
+      unsubscribeCloud = null;
+      cloudReadyRef.current = false;
       setUser(currentUser);
-      if (currentUser) {
-        try {
-          await firestoreService.removeDemoData(currentUser.uid);
-          await firestoreService.initUserData(currentUser.uid);
-          const data = await firestoreService.fetchUserData(currentUser.uid);
-          if (data && data.tasks.length > 0) {
-            setTasks(data.tasks);
-            setProjects(data.projects);
-            setCalendarEvents(data.events);
-            setGoals(data.goals);
-            setHabits(data.habits);
-            setAiSuggestions(data.suggestions);
+
+      if (!currentUser) return;
+
+      try {
+        await firestoreService.removeDemoData(currentUser.uid);
+        const cloud = await firestoreService.fetchUserData(currentUser.uid);
+
+        if (cloud) {
+          const cloudHasData =
+            cloud.tasks.length + cloud.projects.length + cloud.events.length +
+            cloud.goals.length + cloud.habits.length + cloud.suggestions.length > 0;
+
+          if (!cloudHasData) {
+            const localSnapshot = {
+              tasks: withoutSeed(tasks, INITIAL_TASKS),
+              projects: withoutSeed(projects, INITIAL_PROJECTS),
+              events: withoutSeed(calendarEvents, INITIAL_CALENDAR_EVENTS),
+              goals: withoutSeed(goals, INITIAL_GOALS),
+              habits: withoutSeed(habits, INITIAL_HABITS),
+              suggestions: withoutSeed(aiSuggestions, INITIAL_AI_SUGGESTIONS),
+            };
+            const localHasData = Object.values(localSnapshot).some((items) => items.length > 0);
+            if (localHasData) await firestoreService.mergeUserData(currentUser.uid, localSnapshot);
           }
-        } catch (e) {
-          console.warn('Could not sync with Firestore:', e);
         }
+
+        unsubscribeCloud = firestoreService.subscribeUserData(
+          currentUser.uid,
+          (data) => {
+            tasksSyncRef.current = data.tasks;
+            projectsSyncRef.current = data.projects;
+            eventsSyncRef.current = data.events;
+            goalsSyncRef.current = data.goals;
+            habitsSyncRef.current = data.habits;
+            suggestionsSyncRef.current = data.suggestions;
+
+            setTasks((current) => sameEntities(current, data.tasks) ? current : data.tasks);
+            setProjects((current) => sameEntities(current, data.projects) ? current : data.projects);
+            setCalendarEvents((current) => sameEntities(current, data.events) ? current : data.events);
+            setGoals((current) => sameEntities(current, data.goals) ? current : data.goals);
+            setHabits((current) => sameEntities(current, data.habits) ? current : data.habits);
+            setAiSuggestions((current) => sameEntities(current, data.suggestions) ? current : data.suggestions);
+            cloudReadyRef.current = true;
+          },
+          () => addToast('Mất kết nối đồng bộ. Dữ liệu vẫn được giữ trên thiết bị.', 'warning'),
+        );
+      } catch (error) {
+        console.warn('Could not start Firestore sync:', error);
+        addToast('Không thể đồng bộ tài khoản lúc này.', 'error');
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeCloud?.();
+    };
   }, []);
 
-  // Global Ctrl/Cmd + K shortcut
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(tasksSyncRef.current, tasks)) return;
+    const previous = tasksSyncRef.current;
+    tasksSyncRef.current = tasks;
+    void syncEntityDiff(user.uid, previous, tasks, firestoreService.saveTask, firestoreService.deleteTask);
+  }, [tasks, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(projectsSyncRef.current, projects)) return;
+    const previous = projectsSyncRef.current;
+    projectsSyncRef.current = projects;
+    void syncEntityDiff(user.uid, previous, projects, firestoreService.saveProject, firestoreService.deleteProject);
+  }, [projects, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(eventsSyncRef.current, calendarEvents)) return;
+    const previous = eventsSyncRef.current;
+    eventsSyncRef.current = calendarEvents;
+    void syncEntityDiff(user.uid, previous, calendarEvents, firestoreService.saveCalendarEvent, firestoreService.deleteCalendarEvent);
+  }, [calendarEvents, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(habitsSyncRef.current, habits)) return;
+    const previous = habitsSyncRef.current;
+    habitsSyncRef.current = habits;
+    void syncEntityDiff(user.uid, previous, habits, firestoreService.saveHabit, firestoreService.deleteHabit);
+  }, [habits, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(goalsSyncRef.current, goals)) return;
+    const previous = goalsSyncRef.current;
+    goalsSyncRef.current = goals;
+    void syncEntityDiff(user.uid, previous, goals, firestoreService.saveGoal, firestoreService.deleteGoal);
+  }, [goals, user]);
+
+  useEffect(() => {
+    if (!user || !cloudReadyRef.current || sameEntities(suggestionsSyncRef.current, aiSuggestions)) return;
+    const previous = suggestionsSyncRef.current;
+    suggestionsSyncRef.current = aiSuggestions;
+    void syncEntityDiff(user.uid, previous, aiSuggestions, firestoreService.saveAiSuggestion, firestoreService.deleteAiSuggestion);
+  }, [aiSuggestions, user]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -310,7 +400,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Focus Timer interval effect
   useEffect(() => {
     let interval: any = null;
     if (isFocusRunning && focusSecondsLeft > 0) {
@@ -320,7 +409,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else if (focusSecondsLeft === 0 && isFocusRunning) {
       setIsFocusRunning(false);
       addToast(`Đã hoàn thành phiên tập trung cho "${focusTask?.title || 'nhiệm vụ'}"!`, 'success');
-      // Update actual duration on task
       if (focusTask) {
         const addedMinutes = Math.round(focusTotalSeconds / 60);
         updateTask(focusTask.id, {
@@ -333,7 +421,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleAssistant = () => setIsAssistantOpen((prev) => !prev);
 
-  // Task operations
   const addTask = useCallback((taskData: Partial<Task>): Task => {
     const newTask: Task = {
       id: `task-${Date.now()}`,
@@ -409,7 +496,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const target = prev.find((t) => t.id === id);
       if (!target) return prev;
       if (!target.isTopPriority) {
-        // Enforce max 3 top priority tasks
         const currentTopCount = prev.filter((t) => t.isTopPriority && t.status !== 'done').length;
         if (currentTopCount >= 3) {
           addToast('Chỉ nên chọn tối đa 3 việc quan trọng nhất cho một ngày để duy trì sự tập trung.', 'warning');
@@ -447,7 +533,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Đã thêm bước thực hiện mới', 'success');
   }, [addToast]);
 
-  // AI Task Breakdown
   const breakdownTaskWithAi = useCallback(async (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -481,7 +566,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tasks, addToast]);
 
-  // Projects
   const calculateProjectProgress = useCallback((projectId: string): number => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return 0;
@@ -490,7 +574,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (projectTasks.length === 0 && milestones.length === 0) return 0;
 
-    // Weight milestones at 50% and tasks at 50% for realistic progress
     let milestoneScore = 0;
     if (milestones.length > 0) {
       const totalWeight = milestones.reduce((sum, m) => sum + (m.weight || 1), 0);
@@ -502,7 +585,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let taskScore = 0;
     if (projectTasks.length > 0) {
-      // Important/urgent tasks carry 2x weight
       const totalTaskWeight = projectTasks.reduce(
         (sum, t) => sum + (t.priority === 'urgent' || t.priority === 'high' ? 2 : 1),
         0
@@ -584,7 +666,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, []);
 
-  // Calendar
   const addCalendarEvent = useCallback((eventData: Partial<CalendarEvent>): CalendarEvent => {
     const newEvent: CalendarEvent = {
       id: `ev-${Date.now()}`,
@@ -617,21 +698,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Calculate end time
     const [h, m] = startTime.split(':').map(Number);
     const totalMinutes = h * 60 + m + durationMinutes;
     const endH = Math.min(23, Math.floor(totalMinutes / 60));
     const endM = totalMinutes % 60;
     const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-    // Update task
     updateTask(taskId, {
       plannedDate: date,
       startTime,
       estimatedMinutes: durationMinutes,
     });
 
-    // Create or update corresponding calendar event
     const existingEv = calendarEvents.find((ev) => ev.taskId === taskId && ev.date === date);
     if (existingEv) {
       updateCalendarEvent(existingEv.id, { startTime, endTime });
@@ -650,7 +728,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tasks, calendarEvents, updateTask, updateCalendarEvent, addCalendarEvent]);
 
-  // AI Smart Scheduling
   const autoScheduleWithAi = useCallback(async (date: string) => {
     const unscheduled = tasks.filter(
       (t) => t.status !== 'done' && (!t.plannedDate || !t.startTime)
@@ -688,7 +765,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tasks, calendarEvents]);
 
-  // Habit operations
   const toggleHabitForDate = useCallback((habitId: string, date: string) => {
     setHabits((prev) =>
       prev.map((h) => {
@@ -697,7 +773,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const newDates = exists
             ? h.completedDates.filter((d) => d !== date)
             : [...h.completedDates, date];
-          // calculate updated streak
           const newStreak = exists ? Math.max(0, h.streak - 1) : h.streak + 1;
           return { ...h, completedDates: newDates, streak: newStreak };
         }
@@ -732,7 +807,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Đã xóa thói quen', 'info');
   }, [addToast]);
 
-  // Goal operations
   const addGoal = useCallback((goalData: Partial<Goal>): Goal => {
     const newGoal: Goal = {
       id: `goal-${Date.now()}`,
@@ -758,7 +832,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Đã xóa mục tiêu', 'info');
   }, [addToast]);
 
-  // AI Suggestions
   const applyAiSuggestion = useCallback((suggestionId: string) => {
     const sug = aiSuggestions.find((s) => s.id === suggestionId);
     if (!sug) return;
@@ -799,7 +872,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Đã bỏ qua đề xuất', 'info');
   }, [addToast]);
 
-  // Natural Language Input parser
   const parseAndConfirmInput = useCallback(async (prompt: string): Promise<ParsedInputResult> => {
     try {
       const res = await fetch('/api/gemini/parse-input', {
@@ -814,7 +886,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return data;
     } catch (e) {
       console.error('Parse input error:', e);
-      // Fallback
       return {
         title: prompt,
         type: 'task',
@@ -830,7 +901,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const confirmParsedInput = useCallback((parsed: ParsedInputResult) => {
-    // Check if related project matches existing project
     const matchProj = projects.find(
       (p) => p.name.toLowerCase() === parsed.relatedProject.toLowerCase()
     );
@@ -858,7 +928,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectId: matchProj?.id,
       });
     } else {
-      // Task
       addTask({
         title: parsed.title,
         category: matchProj?.category || 'work',
@@ -873,7 +942,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [projects, addHabit, addCalendarEvent, addTask]);
 
-  // AI Chat Assistant
   const sendChatMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -946,7 +1014,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, [chatMessages, addTask, updateTask, addCalendarEvent, addToast]);
 
-  // Focus Timer actions
   const startFocusSession = useCallback((task: Task, minutes = 25) => {
     setFocusTask(task);
     setFocusTotalSeconds(minutes * 60);

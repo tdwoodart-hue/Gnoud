@@ -294,19 +294,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubscribeCloud = firestoreService.subscribeUserData(
           currentUser.uid,
           (data) => {
-            tasksSyncRef.current = data.tasks;
-            projectsSyncRef.current = data.projects;
-            eventsSyncRef.current = data.events;
-            goalsSyncRef.current = data.goals;
-            habitsSyncRef.current = data.habits;
-            suggestionsSyncRef.current = data.suggestions;
-
-            setTasks((current) => sameEntities(current, data.tasks) ? current : data.tasks);
-            setProjects((current) => sameEntities(current, data.projects) ? current : data.projects);
-            setCalendarEvents((current) => sameEntities(current, data.events) ? current : data.events);
-            setGoals((current) => sameEntities(current, data.goals) ? current : data.goals);
-            setHabits((current) => sameEntities(current, data.habits) ? current : data.habits);
-            setAiSuggestions((current) => sameEntities(current, data.suggestions) ? current : data.suggestions);
+            // Each collection has its own Firestore listener. A snapshot from projects/goals/etc.
+            // must not re-apply an older task snapshot and undo an optimistic local edit/delete.
+            // Sync refs represent the last cloud state we accepted, not the latest local state.
+            if (!sameEntities(tasksSyncRef.current, data.tasks)) {
+              tasksSyncRef.current = data.tasks;
+              setTasks(data.tasks);
+            }
+            if (!sameEntities(projectsSyncRef.current, data.projects)) {
+              projectsSyncRef.current = data.projects;
+              setProjects(data.projects);
+            }
+            if (!sameEntities(eventsSyncRef.current, data.events)) {
+              eventsSyncRef.current = data.events;
+              setCalendarEvents(data.events);
+            }
+            if (!sameEntities(goalsSyncRef.current, data.goals)) {
+              goalsSyncRef.current = data.goals;
+              setGoals(data.goals);
+            }
+            if (!sameEntities(habitsSyncRef.current, data.habits)) {
+              habitsSyncRef.current = data.habits;
+              setHabits(data.habits);
+            }
+            if (!sameEntities(suggestionsSyncRef.current, data.suggestions)) {
+              suggestionsSyncRef.current = data.suggestions;
+              setAiSuggestions(data.suggestions);
+            }
             cloudReadyRef.current = true;
           },
           () => addToast('Mất kết nối đồng bộ. Dữ liệu vẫn được giữ trên thiết bị.', 'warning'),
@@ -326,42 +340,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(tasksSyncRef.current, tasks)) return;
     const previous = tasksSyncRef.current;
-    tasksSyncRef.current = tasks;
     void syncEntityDiff(user.uid, previous, tasks, firestoreService.saveTask, firestoreService.deleteTask);
   }, [tasks, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(projectsSyncRef.current, projects)) return;
     const previous = projectsSyncRef.current;
-    projectsSyncRef.current = projects;
     void syncEntityDiff(user.uid, previous, projects, firestoreService.saveProject, firestoreService.deleteProject);
   }, [projects, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(eventsSyncRef.current, calendarEvents)) return;
     const previous = eventsSyncRef.current;
-    eventsSyncRef.current = calendarEvents;
     void syncEntityDiff(user.uid, previous, calendarEvents, firestoreService.saveCalendarEvent, firestoreService.deleteCalendarEvent);
   }, [calendarEvents, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(habitsSyncRef.current, habits)) return;
     const previous = habitsSyncRef.current;
-    habitsSyncRef.current = habits;
     void syncEntityDiff(user.uid, previous, habits, firestoreService.saveHabit, firestoreService.deleteHabit);
   }, [habits, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(goalsSyncRef.current, goals)) return;
     const previous = goalsSyncRef.current;
-    goalsSyncRef.current = goals;
     void syncEntityDiff(user.uid, previous, goals, firestoreService.saveGoal, firestoreService.deleteGoal);
   }, [goals, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(suggestionsSyncRef.current, aiSuggestions)) return;
     const previous = suggestionsSyncRef.current;
-    suggestionsSyncRef.current = aiSuggestions;
     void syncEntityDiff(user.uid, previous, aiSuggestions, firestoreService.saveAiSuggestion, firestoreService.deleteAiSuggestion);
   }, [aiSuggestions, user]);
 

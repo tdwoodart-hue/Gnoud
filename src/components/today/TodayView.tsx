@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,10 +11,203 @@ import {
   ListChecks,
   Play,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { getFormattedToday } from '../../data/mockData';
+import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
+
+const SWIPE_ACTION_WIDTH = 88;
+const SWIPE_MAX_DISTANCE = 180;
+const SWIPE_OPEN_THRESHOLD = 44;
+const SWIPE_HARD_DELETE_DISTANCE = 132;
+const SWIPE_FAST_DELETE_DISTANCE = 72;
+const SWIPE_FAST_DELETE_VELOCITY = -0.85;
+
+export type SwipeReleaseAction = 'close' | 'open' | 'delete';
+
+export const resolveSwipeRelease = (offset: number, velocityX: number): SwipeReleaseAction => {
+  if (
+    offset <= -SWIPE_HARD_DELETE_DISTANCE ||
+    (offset <= -SWIPE_FAST_DELETE_DISTANCE && velocityX <= SWIPE_FAST_DELETE_VELOCITY)
+  ) {
+    return 'delete';
+  }
+  if (offset <= -SWIPE_OPEN_THRESHOLD) return 'open';
+  return 'close';
+};
+
+const SwipeTodayTaskRow: React.FC<{
+  task: Task;
+  completedSubtasks: number;
+  isDone: boolean;
+  isImportant: boolean;
+  subtaskProgress: number;
+  startsRegularGroup: boolean;
+  isOpen: boolean;
+  onSwipeOpen: (taskId: string | null) => void;
+  onToggle: () => void;
+  onOpen: () => void;
+  onRequestDelete: () => void;
+  onDeleteImmediately: () => void;
+}> = ({
+  task,
+  completedSubtasks,
+  isDone,
+  isImportant,
+  subtaskProgress,
+  startsRegularGroup,
+  isOpen,
+  onSwipeOpen,
+  onToggle,
+  onOpen,
+  onRequestDelete,
+  onDeleteImmediately,
+}) => {
+  const [offset, setOffset] = useState(isOpen ? -SWIPE_ACTION_WIDTH : 0);
+  const [dragging, setDragging] = useState(false);
+  const startXRef = useRef<number | null>(null);
+  const startTimeRef = useRef(0);
+  const startOffsetRef = useRef(0);
+  const offsetRef = useRef(offset);
+  const didDragRef = useRef(false);
+
+  const setSwipeOffset = (next: number) => {
+    offsetRef.current = next;
+    setOffset(next);
+  };
+
+  useEffect(() => {
+    setSwipeOffset(isOpen ? -SWIPE_ACTION_WIDTH : 0);
+  }, [isOpen]);
+
+  const finishDrag = (clientX: number) => {
+    if (startXRef.current === null) return;
+    const elapsed = Math.max(1, performance.now() - startTimeRef.current);
+    const velocityX = (clientX - startXRef.current) / elapsed;
+    const action = resolveSwipeRelease(offsetRef.current, velocityX);
+
+    if (action === 'delete') {
+      setSwipeOffset(-SWIPE_MAX_DISTANCE);
+      onSwipeOpen(null);
+      startXRef.current = null;
+      setDragging(false);
+      onDeleteImmediately();
+      return;
+    }
+
+    const shouldOpen = action === 'open';
+    setSwipeOffset(shouldOpen ? -SWIPE_ACTION_WIDTH : 0);
+    onSwipeOpen(shouldOpen ? task.id : null);
+    startXRef.current = null;
+    setDragging(false);
+  };
+
+  const blockClickAfterDrag = (event: React.MouseEvent) => {
+    if (!didDragRef.current) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    didDragRef.current = false;
+    return true;
+  };
+
+  return (
+    <div
+      data-swipe-shell
+      className={`relative overflow-hidden rounded-2xl ${startsRegularGroup ? 'mt-8' : ''}`}
+    >
+      <div className="pointer-events-none absolute inset-y-[1px] right-[1px] w-[180px] overflow-hidden rounded-r-[15px] bg-rose-600">
+        <button
+          type="button"
+          onClick={onRequestDelete}
+          className="pointer-events-auto absolute inset-y-0 right-0 flex w-[88px] flex-col items-center justify-center gap-1 text-xs font-bold text-white active:bg-rose-700"
+          aria-label={`Xóa việc ${task.title}`}
+        >
+          <Trash2 className="h-5 w-5" />
+          Xóa
+        </button>
+      </div>
+
+      <article
+        data-importance={isImportant ? 'priority' : 'regular'}
+        data-priority={isImportant ? 'important' : 'regular'}
+        className={`relative z-10 flex items-center gap-4 rounded-2xl border px-4 sm:px-6 ${
+          dragging ? '' : 'transition-transform duration-200 ease-out'
+        } ${isImportant ? 'min-h-24 border-l-4 border-l-blue-500 bg-blue-50 py-4 shadow-sm' : 'min-h-16 bg-white py-3'} ${
+          isDone
+            ? 'border-stone-200 !bg-stone-100/60 opacity-60'
+            : isImportant
+              ? 'border-blue-100 hover:border-blue-200 hover:shadow-md'
+              : 'border-stone-200 hover:border-stone-300 hover:shadow-sm'
+        }`}
+        style={{ transform: `translateX(${offset}px)`, touchAction: 'pan-y' }}
+        onPointerDown={(event) => {
+          startXRef.current = event.clientX;
+          startTimeRef.current = performance.now();
+          startOffsetRef.current = offsetRef.current;
+          didDragRef.current = false;
+          setDragging(true);
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (startXRef.current === null) return;
+          const delta = event.clientX - startXRef.current;
+          if (Math.abs(delta) > 6) didDragRef.current = true;
+          const next = Math.max(-SWIPE_MAX_DISTANCE, Math.min(0, startOffsetRef.current + delta));
+          setSwipeOffset(next);
+        }}
+        onPointerUp={(event) => finishDrag(event.clientX)}
+        onPointerCancel={(event) => finishDrag(event.clientX)}
+      >
+        <button
+          type="button"
+          onClick={(event) => {
+            if (blockClickAfterDrag(event)) return;
+            onToggle();
+          }}
+          aria-label={isDone ? `Đánh dấu ${task.title} chưa hoàn thành` : `Hoàn thành ${task.title}`}
+          className="shrink-0 text-stone-300 hover:text-emerald-600"
+        >
+          {isDone ? (
+            <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+          ) : (
+            <Circle className={isImportant ? 'h-7 w-7 text-blue-300' : 'h-6 w-6'} />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={(event) => {
+            if (blockClickAfterDrag(event)) return;
+            if (offsetRef.current < 0) {
+              setSwipeOffset(0);
+              onSwipeOpen(null);
+              return;
+            }
+            onOpen();
+          }}
+          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+        >
+          <div className="min-w-0 flex-1">
+            <h2 className={`truncate ${isImportant ? 'text-lg font-bold text-blue-950 sm:text-xl' : 'text-sm font-medium text-stone-700 sm:text-base'} ${isDone ? '!text-stone-400 line-through' : ''}`}>
+              {task.title}
+            </h2>
+            <div className={`${isImportant ? 'mt-2' : 'mt-1'} flex items-center gap-3 text-xs text-stone-400`}>
+              {task.startTime ? (
+                <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{task.startTime}</span>
+              ) : null}
+              <div className="h-1 w-14 overflow-hidden rounded-full bg-stone-200" aria-label={`${completedSubtasks}/${task.subtasks.length} bước`}>
+                <div className={`h-full rounded-full ${isImportant ? 'bg-blue-600' : 'bg-emerald-500'}`} style={{ width: `${subtaskProgress}%` }} />
+              </div>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-stone-300" />
+        </button>
+      </article>
+    </div>
+  );
+};
 
 export const TodayView: React.FC = () => {
   const {
@@ -25,10 +218,13 @@ export const TodayView: React.FC = () => {
     startFocusSession,
     setEditingTask,
     openTaskModal,
+    deleteTask,
   } = useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('task'),
   );
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
+  const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
 
   const closeFocusPage = () => {
     setSelectedTaskId(null);
@@ -220,54 +416,24 @@ export const TodayView: React.FC = () => {
             const startsRegularGroup = !isImportant && index > 0 && todayTasks[index - 1].isTopPriority;
 
             return (
-              <article
+              <SwipeTodayTaskRow
                 key={task.id}
-                data-importance={isImportant ? 'priority' : 'regular'}
-                data-priority={isImportant ? 'important' : 'regular'}
-                className={`flex items-center gap-4 rounded-2xl border px-4 transition-all sm:px-6 ${
-                  startsRegularGroup ? 'mt-8' : ''
-                } ${isImportant ? 'min-h-24 border-l-4 border-l-blue-500 bg-blue-50 py-4 shadow-sm' : 'min-h-16 bg-white py-3'} ${
-                  isDone
-                    ? 'border-stone-200 !bg-stone-100/60 opacity-60'
-                    : isImportant
-                      ? 'border-blue-100 hover:border-blue-200 hover:shadow-md'
-                      : 'border-stone-200 hover:border-stone-300 hover:shadow-sm'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleTaskComplete(task.id)}
-                  aria-label={isDone ? `Đánh dấu ${task.title} chưa hoàn thành` : `Hoàn thành ${task.title}`}
-                  className="shrink-0 text-stone-300 hover:text-emerald-600"
-                >
-                  {isDone ? (
-                    <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-                  ) : (
-                    <Circle className={isImportant ? 'h-7 w-7 text-blue-300' : 'h-6 w-6'} />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedTaskId(task.id)}
-                  className="flex min-w-0 flex-1 items-center gap-4 text-left"
-                >
-                  <div className="min-w-0 flex-1">
-                    <h2 className={`truncate ${isImportant ? 'text-lg font-bold text-blue-950 sm:text-xl' : 'text-sm font-medium text-stone-700 sm:text-base'} ${isDone ? '!text-stone-400 line-through' : ''}`}>
-                      {task.title}
-                    </h2>
-                    <div className={`${isImportant ? 'mt-2' : 'mt-1'} flex items-center gap-3 text-xs text-stone-400`}>
-                      {task.startTime ? (
-                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{task.startTime}</span>
-                      ) : null}
-                      <div className="h-1 w-14 overflow-hidden rounded-full bg-stone-200" aria-label={`${completedSubtasks}/${task.subtasks.length} bước`}>
-                        <div className={`h-full rounded-full ${isImportant ? 'bg-blue-600' : 'bg-emerald-500'}`} style={{ width: `${subtaskProgress}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-stone-300" />
-                </button>
-              </article>
+                task={task}
+                completedSubtasks={completedSubtasks}
+                isDone={isDone}
+                isImportant={isImportant}
+                subtaskProgress={subtaskProgress}
+                startsRegularGroup={startsRegularGroup}
+                isOpen={openSwipeId === task.id}
+                onSwipeOpen={setOpenSwipeId}
+                onToggle={() => toggleTaskComplete(task.id)}
+                onOpen={() => setSelectedTaskId(task.id)}
+                onRequestDelete={() => {
+                  setPendingDeleteTask(task);
+                  setOpenSwipeId(null);
+                }}
+                onDeleteImmediately={() => deleteTask(task.id)}
+              />
             );
           })
         ) : (
@@ -286,6 +452,43 @@ export const TodayView: React.FC = () => {
       >
         <Plus className="h-4 w-4" /> Thêm việc hôm nay
       </button>
+
+      {pendingDeleteTask ? (
+        <div
+          className="fixed inset-0 z-[70] grid place-items-center bg-black/35 px-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="today-delete-task-title"
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <h2 id="today-delete-task-title" className="text-lg font-bold text-slate-950">
+              Bạn có chắc muốn xóa việc này?
+            </h2>
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500">
+              “{pendingDeleteTask.title}” sẽ bị xóa khỏi tài khoản và các thiết bị đang đồng bộ.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteTask(null)}
+                className="h-12 rounded-xl bg-slate-100 text-sm font-bold text-slate-600"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteTask(pendingDeleteTask.id);
+                  setPendingDeleteTask(null);
+                }}
+                className="h-12 rounded-xl bg-rose-600 text-sm font-bold text-white active:bg-rose-700"
+              >
+                Xóa việc
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

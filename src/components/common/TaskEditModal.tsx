@@ -14,18 +14,22 @@ import {
   Square,
   FileText,
 } from 'lucide-react';
+import { isTaskDraft } from '../../services/taskDraft';
 
 export const TaskEditModal: React.FC = () => {
+  const { editingTask } = useApp();
+  return editingTask ? <TaskEditForm key={editingTask.id} editingTask={editingTask} /> : null;
+};
+
+const TaskEditForm: React.FC<{ editingTask: Task }> = ({ editingTask }) => {
   const {
-    editingTask,
     setEditingTask,
+    addTask,
     updateTask,
     deleteTask,
     projects,
     breakdownTaskWithAi,
   } = useApp();
-
-  if (!editingTask) return null;
 
   const [task, setTask] = useState<Task>({ ...editingTask });
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -34,7 +38,8 @@ export const TaskEditModal: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    updateTask(task.id, task);
+    if (isTaskDraft(task)) addTask(task);
+    else updateTask(task.id, task);
     setEditingTask(null);
   };
 
@@ -132,14 +137,7 @@ export const TaskEditModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-              title="Xóa công việc"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!isTaskDraft(task) && <button type="button" onClick={handleDelete} className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Xóa công việc"><Trash2 className="w-4 h-4" /></button>}
             <button
               type="button"
               onClick={() => setEditingTask(null)}
@@ -468,7 +466,7 @@ export const TaskEditModal: React.FC = () => {
               type="submit"
               className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-xs"
             >
-              Lưu thay đổi
+              {isTaskDraft(task) ? 'Thêm công việc' : 'Lưu thay đổi'}
             </button>
           </div>
         </form>

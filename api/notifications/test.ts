@@ -9,7 +9,7 @@ export default async function handler(req: any, res: any) {
     await sendNotification(device.subscription, { title: 'Thông báo đã hoạt động', body: 'Lịch Sống đã kết nối với iPhone.', tag: 'lich-song-test', url: '/' });
     return res.json({ ok: true });
   } catch (error: any) {
-    if (error?.statusCode === 404 || error?.statusCode === 410) return res.status(410).json({ error: 'Subscription expired' });
+    if ([401, 403, 404, 410].includes(error?.statusCode)) return res.status(410).json({ error: 'Subscription expired' });
     return serverError(res, error);
   }
 }

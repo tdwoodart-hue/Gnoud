@@ -17,5 +17,10 @@ export async function notificationErrorMessage(response: Response): Promise<stri
   if (error === 'Firebase Admin is not configured') return 'Server chưa kết nối Firestore Admin.';
   if (error === 'Device is not subscribed' || error === 'Notifications are not ready') return 'iPhone chưa đăng ký nhận thông báo. Hãy bật lại.';
   if (error === 'Push delivery failed') return 'Apple không nhận được thông báo. Hãy bật lại thông báo.';
-  return 'Không thể gửi thông báo lúc này.';
+  if (error === 'Subscription expired') return 'Đăng ký thông báo đã cũ. Ứng dụng đang kết nối lại.';
+  return error || 'Không thể gửi thông báo lúc này.';
+}
+
+export function shouldRenewPushSubscription(status: number, error: string): boolean {
+  return [401, 403, 404, 410].includes(status) || /expired|unauthorizedregistration|vapid/i.test(error);
 }

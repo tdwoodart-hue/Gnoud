@@ -1,6 +1,6 @@
 import { Task } from '../types';
 import { getReminderPolicy } from './notificationPolicy';
-import { NotificationState, notificationErrorMessage, resolveNotificationState } from './notificationStatus';
+import { NotificationState, notificationErrorMessage, resolveNotificationState, shouldRenewPushSubscription } from './notificationStatus';
 
 const DEVICE_ID_KEY = 'lich_song_push_device_id';
 
@@ -95,10 +95,21 @@ export async function syncNotificationTasks(tasks: Task[]): Promise<void> {
 }
 
 export async function sendTestNotification(): Promise<void> {
-  const response = await fetch('/api/notifications/test', {
+  const request = () => fetch('/api/notifications/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId() }),
   });
+  let response = await request();
+  if (!response.ok) {
+    const copy = response.clone();
+    let serverError = '';
+    try { serverError = (await copy.json())?.error || ''; } catch { /* response is not JSON */ }
+    if (shouldRenewPushSubscription(response.status, serverError)) {
+      await disablePushNotifications();
+      await enablePushNotifications();
+      response = await request();
+    }
+  }
   if (!response.ok) throw new Error(await notificationErrorMessage(response));
 }

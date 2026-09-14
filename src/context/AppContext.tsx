@@ -26,6 +26,7 @@ import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedir
 import { authErrorMessage, shouldUseRedirect } from '../services/authFlow';
 import { firestoreService } from '../services/firestoreService';
 import { syncNotificationTasks } from '../services/notificationService';
+import { createTaskDraft } from '../services/taskDraft';
 
 export interface ToastMessage {
   id: string;
@@ -996,7 +997,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsMorningPlanningOpen,
         isEveningReviewOpen,
         setIsEveningReviewOpen,
-        openTaskModal: (task?: Task) => setEditingTask(task || null),
+        openTaskModal: (task?: Task) => setEditingTask(task || createTaskDraft(getFormattedToday(0))),
         openFocusSession: (task: Task) => startFocusSession(task),
         tasks,
         projects,

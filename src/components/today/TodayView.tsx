@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { getFormattedToday } from '../../data/mockData';
+import { PageHeader } from '../common/PageHeader';
 
 export const TodayView: React.FC = () => {
   const {
@@ -23,7 +24,7 @@ export const TodayView: React.FC = () => {
     toggleSubtask,
     startFocusSession,
     setEditingTask,
-    setIsCommandMenuOpen,
+    openTaskModal,
   } = useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('task'),
@@ -205,12 +206,7 @@ export const TodayView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <header className="mb-5 flex items-center justify-between border-b border-stone-200 pb-4">
-        <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Hôm nay</h1>
-        <p className="text-sm font-medium tabular-nums text-stone-400">
-          {completedCount}/{todayTasks.length}
-        </p>
-      </header>
+      <PageHeader title="Hôm nay" meta={`${completedCount}/${todayTasks.length}`} action={<button type="button" onClick={() => openTaskModal()} className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 text-white shadow-sm" aria-label="Thêm việc"><Plus className="h-5 w-5" /></button>} />
 
       <main data-testid="today-task-list" className="space-y-3">
         {todayTasks.length > 0 ? (
@@ -278,13 +274,14 @@ export const TodayView: React.FC = () => {
           <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-20 text-center">
             <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-stone-300" />
             <p className="font-medium text-stone-700">Hôm nay chưa có việc nào</p>
+            <button type="button" onClick={() => openTaskModal()} className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">Thêm việc đầu tiên</button>
           </div>
         )}
       </main>
 
       <button
         type="button"
-        onClick={() => setIsCommandMenuOpen(true)}
+        onClick={() => openTaskModal()}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-stone-300 py-4 text-sm font-medium text-stone-500 hover:border-stone-400 hover:bg-white hover:text-stone-900"
       >
         <Plus className="h-4 w-4" /> Thêm việc hôm nay

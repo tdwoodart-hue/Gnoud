@@ -1,0 +1,5 @@
+Sau khi chép các file trong ZIP vào source, xóa 3 file cũ này khỏi repo:
+
+src/components/assistant/AiAssistantPanel.tsx
+src/services/personalChiefOfStaff.ts
+test/personalChiefOfStaff.node.test.cjs

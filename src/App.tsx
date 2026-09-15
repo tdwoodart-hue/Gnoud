@@ -11,7 +11,6 @@ import { TasksView } from './components/tasks/TasksView';
 import { CalendarView } from './components/calendar/CalendarView';
 import { PersonalView } from './components/personal/PersonalView';
 import { ReportsView } from './components/reports/ReportsView';
-import { AiAssistantPanel } from './components/assistant/AiAssistantPanel';
 import { TaskEditModal } from './components/common/TaskEditModal';
 import { FocusSessionModal } from './components/common/FocusSessionModal';
 import { ToastContainer } from './components/common/ToastContainer';
@@ -45,7 +44,6 @@ const GlobalModals: React.FC = () => {
 
   return (
     <>
-      <AiAssistantPanel />
       <TaskEditModal />
       <FocusSessionModal />
       <CommandMenuModal

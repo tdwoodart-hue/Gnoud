@@ -1,9 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, ChevronDown, ChevronRight, Download, LogIn, LogOut, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileJson2,
+  LogIn,
+  LogOut,
+  RotateCcw,
+  Send,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { disablePushNotifications, enablePushNotifications, getNotificationSchedulerReady, getNotificationState, sendTestNotification } from '../../services/notificationService';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getNotificationSchedulerReady,
+  getNotificationState,
+  sendTestNotification,
+} from '../../services/notificationService';
 import { NotificationState } from '../../services/notificationStatus';
 import { formatDisplayDate } from '../../data/mockData';
+import { buildChatGPTSnapshot, downloadChatGPTSnapshot } from '../../services/dataSnapshot';
+import { getTelemetrySnapshot, recordUsageEvent } from '../../services/usageTelemetry';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const {
@@ -14,6 +34,11 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     trashTasks,
     restoreTask,
     permanentlyDeleteTask,
+    tasks,
+    projects,
+    calendarEvents,
+    habits,
+    goals,
   } = useApp();
   const [state, setState] = useState<NotificationState>('default');
   const [busy, setBusy] = useState(false);
@@ -82,6 +107,25 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     a.download = `lich-song-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportChatGPTSnapshot = () => {
+    try {
+      recordUsageEvent('snapshot_exported');
+      const snapshot = buildChatGPTSnapshot({
+        tasks,
+        projects,
+        calendarEvents,
+        habits,
+        goals,
+        telemetry: getTelemetrySnapshot(),
+      });
+      const filename = downloadChatGPTSnapshot(snapshot);
+      addToast(`Đã tạo ${filename}`, 'success');
+    } catch (error) {
+      console.warn('Could not export ChatGPT snapshot:', error);
+      addToast('Không thể tạo snapshot lúc này.', 'error');
+    }
   };
 
   const active = state === 'active';
@@ -153,7 +197,15 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
           <section>
             <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Dữ liệu</p>
             <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-              <button onClick={exportData} className="flex w-full items-center gap-3 p-4 text-left">
+              <button onClick={exportChatGPTSnapshot} className="flex w-full items-center gap-3 p-4 text-left">
+                <FileJson2 className="h-5 w-5 shrink-0 text-violet-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Xuất dữ liệu cho ChatGPT</p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-400">Snapshot đã lọc · không gồm email, UID, token, mô tả, ghi chú hay vị trí</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+              </button>
+              <button onClick={exportData} className="flex w-full items-center gap-3 border-t border-slate-100 p-4 text-left">
                 <Download className="h-5 w-5 text-blue-600" />
                 <span className="flex-1 font-semibold">Xuất bản sao lưu</span>
                 <ChevronRight className="h-4 w-4 text-slate-300" />

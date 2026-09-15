@@ -8,17 +8,16 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Task, Project, CalendarEvent, Goal, Habit, AiSuggestion } from '../types';
-
-export type DeletedTask = Task & { deletedAt: string };
+import { Task, Project, CalendarEvent, Goal, Habit } from '../types';
 import {
   INITIAL_TASKS,
   INITIAL_PROJECTS,
   INITIAL_CALENDAR_EVENTS,
   INITIAL_GOALS,
   INITIAL_HABITS,
-  INITIAL_AI_SUGGESTIONS,
 } from '../data/mockData';
+
+export type DeletedTask = Task & { deletedAt: string };
 
 const DEMO_DOCUMENTS: Record<string, string[]> = {
   tasks: ['task-1', 'task-2', 'task-3', 'task-4', 'task-5', 'task-6', 'task-7', 'task-8'],
@@ -26,7 +25,6 @@ const DEMO_DOCUMENTS: Record<string, string[]> = {
   calendarEvents: ['ev-1', 'ev-2', 'ev-3', 'ev-4', 'ev-5', 'ev-6'],
   habits: ['hab-1', 'hab-2', 'hab-3', 'hab-4'],
   goals: ['goal-1', 'goal-2', 'goal-3', 'goal-4'],
-  aiSuggestions: ['sug-1', 'sug-2', 'sug-3'],
 };
 
 export interface UserSyncData {
@@ -36,7 +34,6 @@ export interface UserSyncData {
   events: CalendarEvent[];
   goals: Goal[];
   habits: Habit[];
-  suggestions: AiSuggestion[];
 }
 
 function firestoreSafe<T>(value: T): T {
@@ -69,13 +66,12 @@ export const firestoreService = {
         ids.forEach((id) => batch.delete(doc(db, 'users', userId, collectionName, id)));
       });
       await batch.commit();
+
     } catch (err) {
       console.warn('Could not remove legacy demo data from Firestore:', err);
     }
   },
 
-  // Kept for backwards compatibility. AppContext no longer calls this automatically,
-  // because an empty account must stay empty instead of being re-seeded with demo data.
   async initUserData(userId: string) {
     try {
       const tasksSnapshot = await getDocs(collection(db, 'users', userId, 'tasks'));
@@ -97,9 +93,6 @@ export const firestoreService = {
       INITIAL_HABITS.forEach((habit) => {
         batch.set(doc(db, 'users', userId, 'habits', habit.id), firestoreSafe({ ...habit, userId }));
       });
-      INITIAL_AI_SUGGESTIONS.forEach((suggestion) => {
-        batch.set(doc(db, 'users', userId, 'aiSuggestions', suggestion.id), firestoreSafe({ ...suggestion, userId }));
-      });
       await batch.commit();
     } catch (err) {
       console.warn('Could not initialize user data in Firestore:', err);
@@ -108,7 +101,7 @@ export const firestoreService = {
 
   async fetchUserData(userId: string): Promise<UserSyncData | null> {
     try {
-      const [tasksSnap, deletedTasksSnap, projectsSnap, eventsSnap, goalsSnap, habitsSnap, suggestionsSnap] =
+      const [tasksSnap, deletedTasksSnap, projectsSnap, eventsSnap, goalsSnap, habitsSnap] =
         await Promise.all([
           getDocs(collection(db, 'users', userId, 'tasks')),
           getDocs(collection(db, 'users', userId, 'deletedTasks')),
@@ -116,7 +109,6 @@ export const firestoreService = {
           getDocs(collection(db, 'users', userId, 'calendarEvents')),
           getDocs(collection(db, 'users', userId, 'goals')),
           getDocs(collection(db, 'users', userId, 'habits')),
-          getDocs(collection(db, 'users', userId, 'aiSuggestions')),
         ]);
 
       return {
@@ -126,7 +118,6 @@ export const firestoreService = {
         events: eventsSnap.docs.map((d) => fromFirestore<CalendarEvent>(d.data())),
         goals: goalsSnap.docs.map((d) => fromFirestore<Goal>(d.data())),
         habits: habitsSnap.docs.map((d) => fromFirestore<Habit>(d.data())),
-        suggestions: suggestionsSnap.docs.map((d) => fromFirestore<AiSuggestion>(d.data())),
       };
     } catch (err) {
       console.warn('Error fetching data from Firestore, relying on local state:', err);
@@ -146,12 +137,11 @@ export const firestoreService = {
       events: [],
       goals: [],
       habits: [],
-      suggestions: [],
     };
     const ready = new Set<keyof UserSyncData>();
 
     const publish = () => {
-      if (ready.size !== 7) return;
+      if (ready.size !== 6) return;
       onData({
         tasks: [...data.tasks],
         deletedTasks: [...data.deletedTasks],
@@ -159,7 +149,6 @@ export const firestoreService = {
         events: [...data.events],
         goals: [...data.goals],
         habits: [...data.habits],
-        suggestions: [...data.suggestions],
       });
     };
 
@@ -223,15 +212,6 @@ export const firestoreService = {
         },
         fail,
       ),
-      onSnapshot(
-        collection(db, 'users', userId, 'aiSuggestions'),
-        (snapshot) => {
-          data.suggestions = snapshot.docs.map((d) => fromFirestore<AiSuggestion>(d.data()));
-          ready.add('suggestions');
-          publish();
-        },
-        fail,
-      ),
     ];
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -246,7 +226,6 @@ export const firestoreService = {
         ...data.events.map((item) => saveEntity(userId, 'calendarEvents', item)),
         ...data.goals.map((item) => saveEntity(userId, 'goals', item)),
         ...data.habits.map((item) => saveEntity(userId, 'habits', item)),
-        ...data.suggestions.map((item) => saveEntity(userId, 'aiSuggestions', item)),
       ]);
     } catch (error) {
       console.warn('Could not migrate local data to Firestore:', error);
@@ -264,10 +243,7 @@ export const firestoreService = {
       next.forEach((task) => {
         const before = previousById.get(task.id);
         if (!before || JSON.stringify(before) !== JSON.stringify(task)) {
-          batch.set(
-            doc(db, 'users', userId, 'tasks', task.id),
-            firestoreSafe({ ...task, userId }),
-          );
+          batch.set(doc(db, 'users', userId, 'tasks', task.id), firestoreSafe({ ...task, userId }));
           writeCount += 1;
         }
       });
@@ -286,114 +262,39 @@ export const firestoreService = {
   },
 
   async saveTask(userId: string, task: Task) {
-    try {
-      await saveEntity(userId, 'tasks', task);
-    } catch (e) {
-      console.warn('Error saving task to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'tasks', task); } catch (e) { console.warn('Error saving task to Firestore:', e); }
   },
-
   async deleteTask(userId: string, taskId: string) {
-    try {
-      await deleteEntity(userId, 'tasks', taskId);
-    } catch (e) {
-      console.warn('Error deleting task from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'tasks', taskId); } catch (e) { console.warn('Error deleting task from Firestore:', e); }
   },
-
   async saveDeletedTask(userId: string, task: DeletedTask) {
-    try {
-      await saveEntity(userId, 'deletedTasks', task);
-    } catch (e) {
-      console.warn('Error saving deleted task to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'deletedTasks', task); } catch (e) { console.warn('Error saving deleted task to Firestore:', e); }
   },
-
   async deleteDeletedTask(userId: string, taskId: string) {
-    try {
-      await deleteEntity(userId, 'deletedTasks', taskId);
-    } catch (e) {
-      console.warn('Error permanently deleting task from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'deletedTasks', taskId); } catch (e) { console.warn('Error permanently deleting task from Firestore:', e); }
   },
-
   async saveProject(userId: string, project: Project) {
-    try {
-      await saveEntity(userId, 'projects', project);
-    } catch (e) {
-      console.warn('Error saving project to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'projects', project); } catch (e) { console.warn('Error saving project to Firestore:', e); }
   },
-
   async deleteProject(userId: string, projectId: string) {
-    try {
-      await deleteEntity(userId, 'projects', projectId);
-    } catch (e) {
-      console.warn('Error deleting project from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'projects', projectId); } catch (e) { console.warn('Error deleting project from Firestore:', e); }
   },
-
   async saveCalendarEvent(userId: string, event: CalendarEvent) {
-    try {
-      await saveEntity(userId, 'calendarEvents', event);
-    } catch (e) {
-      console.warn('Error saving event to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'calendarEvents', event); } catch (e) { console.warn('Error saving event to Firestore:', e); }
   },
-
   async deleteCalendarEvent(userId: string, eventId: string) {
-    try {
-      await deleteEntity(userId, 'calendarEvents', eventId);
-    } catch (e) {
-      console.warn('Error deleting event from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'calendarEvents', eventId); } catch (e) { console.warn('Error deleting event from Firestore:', e); }
   },
-
   async saveGoal(userId: string, goal: Goal) {
-    try {
-      await saveEntity(userId, 'goals', goal);
-    } catch (e) {
-      console.warn('Error saving goal to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'goals', goal); } catch (e) { console.warn('Error saving goal to Firestore:', e); }
   },
-
   async deleteGoal(userId: string, goalId: string) {
-    try {
-      await deleteEntity(userId, 'goals', goalId);
-    } catch (e) {
-      console.warn('Error deleting goal from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'goals', goalId); } catch (e) { console.warn('Error deleting goal from Firestore:', e); }
   },
-
   async saveHabit(userId: string, habit: Habit) {
-    try {
-      await saveEntity(userId, 'habits', habit);
-    } catch (e) {
-      console.warn('Error saving habit to Firestore:', e);
-    }
+    try { await saveEntity(userId, 'habits', habit); } catch (e) { console.warn('Error saving habit to Firestore:', e); }
   },
-
   async deleteHabit(userId: string, habitId: string) {
-    try {
-      await deleteEntity(userId, 'habits', habitId);
-    } catch (e) {
-      console.warn('Error deleting habit from Firestore:', e);
-    }
-  },
-
-  async saveAiSuggestion(userId: string, suggestion: AiSuggestion) {
-    try {
-      await saveEntity(userId, 'aiSuggestions', suggestion);
-    } catch (e) {
-      console.warn('Error saving suggestion to Firestore:', e);
-    }
-  },
-
-  async deleteAiSuggestion(userId: string, suggestionId: string) {
-    try {
-      await deleteEntity(userId, 'aiSuggestions', suggestionId);
-    } catch (e) {
-      console.warn('Error deleting suggestion from Firestore:', e);
-    }
+    try { await deleteEntity(userId, 'habits', habitId); } catch (e) { console.warn('Error deleting habit from Firestore:', e); }
   },
 };

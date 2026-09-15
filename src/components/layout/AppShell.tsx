@@ -5,7 +5,6 @@ import {
   Command,
   ListTodo,
   Settings,
-  Sparkles,
   Sun,
   UserRound,
 } from 'lucide-react';
@@ -23,7 +22,7 @@ const icons: Record<NavTab, React.FC<{ className?: string }>> = {
 };
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeTab, setActiveTab, setIsAssistantOpen, setIsCommandMenuOpen } = useApp();
+  const { activeTab, setActiveTab, setIsCommandMenuOpen } = useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -35,21 +34,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#fafbfc] font-sans text-slate-900">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl overflow-x-hidden">
-        {/* Desktop Sidebar */}
         <aside className="hidden w-60 shrink-0 flex-col justify-between border-r border-slate-200/70 bg-white/90 px-4 py-7 backdrop-blur-xs md:flex">
           <div>
-            {/* App Brand */}
             <div className="mb-8 flex items-center gap-3 px-2">
               <div className="grid h-10 w-10 place-items-center rounded-2xl border border-indigo-100 bg-indigo-50/80 text-indigo-600 shadow-xs">
                 <Sun className="h-5 w-5" />
               </div>
               <div className="min-w-0">
                 <div className="text-base font-bold tracking-tight text-slate-900">Lịch Sống</div>
-                <div className="text-[11px] font-medium text-slate-400">Trợ lý cuộc sống cá nhân</div>
+                <div className="text-[11px] font-medium text-slate-400">Quản lý cuộc sống cá nhân</div>
               </div>
             </div>
 
-            {/* Main Navigation */}
             <nav className="space-y-1.5" aria-label="Điều hướng chính">
               {PRIMARY_NAV_ITEMS.map((item) => {
                 const Icon = icons[item.id];
@@ -65,11 +61,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                         : 'border border-transparent text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
                     }`}
                   >
-                    <Icon
-                      className={`h-4 w-4 transition-colors ${
-                        active ? 'text-indigo-600' : 'text-slate-400'
-                      }`}
-                    />
+                    <Icon className={`h-4 w-4 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -77,17 +69,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </nav>
           </div>
 
-          {/* Sidebar Footer Controls */}
           <div className="space-y-2 border-t border-slate-100/90 pt-5">
-            <button
-              type="button"
-              onClick={() => setIsAssistantOpen(true)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-purple-100/80 bg-purple-50/40 px-3.5 py-2.5 text-xs font-semibold text-purple-700 transition hover:bg-purple-50"
-            >
-              <Sparkles className="h-4 w-4 text-purple-500" />
-              <span className="flex-1 text-left">Trợ lý AI</span>
-            </button>
-
             <div className="flex gap-1.5">
               <button
                 type="button"
@@ -112,13 +94,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </aside>
 
-        {/* Main Content Area */}
         <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-12 md:pt-10">
           {children}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
         {PRIMARY_NAV_ITEMS.map((item) => {
           const Icon = icons[item.id];
@@ -132,11 +112,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              <span
-                className={`grid h-8 w-12 place-items-center rounded-xl transition-colors ${
-                  active ? 'border border-indigo-100 bg-indigo-50/80' : ''
-                }`}
-              >
+              <span className={`grid h-8 w-12 place-items-center rounded-xl transition-colors ${active ? 'border border-indigo-100 bg-indigo-50/80' : ''}`}>
                 <Icon className="h-[18px] w-[18px]" />
               </span>
               <span className="leading-none">{item.label}</span>
@@ -149,4 +125,3 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     </div>
   );
 };
-

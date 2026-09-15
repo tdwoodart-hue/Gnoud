@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Clock, Flame, BarChart3, Layers, Sparkles, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Clock, Flame, Layers } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
@@ -9,10 +9,9 @@ export const ReportsView: React.FC = () => {
 
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((task) => task.status === 'done').length;
-  const pendingTasks = totalTasks - doneTasks;
   const completionRate = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
   const focusHours = (tasks.reduce((sum, task) => sum + (task.actualMinutes || 0), 0) / 60).toFixed(1);
-  const bestStreak = habits.length ? Math.max(0, ...habits.map((h) => h.streak || 0)) : 0;
+  const bestStreak = habits.length ? Math.max(0, ...habits.map((habit) => habit.streak || 0)) : 0;
 
   const stats = [
     {
@@ -40,12 +39,9 @@ export const ReportsView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader
-        title="Báo cáo & Hiệu suất"
-      />
+      <PageHeader title="Báo cáo & Hiệu suất" />
 
-      {/* Top Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {stats.map(({ label, value, subtext, icon: Icon, badgeColor }) => (
           <div
             key={label}
@@ -65,23 +61,10 @@ export const ReportsView: React.FC = () => {
         ))}
       </div>
 
-      {/* Productivity Insight Card */}
-      <div className="p-5 bg-indigo-50/60 rounded-3xl border border-indigo-100/70 flex items-start gap-3.5 shadow-xs">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-indigo-100 text-indigo-600">
-          <Sparkles className="w-4 h-4" />
-        </div>
-        <div className="text-xs text-slate-600 leading-relaxed space-y-1">
-          <span className="font-bold text-slate-900 block text-sm">Góc nhìn trợ lý</span>
-          Bạn đạt hiệu suất cao nhất vào buổi sáng từ 8:30 đến 11:30. Hãy tiếp tục sắp xếp các công việc quan trọng cần tư duy sâu vào khung giờ vàng này.
-        </div>
-      </div>
-
-      {/* Project Progress Section */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-slate-400" />
-            Tiến độ theo dự án
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <Layers className="h-4 w-4 text-slate-400" /> Tiến độ theo dự án
           </h2>
           <span className="text-xs font-medium text-slate-400">{projects.length} dự án</span>
         </div>
@@ -101,30 +84,24 @@ export const ReportsView: React.FC = () => {
                   className="rounded-3xl border border-slate-200/70 bg-white p-4.5 shadow-xs transition hover:border-slate-300/80 hover:shadow-sm"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2.5">
                       <span
                         className="h-3 w-3 shrink-0 rounded-full"
                         style={{ backgroundColor: project.color || '#6366f1' }}
                       />
                       <p className="truncate text-sm font-bold text-slate-900">{project.name}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-slate-400 font-medium">
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs font-medium text-slate-400">
                         {projectDone}/{relatedTasks.length} việc
                       </span>
-                      <span className="text-xs font-bold text-slate-700 tabular-nums">
-                        {projectRate}%
-                      </span>
+                      <span className="text-xs font-bold tabular-nums text-slate-700">{projectRate}%</span>
                     </div>
                   </div>
-
                   <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${projectRate}%`,
-                        backgroundColor: project.color || '#6366f1',
-                      }}
+                      style={{ width: `${projectRate}%`, backgroundColor: project.color || '#6366f1' }}
                     />
                   </div>
                 </div>
@@ -141,4 +118,3 @@ export const ReportsView: React.FC = () => {
     </div>
   );
 };
-

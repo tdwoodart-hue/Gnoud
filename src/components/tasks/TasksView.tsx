@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronRight,
   FolderKanban,
   Plus,
@@ -11,8 +12,15 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { TaskStatus } from '../../types';
+import { Task, TaskStatus } from '../../types';
 import { parseProjectPlanFile } from '../../services/taskDraft';
+import {
+  applyTaskScope,
+  buildCompactTaskBuckets,
+  bundleTasksByProject,
+  getTaskDate,
+  TaskScope,
+} from '../../services/taskListLayout';
 import { formatDisplayDate } from '../../data/mockData';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
@@ -20,11 +28,243 @@ import { EmptyState } from '../common/EmptyState';
 type Filter = 'open' | 'done' | 'all';
 type ViewMode = 'tasks' | 'projects';
 
+type TaskGroupProps = {
+  title: string;
+  tasks: Task[];
+  projectNames: Map<string, string>;
+  statusLabel: Record<TaskStatus, string>;
+  toggleTaskComplete: (id: string) => void;
+  openTaskModal: (task?: Task) => void;
+  bundleKey: string;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  compactLimit?: number;
+};
+
 const priorityColor = {
   urgent: 'bg-rose-500',
   high: 'bg-amber-400',
   medium: 'bg-indigo-500',
   low: 'bg-slate-300',
+};
+
+const localIsoDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const TaskRow: React.FC<{
+  task: Task;
+  projectName?: string;
+  statusLabel: Record<TaskStatus, string>;
+  toggleTaskComplete: (id: string) => void;
+  openTaskModal: (task?: Task) => void;
+  nested?: boolean;
+}> = ({ task, projectName, statusLabel, toggleTaskComplete, openTaskModal, nested = false }) => {
+  const date = getTaskDate(task);
+
+  return (
+    <div
+      className={`flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-3.5 shadow-xs transition hover:border-slate-300/80 hover:shadow-sm ${
+        nested ? 'ml-3 border-l-2 border-l-indigo-100 bg-slate-50/60 shadow-none' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => toggleTaskComplete(task.id)}
+        aria-label={task.status === 'done' ? 'Mở lại' : 'Hoàn thành'}
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2 transition active:scale-95 ${
+          task.status === 'done'
+            ? 'border-emerald-500 bg-emerald-500 text-white'
+            : 'border-slate-300 hover:border-indigo-400'
+        }`}
+      >
+        {task.status === 'done' && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => openTaskModal(task)}
+        className="min-w-0 flex-1 py-2.5 text-left"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${priorityColor[task.priority]}`} />
+          <p
+            className={`truncate text-sm font-semibold ${
+              task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'
+            }`}
+          >
+            {task.title}
+          </p>
+        </div>
+        <p className="mt-0.5 truncate text-[11px] text-slate-400">
+          {[date ? formatDisplayDate(date) : '', task.startTime, projectName || statusLabel[task.status]]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      </button>
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+    </div>
+  );
+};
+
+const TaskGroup: React.FC<TaskGroupProps> = ({
+  title,
+  tasks,
+  projectNames,
+  statusLabel,
+  toggleTaskComplete,
+  openTaskModal,
+  bundleKey,
+  collapsible = false,
+  defaultCollapsed = false,
+  compactLimit = 6,
+}) => {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [showAll, setShowAll] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const rows = useMemo(() => bundleTasksByProject(tasks, projectNames, 2), [tasks, projectNames]);
+
+  if (tasks.length === 0) return null;
+
+  const toggleProject = (projectId: string) => {
+    setExpandedProjects((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
+
+  if (collapsible && collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 text-left transition hover:bg-white hover:shadow-xs"
+      >
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-slate-200/70 text-slate-500">
+          <ChevronRight className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{title}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{tasks.length} việc đã lên lịch · bấm để xem</p>
+        </div>
+      </button>
+    );
+  }
+
+  const visibleRows = showAll ? rows : rows.slice(0, compactLimit);
+  const hiddenRows = Math.max(0, rows.length - visibleRows.length);
+
+  return (
+    <section className="space-y-2">
+      <div className="flex min-h-7 items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{title}</h3>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-400">
+            {tasks.length}
+          </span>
+        </div>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-700"
+          >
+            Thu gọn <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+          </button>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        {visibleRows.map((row) => {
+          if (row.kind === 'task') {
+            return (
+              <TaskRow
+                key={`${bundleKey}-task-${row.task.id}`}
+                task={row.task}
+                projectName={row.task.projectId ? projectNames.get(row.task.projectId) : undefined}
+                statusLabel={statusLabel}
+                toggleTaskComplete={toggleTaskComplete}
+                openTaskModal={openTaskModal}
+              />
+            );
+          }
+
+          const expanded = expandedProjects.has(row.projectId);
+          const first = row.tasks[0];
+          const last = row.tasks[row.tasks.length - 1];
+          const firstDate = getTaskDate(first);
+          const lastDate = getTaskDate(last);
+          const dateText =
+            firstDate && lastDate && firstDate !== lastDate
+              ? `${formatDisplayDate(firstDate)} → ${formatDisplayDate(lastDate)}`
+              : firstDate
+                ? formatDisplayDate(firstDate)
+                : 'Chưa xếp lịch';
+
+          return (
+            <div key={`${bundleKey}-project-${row.projectId}`} className="space-y-2">
+              <button
+                type="button"
+                onClick={() => toggleProject(row.projectId)}
+                className="flex min-h-[58px] w-full items-center gap-3 rounded-2xl border border-indigo-100/80 bg-indigo-50/45 px-3.5 text-left transition hover:bg-indigo-50/80"
+              >
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-indigo-600 ring-1 ring-indigo-100">
+                  <FolderKanban className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">{row.projectName}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                    {row.tasks.length} việc · {dateText}
+                  </p>
+                </div>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-indigo-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              </button>
+
+              {expanded ? (
+                <div className="space-y-1.5">
+                  {row.tasks.map((task) => (
+                    <TaskRow
+                      key={`${bundleKey}-nested-${task.id}`}
+                      task={task}
+                      projectName={row.projectName}
+                      statusLabel={statusLabel}
+                      toggleTaskComplete={toggleTaskComplete}
+                      openTaskModal={openTaskModal}
+                      nested
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {hiddenRows > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="h-10 w-full rounded-xl border border-dashed border-slate-200 text-xs font-semibold text-slate-500 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          Xem thêm {hiddenRows} nhóm/việc
+        </button>
+      ) : showAll && rows.length > compactLimit ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(false)}
+          className="h-9 w-full text-xs font-semibold text-slate-400 hover:text-slate-700"
+        >
+          Thu gọn danh sách
+        </button>
+      ) : null}
+    </section>
+  );
 };
 
 export const TasksView: React.FC = () => {
@@ -39,38 +279,47 @@ export const TasksView: React.FC = () => {
     deleteProject,
     calculateProjectProgress,
   } = useApp();
+
   const [filter, setFilter] = useState<Filter>('open');
   const [viewMode, setViewMode] = useState<ViewMode>('tasks');
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const [scope, setScope] = useState<TaskScope>('all');
   const [creatingProject, setCreatingProject] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectCategory, setProjectCategory] = useState<'work' | 'personal'>('work');
   const [projectTargetDate, setProjectTargetDate] = useState('');
   const [pendingProjectDeleteId, setPendingProjectDeleteId] = useState<string | null>(null);
   const projectPlanInputRef = useRef<HTMLInputElement>(null);
+  const todayIso = localIsoDate();
 
-  const visible = useMemo(
-    () =>
-      tasks
-        .filter((task) => !projectFilter || task.projectId === projectFilter)
-        .filter(
-          (task) =>
-            filter === 'all' ||
-            (filter === 'done' ? task.status === 'done' : task.status !== 'done'),
-        )
-        .sort(
-          (a, b) =>
-            (a.plannedDate || '9999').localeCompare(b.plannedDate || '9999') ||
-            (a.startTime || '99:99').localeCompare(b.startTime || '99:99'),
-        ),
-    [tasks, filter, projectFilter],
+  const projectNames = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
   );
 
-  const projectNameById = (id?: string) => projects.find((project) => project.id === id)?.name;
+  const statusFiltered = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          filter === 'all' ||
+          (filter === 'done' ? task.status === 'done' : task.status !== 'done'),
+      ),
+    [tasks, filter],
+  );
+
+  const visible = useMemo(() => {
+    const projectScoped = projectFilter
+      ? statusFiltered.filter((task) => task.projectId === projectFilter)
+      : statusFiltered;
+    return projectFilter ? projectScoped : applyTaskScope(projectScoped, scope, todayIso);
+  }, [statusFiltered, projectFilter, scope, todayIso]);
+
+  const buckets = useMemo(() => buildCompactTaskBuckets(visible, todayIso), [visible, todayIso]);
   const selectedProject = projects.find((project) => project.id === projectFilter);
   const pendingProjectTaskCount = pendingProjectDeleteId
     ? tasks.filter((task) => task.projectId === pendingProjectDeleteId).length
     : 0;
+
   const statusLabel: Record<TaskStatus, string> = {
     todo: 'Chưa làm',
     in_progress: 'Đang làm',
@@ -97,6 +346,7 @@ export const TasksView: React.FC = () => {
 
   const openProjectTasks = (projectId: string) => {
     setProjectFilter(projectId);
+    setScope('all');
     setFilter('open');
     setViewMode('tasks');
   };
@@ -125,6 +375,20 @@ export const TasksView: React.FC = () => {
   };
 
   const openCount = tasks.filter((task) => task.status !== 'done').length;
+  const scopeOptions: Array<{ id: TaskScope; label: string }> = [
+    { id: 'all', label: 'Tất cả' },
+    { id: 'today', label: 'Hôm nay' },
+    { id: 'week', label: '7 ngày' },
+    ...projects.map((project) => ({ id: `project:${project.id}` as TaskScope, label: project.name })),
+    { id: 'no-project', label: 'Không dự án' },
+  ];
+
+  const groupProps = {
+    projectNames,
+    statusLabel,
+    toggleTaskComplete,
+    openTaskModal,
+  };
 
   return (
     <div className="mx-auto min-w-0 w-full max-w-3xl overflow-x-hidden">
@@ -143,8 +407,7 @@ export const TasksView: React.FC = () => {
         }
       />
 
-      {/* Switcher ViewMode */}
-      <div className="mb-5 grid grid-cols-2 rounded-2xl border border-slate-200/70 bg-slate-100/80 p-1">
+      <div className="mb-4 grid grid-cols-2 rounded-2xl border border-slate-200/70 bg-slate-100/80 p-1">
         <button
           type="button"
           onClick={() => setViewMode('tasks')}
@@ -174,12 +437,10 @@ export const TasksView: React.FC = () => {
       {viewMode === 'tasks' ? (
         <>
           {selectedProject ? (
-            <div className="mb-4 min-w-0 space-y-2">
-              <div className="flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4">
+            <div className="mb-3 min-w-0 space-y-2">
+              <div className="flex min-h-11 min-w-0 items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4">
                 <FolderKanban className="h-4 w-4 shrink-0 text-indigo-600" />
-                <p className="min-w-0 flex-1 truncate text-sm font-bold text-indigo-950">
-                  {selectedProject.name}
-                </p>
+                <p className="min-w-0 flex-1 truncate text-sm font-bold text-indigo-950">{selectedProject.name}</p>
                 <button
                   type="button"
                   onClick={() => setProjectFilter(null)}
@@ -202,7 +463,7 @@ export const TasksView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => projectPlanInputRef.current?.click()}
-                className="flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 text-xs font-semibold text-indigo-700 shadow-xs transition hover:bg-indigo-50/50 active:scale-[0.99]"
+                className="flex h-10 w-full min-w-0 items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 text-xs font-semibold text-indigo-700 shadow-xs transition hover:bg-indigo-50/50 active:scale-[0.99]"
               >
                 <Upload className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">Nhập lộ trình</span>
@@ -211,7 +472,7 @@ export const TasksView: React.FC = () => {
             </div>
           ) : null}
 
-          <div className="mb-4 flex min-w-0 gap-1.5 rounded-2xl border border-slate-200/70 bg-slate-100/80 p-1">
+          <div className="mb-3 flex min-w-0 gap-1.5 rounded-2xl border border-slate-200/70 bg-slate-100/80 p-1">
             {(
               [
                 ['open', 'Đang làm'],
@@ -234,13 +495,34 @@ export const TasksView: React.FC = () => {
             ))}
           </div>
 
+          {!selectedProject ? (
+            <div className="-mx-1 mb-4 overflow-x-auto px-1 pb-1">
+              <div className="flex w-max min-w-full gap-2">
+                {scopeOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setScope(option.id)}
+                    className={`h-8 max-w-[180px] shrink-0 truncate rounded-full px-3 text-[11px] font-semibold transition ${
+                      scope === option.id
+                        ? 'bg-slate-900 text-white'
+                        : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {visible.length === 0 ? (
             <EmptyState
               title={selectedProject ? 'Dự án này chưa có công việc' : 'Không có công việc'}
               description={
                 selectedProject
                   ? 'Hãy thêm công việc đầu tiên để bắt đầu triển khai dự án này.'
-                  : 'Danh sách công việc của bạn hiện đang trống.'
+                  : 'Không có việc phù hợp với bộ lọc hiện tại.'
               }
               action={
                 <button
@@ -248,57 +530,26 @@ export const TasksView: React.FC = () => {
                   onClick={() => openTaskModal()}
                   className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700"
                 >
-                  Thêm việc đầu tiên
+                  Thêm việc
                 </button>
               }
             />
           ) : (
-            <div className="space-y-2.5">
-              {visible.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex min-h-[72px] items-center gap-3.5 rounded-2xl border border-slate-200/70 bg-white px-4 shadow-xs transition hover:border-slate-300/80 hover:shadow-sm"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleTaskComplete(task.id)}
-                    aria-label={task.status === 'done' ? 'Mở lại' : 'Hoàn thành'}
-                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95 ${
-                      task.status === 'done'
-                        ? 'border-emerald-500 bg-emerald-500 text-white'
-                        : 'border-slate-300 hover:border-indigo-400'
-                    }`}
-                  >
-                    {task.status === 'done' && <Check className="h-4 w-4 stroke-[3]" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openTaskModal(task)}
-                    className="min-w-0 flex-1 py-3 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${priorityColor[task.priority]}`} />
-                      <p
-                        className={`truncate text-sm font-semibold sm:text-base ${
-                          task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'
-                        }`}
-                      >
-                        {task.title}
-                      </p>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-slate-400">
-                      {[
-                        formatDisplayDate(task.plannedDate),
-                        task.startTime,
-                        projectNameById(task.projectId) || statusLabel[task.status],
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
-                  </button>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                </div>
-              ))}
+            <div className="space-y-5">
+              <TaskGroup title="Quá hạn" tasks={buckets.overdue} bundleKey="overdue" {...groupProps} />
+              <TaskGroup title="Hôm nay" tasks={buckets.today} bundleKey="today" {...groupProps} />
+              <TaskGroup title="Ngày mai" tasks={buckets.tomorrow} bundleKey="tomorrow" {...groupProps} />
+              <TaskGroup title="7 ngày tới" tasks={buckets.week} bundleKey="week" {...groupProps} />
+              <TaskGroup title="Chưa xếp lịch" tasks={buckets.unscheduled} bundleKey="unscheduled" {...groupProps} />
+              <TaskGroup
+                title="Sau đó"
+                tasks={buckets.later}
+                bundleKey="later"
+                collapsible
+                defaultCollapsed
+                compactLimit={5}
+                {...groupProps}
+              />
             </div>
           )}
         </>
@@ -483,4 +734,3 @@ export const TasksView: React.FC = () => {
     </div>
   );
 };
-

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  ArrowRight,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -23,6 +22,7 @@ const SWIPE_OPEN_THRESHOLD = 44;
 const SWIPE_HARD_DELETE_DISTANCE = 132;
 const SWIPE_FAST_DELETE_DISTANCE = 72;
 const SWIPE_FAST_DELETE_VELOCITY = -0.85;
+const SWIPE_START_THRESHOLD = 8;
 
 export type SwipeReleaseAction = 'close' | 'open' | 'delete';
 
@@ -36,8 +36,6 @@ export const resolveSwipeRelease = (offset: number, velocityX: number): SwipeRel
   if (offset <= -SWIPE_OPEN_THRESHOLD) return 'open';
   return 'close';
 };
-
-const SWIPE_START_THRESHOLD = 8;
 
 export const shouldStartSwipe = (deltaX: number, deltaY: number): boolean => {
   const horizontal = Math.abs(deltaX);
@@ -103,6 +101,7 @@ const SwipeTodayTaskRow: React.FC<{
       resetPointer();
       return;
     }
+
     const elapsed = Math.max(1, performance.now() - startTimeRef.current);
     const velocityX = (clientX - startXRef.current) / elapsed;
     const action = resolveSwipeRelease(offsetRef.current, velocityX);
@@ -135,10 +134,7 @@ const SwipeTodayTaskRow: React.FC<{
   };
 
   return (
-    <div
-      data-swipe-shell
-      className={`relative overflow-hidden rounded-2xl ${startsRegularGroup ? 'mt-7' : ''}`}
-    >
+    <div data-swipe-shell className={`relative overflow-hidden rounded-2xl ${startsRegularGroup ? 'mt-7' : ''}`}>
       <div className="pointer-events-none absolute inset-y-[1px] right-[1px] w-[180px] overflow-hidden rounded-r-[15px] bg-rose-500">
         <button
           type="button"
@@ -153,7 +149,6 @@ const SwipeTodayTaskRow: React.FC<{
 
       <article
         data-importance={isImportant ? 'priority' : 'regular'}
-        data-priority={isImportant ? 'important' : 'regular'}
         className={`relative z-10 flex items-center gap-4 rounded-2xl border px-4 sm:px-5 ${
           dragging ? '' : 'transition-transform duration-200 ease-out'
         } ${
@@ -205,13 +200,7 @@ const SwipeTodayTaskRow: React.FC<{
           {isDone ? (
             <CheckCircle2 className="h-6 w-6 text-emerald-600" />
           ) : (
-            <Circle
-              className={
-                isImportant
-                  ? 'h-6 w-6 text-indigo-300 transition-colors hover:text-indigo-600'
-                  : 'h-6 w-6 text-slate-300 transition-colors hover:text-indigo-600'
-              }
-            />
+            <Circle className={isImportant ? 'h-6 w-6 text-indigo-300' : 'h-6 w-6 text-slate-300'} />
           )}
         </button>
 
@@ -229,40 +218,24 @@ const SwipeTodayTaskRow: React.FC<{
           className="flex min-w-0 flex-1 items-center gap-4 text-left"
         >
           <div className="min-w-0 flex-1">
-            <h2
-              className={`truncate ${
-                isImportant
-                  ? 'text-base font-bold text-slate-900 sm:text-lg'
-                  : 'text-sm font-semibold text-slate-800 sm:text-base'
-              } ${isDone ? '!text-slate-400 line-through' : ''}`}
-            >
+            <h2 className={`truncate ${isImportant ? 'text-base font-bold text-slate-900 sm:text-lg' : 'text-sm font-semibold text-slate-800 sm:text-base'} ${isDone ? '!text-slate-400 line-through' : ''}`}>
               {task.title}
             </h2>
-            <div
-              className={`${
-                isImportant ? 'mt-1.5' : 'mt-1'
-              } flex items-center gap-3 text-xs text-slate-400`}
-            >
+            <div className={`${isImportant ? 'mt-1.5' : 'mt-1'} flex items-center gap-3 text-xs text-slate-400`}>
               {task.startTime ? (
                 <span className="inline-flex items-center gap-1 font-medium text-slate-500">
-                  <Clock3 className="h-3.5 w-3.5 text-slate-400" />
-                  {task.startTime}
+                  <Clock3 className="h-3.5 w-3.5 text-slate-400" /> {task.startTime}
                 </span>
               ) : null}
-              <div
-                className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100"
-                aria-label={`${completedSubtasks}/${task.subtasks.length} bước`}
-              >
+              <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100" aria-label={`${completedSubtasks}/${task.subtasks.length} bước`}>
                 <div
-                  className={`h-full rounded-full transition-all ${
-                    isImportant ? 'bg-indigo-600' : 'bg-emerald-500'
-                  }`}
+                  className={`h-full rounded-full transition-all ${isImportant ? 'bg-indigo-600' : 'bg-emerald-500'}`}
                   style={{ width: `${subtaskProgress}%` }}
                 />
               </div>
             </div>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
         </button>
       </article>
     </div>
@@ -278,24 +251,13 @@ export const TodayView: React.FC = () => {
     setEditingTask,
     openTaskModal,
     deleteTask,
-    assistantDecisions,
-    mentorTimeline,
-    mentorPrompt,
-    confirmMentorPrompt,
-    approveAssistantDecision,
-    rejectAssistantDecision,
-    setIsAssistantOpen,
   } = useApp();
+
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('task'),
   );
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
-
-  const closeFocusPage = () => {
-    setSelectedTaskId(null);
-    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
-  };
 
   const today = getFormattedToday(0);
   const todayTasks = useMemo(
@@ -311,25 +273,12 @@ export const TodayView: React.FC = () => {
     [tasks, today],
   );
 
-  const timelineEntries = useMemo(
-    () => [
-      ...todayTasks.map((task) => ({
-        kind: 'task' as const,
-        key: `task:${task.id}`,
-        time: task.startTime || (task.isTopPriority ? '00:00' : '99:99'),
-        task,
-      })),
-      ...mentorTimeline.map((item) => ({
-        kind: 'mentor' as const,
-        key: item.id,
-        time: item.time,
-        item,
-      })),
-    ].sort((a, b) => a.time.localeCompare(b.time)),
-    [todayTasks, mentorTimeline],
-  );
-
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
+
+  const closeDetail = () => {
+    setSelectedTaskId(null);
+    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
+  };
 
   if (selectedTask) {
     const completedSubtasks = selectedTask.subtasks.filter((subtask) => subtask.completed).length;
@@ -347,15 +296,12 @@ export const TodayView: React.FC = () => {
             : 'Thường';
 
     return (
-      <div
-        data-testid="task-detail-page"
-        className="fixed inset-0 z-[100] overflow-y-auto bg-[#fafbfc] text-slate-900"
-      >
+      <div data-testid="task-detail-page" className="fixed inset-0 z-[100] overflow-y-auto bg-[#fafbfc] text-slate-900">
         <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-2xl items-center gap-3 px-4 sm:px-5">
             <button
               type="button"
-              onClick={closeFocusPage}
+              onClick={closeDetail}
               className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200/60 bg-slate-50/80 text-slate-600 transition hover:bg-slate-100 active:scale-95"
               aria-label="Quay lại hôm nay"
             >
@@ -370,8 +316,7 @@ export const TodayView: React.FC = () => {
               onClick={() => setEditingTask(selectedTask)}
               className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50/80 px-3.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100/70 active:scale-95"
             >
-              <Edit2 className="h-3.5 w-3.5" />
-              Sửa
+              <Edit2 className="h-3.5 w-3.5" /> Sửa
             </button>
           </div>
         </div>
@@ -384,8 +329,7 @@ export const TodayView: React.FC = () => {
                 <>
                   <span>·</span>
                   <span className="inline-flex items-center gap-1 text-slate-600">
-                    <Clock3 className="h-3.5 w-3.5 text-slate-400" />
-                    {selectedTask.startTime}
+                    <Clock3 className="h-3.5 w-3.5 text-slate-400" /> {selectedTask.startTime}
                   </span>
                 </>
               ) : null}
@@ -403,23 +347,13 @@ export const TodayView: React.FC = () => {
                   {project.name}
                 </span>
               ) : null}
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  selectedTask.priority === 'urgent'
-                    ? 'border border-rose-100 bg-rose-50 text-rose-700'
-                    : selectedTask.priority === 'high'
-                      ? 'border border-amber-100 bg-amber-50 text-amber-700'
-                      : 'border border-slate-200/60 bg-slate-100/80 text-slate-600'
-                }`}
-              >
+              <span className="rounded-full border border-slate-200/60 bg-slate-100/80 px-3 py-1 text-xs font-semibold text-slate-600">
                 {priorityLabel}
               </span>
             </div>
 
             {selectedTask.description ? (
-              <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-slate-600">
-                {selectedTask.description}
-              </p>
+              <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-slate-600">{selectedTask.description}</p>
             ) : null}
 
             <button
@@ -431,8 +365,7 @@ export const TodayView: React.FC = () => {
                   : 'border border-slate-200 bg-slate-900 text-white shadow-xs hover:bg-slate-800'
               }`}
             >
-              <Check className="h-4 w-4" />
-              {selectedTask.status === 'done' ? 'Đã xong' : 'Hoàn thành nhiệm vụ'}
+              <Check className="h-4 w-4" /> {selectedTask.status === 'done' ? 'Đã xong' : 'Hoàn thành nhiệm vụ'}
             </button>
           </section>
 
@@ -449,10 +382,7 @@ export const TodayView: React.FC = () => {
               <span className="text-xl font-bold tabular-nums text-indigo-600">{subtaskProgress}%</span>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-indigo-600 transition-all duration-300"
-                style={{ width: `${subtaskProgress}%` }}
-              />
+              <div className="h-full rounded-full bg-indigo-600 transition-all duration-300" style={{ width: `${subtaskProgress}%` }} />
             </div>
           </section>
 
@@ -508,8 +438,7 @@ export const TodayView: React.FC = () => {
                   onClick={() => setEditingTask(selectedTask)}
                   className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Thêm bước
+                  <Plus className="h-3.5 w-3.5" /> Thêm bước
                 </button>
               </div>
             )}
@@ -518,9 +447,7 @@ export const TodayView: React.FC = () => {
           {selectedTask.notes ? (
             <section className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-xs">
               <h2 className="text-sm font-bold text-slate-900">Ghi chú</h2>
-              <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-600">
-                {selectedTask.notes}
-              </p>
+              <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-600">{selectedTask.notes}</p>
             </section>
           ) : null}
         </main>
@@ -529,9 +456,6 @@ export const TodayView: React.FC = () => {
   }
 
   const completedCount = todayTasks.filter((task) => task.status === 'done').length;
-  const pendingAssistantDecision = assistantDecisions.find(
-    (decision) => decision.status === 'planned' && decision.mode === 'approval_required',
-  );
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -550,88 +474,20 @@ export const TodayView: React.FC = () => {
         }
       />
 
-      {mentorPrompt ? (
-        <div
-          data-testid="mentor-prompt"
-          className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4 shadow-xs"
-        >
-          <p className="min-w-0 flex-1 text-sm font-medium leading-relaxed text-amber-950">{mentorPrompt.text}</p>
-          <button
-            type="button"
-            onClick={confirmMentorPrompt}
-            className="h-9 shrink-0 rounded-xl bg-slate-900 px-3.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800"
-          >
-            Chốt
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsAssistantOpen(true)}
-            className="h-9 shrink-0 rounded-xl border border-slate-200/80 bg-white px-3.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            Đổi
-          </button>
-        </div>
-      ) : null}
-
-      {pendingAssistantDecision ? (
-        <div className="mb-4 rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4 shadow-xs">
-          <p className="text-sm leading-relaxed text-amber-950">{pendingAssistantDecision.summary}</p>
-          <div className="mt-3 flex gap-2.5">
-            <button
-              type="button"
-              onClick={() => rejectAssistantDecision(pendingAssistantDecision.id)}
-              className="h-9 flex-1 rounded-xl border border-slate-200/80 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              Giữ lịch
-            </button>
-            <button
-              type="button"
-              onClick={() => approveAssistantDecision(pendingAssistantDecision.id)}
-              className="h-9 flex-1 rounded-xl bg-slate-900 text-xs font-bold text-white shadow-xs hover:bg-slate-800"
-            >
-              Dời việc
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <main data-testid="today-task-list" className="space-y-3">
-        {timelineEntries.length > 0 ? (
-          timelineEntries.map((entry) => {
-            if (entry.kind === 'mentor') {
-              return (
-                <button
-                  key={entry.key}
-                  type="button"
-                  onClick={() => setIsAssistantOpen(true)}
-                  className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-3.5 text-left shadow-xs transition hover:border-slate-300 hover:shadow-sm"
-                >
-                  <span className="w-12 shrink-0 text-xs font-semibold tabular-nums text-slate-400">{entry.item.time}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-slate-800">{entry.item.title}</span>
-                    {entry.item.detail ? (
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{entry.item.detail}</span>
-                    ) : null}
-                  </span>
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-300" aria-hidden="true" />
-                </button>
-              );
-            }
-
-            const task = entry.task;
-            const taskIndex = todayTasks.findIndex((item) => item.id === task.id);
+        {todayTasks.length > 0 ? (
+          todayTasks.map((task, taskIndex) => {
             const completedSubtasks = task.subtasks.filter((subtask) => subtask.completed).length;
             const isDone = task.status === 'done';
             const isImportant = Boolean(task.isTopPriority);
             const subtaskProgress = task.subtasks.length
               ? (completedSubtasks / task.subtasks.length) * 100
               : 0;
-            const startsRegularGroup =
-              !isImportant && taskIndex > 0 && Boolean(todayTasks[taskIndex - 1]?.isTopPriority);
+            const startsRegularGroup = !isImportant && taskIndex > 0 && Boolean(todayTasks[taskIndex - 1]?.isTopPriority);
 
             return (
               <SwipeTodayTaskRow
-                key={entry.key}
+                key={task.id}
                 task={task}
                 completedSubtasks={completedSubtasks}
                 isDone={isDone}
@@ -684,9 +540,7 @@ export const TodayView: React.FC = () => {
           aria-labelledby="today-delete-task-title"
         >
           <div className="w-full max-w-sm rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
-            <h2 id="today-delete-task-title" className="text-lg font-bold text-slate-900">
-              Bạn có chắc muốn xóa việc này?
-            </h2>
+            <h2 id="today-delete-task-title" className="text-lg font-bold text-slate-900">Bạn có chắc muốn xóa việc này?</h2>
             <p className="mt-2 break-words text-sm leading-relaxed text-slate-500">
               “{pendingDeleteTask.title}” sẽ được chuyển vào Thùng rác và có thể khôi phục trong 30 ngày.
             </p>
@@ -715,4 +569,3 @@ export const TodayView: React.FC = () => {
     </div>
   );
 };
-

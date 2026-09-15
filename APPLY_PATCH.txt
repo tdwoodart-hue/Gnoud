@@ -1,0 +1,15 @@
+GNoud - NO AI + DATA SNAPSHOT FOR CHATGPT
+
+Đây là bản cumulative: có thể dùng bản ZIP này thay cho ZIP no-AI trước đó.
+
+1. Chép các file/folder trong ZIP vào đúng vị trí tương ứng của source Gnoud và cho phép ghi đè.
+2. Xóa các file được liệt kê trong DELETE_THESE_FILES.txt nếu chúng vẫn còn trong source.
+3. Chạy npm install một lần để package-lock.json tự cập nhật sau khi dependency AI đã bị bỏ.
+4. Chạy npm run lint và npm run build trên máy của bạn.
+
+Tính năng mới:
+- Telemetry sử dụng lưu LOCAL ONLY trong localStorage, không tự gửi ra ngoài.
+- Ghi các thao tác sản phẩm chính và lỗi runtime cơ bản, không ghi task title vào telemetry.
+- Cài đặt > Dữ liệu > Xuất dữ liệu cho ChatGPT tạo file gnoud-chatgpt-snapshot-YYYY-MM-DD.json.
+- Snapshot loại bỏ Firebase UID, email, auth/push token, mô tả task/project, ghi chú, tiêu đề subtask, vị trí/mô tả lịch.
+- Snapshot giữ task title/project name/habit/goal + số liệu usage để ChatGPT có đủ ngữ cảnh phân tích UX và cách sử dụng.

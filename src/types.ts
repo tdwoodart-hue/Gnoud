@@ -23,9 +23,9 @@ export interface Task {
   projectId?: string;
   status: TaskStatus;
   priority: TaskPriority;
-  deadline?: string; // YYYY-MM-DD
-  plannedDate?: string; // YYYY-MM-DD
-  startTime?: string; // HH:mm
+  deadline?: string;
+  plannedDate?: string;
+  startTime?: string;
   estimatedMinutes: number;
   actualMinutes: number;
   subtasks: Subtask[];
@@ -33,7 +33,7 @@ export interface Task {
   tags: string[];
   reminder?: string;
   recurrence?: 'none' | 'daily' | 'weekly' | 'weekdays' | 'monthly';
-  isTopPriority?: boolean; // Top 3 tasks for today
+  isTopPriority?: boolean;
   createdAt: string;
   completedAt?: string;
 }
@@ -43,7 +43,7 @@ export interface Milestone {
   title: string;
   targetDate?: string;
   completed: boolean;
-  weight?: number; // 1-5 for weighted progress
+  weight?: number;
 }
 
 export interface ProjectActivity {
@@ -62,21 +62,16 @@ export interface Project {
   targetDate?: string;
   milestones: Milestone[];
   recentActivity: ProjectActivity[];
-  aiHealthSummary?: {
-    status: 'healthy' | 'at_risk' | 'needs_attention';
-    score: number;
-    summary: string;
-    recommendations: string[];
-  };
+  progress?: number;
 }
 
 export interface CalendarEvent {
   id: string;
   title: string;
   type: 'task' | 'meeting' | 'personal' | 'habit';
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
+  date: string;
+  startTime: string;
+  endTime: string;
   taskId?: string;
   projectId?: string;
   description?: string;
@@ -91,11 +86,11 @@ export interface Habit {
   frequency?: string;
   targetTime?: string;
   targetDaysPerWeek?: number;
-  preferredTime?: string; // HH:mm
+  preferredTime?: string;
   durationMinutes: number;
   streak: number;
   bestStreak?: number;
-  completedDates: string[]; // YYYY-MM-DD
+  completedDates: string[];
   description?: string;
 }
 
@@ -113,54 +108,18 @@ export interface Goal {
   type?: GoalCategory;
   category?: GoalCategory;
   targetDate: string;
-  progress: number; // 0-100
+  progress: number;
   keyResults: KeyResult[];
   linkedProjectId?: string;
   linkedProjectIds?: string[];
   notes?: string;
 }
 
-export interface AiSuggestion {
-  id: string;
-  title: string;
-  reason: string;
-  expectedImpact: string;
-  actionType: 'reschedule_task' | 'breakdown_task' | 'fill_gap' | 'rebalance_workload' | 'custom';
-  payload: any;
-  status: 'pending' | 'applied' | 'dismissed';
-}
-
-export interface ChatMessage {
-  id: string;
-  sender: 'user' | 'assistant';
-  text: string;
-  timestamp: string;
-  proposedAction?: {
-    type: 'create_task' | 'reschedule_task' | 'add_event' | 'schedule_all';
-    data: any;
-    description: string;
-    applied?: boolean;
-  };
-}
-
-export interface ParsedInputResult {
-  title: string;
-  type: 'task' | 'event' | 'habit';
-  date: string;
-  startTime: string;
-  estimatedMinutes: number;
-  priority: TaskPriority;
-  relatedProject: string;
-  reminder: string;
-  actionType?: string;
-  rawInput?: string;
-}
-
 export interface LifeMetric {
   id: string;
   area: string;
   labelVi: string;
-  score: number; // 1-10
+  score: number;
   status: 'good' | 'average' | 'attention';
   note: string;
 }

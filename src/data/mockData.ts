@@ -1,4 +1,4 @@
-import { AiSuggestion, CalendarEvent, Goal, Habit, LifeMetric, Project, Task } from '../types';
+import { CalendarEvent, Goal, Habit, LifeMetric, Project, Task } from '../types';
 
 export const getFormattedToday = (offsetDays = 0): string => {
   const date = new Date();
@@ -36,11 +36,9 @@ export const formatDisplayDate = (value?: string | Date | null): string => {
   return `${day}/${month}/${parsed.getFullYear()}`;
 };
 
-// New accounts start empty. Users create and own every record shown in the app.
 export const INITIAL_TASKS: Task[] = [];
 export const INITIAL_PROJECTS: Project[] = [];
 export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [];
 export const INITIAL_HABITS: Habit[] = [];
 export const INITIAL_GOALS: Goal[] = [];
-export const INITIAL_AI_SUGGESTIONS: AiSuggestion[] = [];
 export const INITIAL_LIFE_METRICS: LifeMetric[] = [];

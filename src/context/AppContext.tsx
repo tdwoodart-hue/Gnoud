@@ -1,44 +1,36 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Task,
-  Project,
   CalendarEvent,
-  Habit,
   Goal,
-  AiSuggestion,
+  Habit,
   LifeMetric,
-  ChatMessage,
-  ParsedInputResult,
   NavTab,
+  Project,
+  Task,
 } from '../types';
 import {
-  INITIAL_TASKS,
-  INITIAL_PROJECTS,
   INITIAL_CALENDAR_EVENTS,
-  INITIAL_HABITS,
   INITIAL_GOALS,
-  INITIAL_AI_SUGGESTIONS,
+  INITIAL_HABITS,
   INITIAL_LIFE_METRICS,
+  INITIAL_PROJECTS,
+  INITIAL_TASKS,
   getFormattedToday,
 } from '../data/mockData';
 import { auth, googleProvider } from '../lib/firebase';
-import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User as FirebaseUser } from 'firebase/auth';
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  User as FirebaseUser,
+} from 'firebase/auth';
 import { authErrorMessage, shouldUseRedirect } from '../services/authFlow';
 import { firestoreService, type DeletedTask } from '../services/firestoreService';
 import { syncNotificationTasks } from '../services/notificationService';
 import { createTaskDraft } from '../services/taskDraft';
-import {
-  applyAssistantDecisionToTasks,
-  evaluateChiefOfStaff,
-  parseMentorInstruction,
-  undoAssistantDecisionInTasks,
-  type AssistantDecisionRecord,
-  type ChiefOfStaffBrief,
-  type DailyMentorDirective,
-  type MentorProfile,
-  type MentorPrompt,
-  type MentorTimelineItem,
-} from '../services/personalChiefOfStaff';
+import { installGlobalErrorTelemetry, recordUsageEvent } from '../services/usageTelemetry';
 
 export interface ToastMessage {
   id: string;
@@ -56,9 +48,6 @@ interface AppContextType {
   setCurrentView: (view: string) => void;
   activeTab: NavTab;
   setActiveTab: (tab: NavTab) => void;
-  isAssistantOpen: boolean;
-  setIsAssistantOpen: (open: boolean) => void;
-  toggleAssistant: () => void;
   isCommandMenuOpen: boolean;
   setIsCommandMenuOpen: (open: boolean) => void;
   isMorningPlanningOpen: boolean;
@@ -73,19 +62,7 @@ interface AppContextType {
   calendarEvents: CalendarEvent[];
   habits: Habit[];
   goals: Goal[];
-  aiSuggestions: AiSuggestion[];
   lifeMetrics: LifeMetric[];
-  chatMessages: ChatMessage[];
-  assistantBrief: ChiefOfStaffBrief | null;
-  assistantDecisions: AssistantDecisionRecord[];
-  mentorProfile: MentorProfile;
-  mentorTimeline: MentorTimelineItem[];
-  mentorPrompt: MentorPrompt | null;
-  confirmMentorPrompt: () => void;
-  undoAssistantDecision: (decisionId: string) => void;
-  approveAssistantDecision: (decisionId: string) => void;
-  rejectAssistantDecision: (decisionId: string) => void;
-  refreshChiefOfStaff: () => void;
   addTask: (taskData: Partial<Task>) => Task;
   addTasks: (taskDataList: Partial<Task>[]) => Task[];
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -96,7 +73,6 @@ interface AppContextType {
   toggleTopPriority: (id: string) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   addSubtask: (taskId: string, title: string, estimatedMinutes?: number) => void;
-  breakdownTaskWithAi: (taskId: string) => Promise<void>;
   addProject: (proj: Partial<Project>) => Project;
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (id: string) => void;
@@ -106,7 +82,6 @@ interface AppContextType {
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   deleteCalendarEvent: (id: string) => void;
   scheduleTaskIntoCalendar: (taskId: string, date: string, startTime: string, durationMinutes?: number) => void;
-  autoScheduleWithAi: (date: string) => Promise<{ proposedSchedule: any[]; summary: string }>;
   toggleHabitForDate: (habitId: string, date: string) => void;
   addHabit: (habit: Partial<Habit>) => Habit;
   updateHabit: (id: string, updates: Partial<Habit>) => void;
@@ -114,12 +89,6 @@ interface AppContextType {
   addGoal: (goal: Partial<Goal>) => Goal;
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => void;
-  applyAiSuggestion: (suggestionId: string) => void;
-  dismissAiSuggestion: (suggestionId: string) => void;
-  sendChatMessage: (text: string) => Promise<void>;
-  applyAssistantAction: (messageId: string) => void;
-  parseAndConfirmInput: (prompt: string) => Promise<ParsedInputResult>;
-  confirmParsedInput: (parsed: ParsedInputResult) => void;
   focusTask: Task | null;
   isFocusRunning: boolean;
   focusSecondsLeft: number;
@@ -144,12 +113,6 @@ const AppContext = createContext<AppContextType | null>(null);
 const STORAGE_KEY_PREFIX = 'lich_song_';
 const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-const DEFAULT_MENTOR_PROFILE: MentorProfile = {
-  id: 'disciplined',
-  name: 'Kỷ luật cao',
-  bedtime: '22:00',
-  wakeTime: '06:00',
-};
 
 export const cascadeProjectDeletion = (
   projectId: string,
@@ -180,12 +143,12 @@ export const cascadeProjectDeletion = (
 function removeCachedDemoData(): void {
   try {
     if (localStorage.getItem(DEMO_DATA_REMOVED_KEY)) return;
-    ['tasks', 'projects', 'events', 'habits', 'goals', 'suggestions', 'life_metrics'].forEach((key) => {
+    ['tasks', 'projects', 'events', 'habits', 'goals', 'life_metrics'].forEach((key) => {
       localStorage.removeItem(STORAGE_KEY_PREFIX + key);
     });
     localStorage.setItem(DEMO_DATA_REMOVED_KEY, 'true');
-  } catch (e) {
-    console.warn('Could not clear cached demo data:', e);
+  } catch (error) {
+    console.warn('Could not clear cached demo data:', error);
   }
 }
 
@@ -193,8 +156,8 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_PREFIX + key);
     return saved ? JSON.parse(saved) : fallback;
-  } catch (e) {
-    console.error(`Error loading ${key} from storage:`, e);
+  } catch (error) {
+    console.error(`Error loading ${key} from storage:`, error);
     return fallback;
   }
 }
@@ -202,8 +165,8 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(STORAGE_KEY_PREFIX + key, JSON.stringify(value));
-  } catch (e) {
-    console.error(`Error saving ${key} to storage:`, e);
+  } catch (error) {
+    console.error(`Error saving ${key} to storage:`, error);
   }
 }
 
@@ -249,47 +212,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentView, setCurrentView] = useState<string>('today');
-  const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
-  const [isCommandMenuOpen, setIsCommandMenuOpen] = useState<boolean>(false);
-  const [isMorningPlanningOpen, setIsMorningPlanningOpen] = useState<boolean>(false);
-  const [isEveningReviewOpen, setIsEveningReviewOpen] = useState<boolean>(false);
+  const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
+  const [isMorningPlanningOpen, setIsMorningPlanningOpen] = useState(false);
+  const [isEveningReviewOpen, setIsEveningReviewOpen] = useState(false);
 
   const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('tasks', INITIAL_TASKS));
   const [trashTasks, setTrashTasks] = useState<DeletedTask[]>(() => loadFromStorage('deleted_tasks', []));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage('projects', INITIAL_PROJECTS));
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadFromStorage('events', INITIAL_CALENDAR_EVENTS));
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() =>
+    loadFromStorage('events', INITIAL_CALENDAR_EVENTS),
+  );
   const [habits, setHabits] = useState<Habit[]>(() => loadFromStorage('habits', INITIAL_HABITS));
   const [goals, setGoals] = useState<Goal[]>(() => loadFromStorage('goals', INITIAL_GOALS));
-  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>(() => loadFromStorage('suggestions', INITIAL_AI_SUGGESTIONS));
   const [lifeMetrics] = useState<LifeMetric[]>(() => loadFromStorage('life_metrics', INITIAL_LIFE_METRICS));
-  const [assistantBrief, setAssistantBrief] = useState<ChiefOfStaffBrief | null>(null);
-  const [assistantDecisions, setAssistantDecisions] = useState<AssistantDecisionRecord[]>(() =>
-    loadFromStorage('assistant_decisions', []),
-  );
-  const [assistantClock, setAssistantClock] = useState(() => Date.now());
-  const [mentorProfile, setMentorProfile] = useState<MentorProfile>(() =>
-    loadFromStorage('mentor_profile', DEFAULT_MENTOR_PROFILE),
-  );
-  const [dailyMentorDirective, setDailyMentorDirective] = useState<DailyMentorDirective | null>(() =>
-    loadFromStorage('mentor_directive', null),
-  );
-  const [mentorTimeline, setMentorTimeline] = useState<MentorTimelineItem[]>([]);
-  const [mentorPrompt, setMentorPrompt] = useState<MentorPrompt | null>(null);
-
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: 'msg-welcome',
-      sender: 'assistant',
-      text: 'Tao sẽ giúp mày giữ ngày gọn, thực tế và có kỷ luật. Cứ nói thẳng lịch hoặc điều mày muốn thay đổi.',
-      timestamp: '08:00',
-    },
-  ]);
 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [focusTask, setFocusTask] = useState<Task | null>(null);
-  const [isFocusRunning, setIsFocusRunning] = useState<boolean>(false);
-  const [focusSecondsLeft, setFocusSecondsLeft] = useState<number>(25 * 60);
-  const [focusTotalSeconds, setFocusTotalSeconds] = useState<number>(25 * 60);
+  const [isFocusRunning, setIsFocusRunning] = useState(false);
+  const [focusSecondsLeft, setFocusSecondsLeft] = useState(25 * 60);
+  const [focusTotalSeconds, setFocusTotalSeconds] = useState(25 * 60);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const cloudReadyRef = useRef(false);
@@ -299,14 +240,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const eventsSyncRef = useRef<CalendarEvent[]>(calendarEvents);
   const habitsSyncRef = useRef<Habit[]>(habits);
   const goalsSyncRef = useRef<Goal[]>(goals);
-  const suggestionsSyncRef = useRef<AiSuggestion[]>(aiSuggestions);
+
+  useEffect(() => {
+    recordUsageEvent('app_opened');
+    return installGlobalErrorTelemetry();
+  }, []);
+
+  const changeCurrentView = useCallback((view: string) => {
+    setCurrentView(view);
+    recordUsageEvent('navigation_changed', { view });
+  }, []);
+
+  const openTaskModal = useCallback((task?: Task) => {
+    recordUsageEvent('task_form_opened', { mode: task ? 'edit' : 'create' });
+    setEditingTask(task || createTaskDraft(getFormattedToday(0)));
+  }, []);
 
   const addToast = useCallback((
     message: string,
     type: 'info' | 'success' | 'warning' | 'error' = 'info',
     action?: { label: string; onClick: () => void },
   ) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts([{
       id,
       message,
@@ -315,12 +270,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onAction: action?.onClick,
     }]);
     window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((previous) => previous.filter((toast) => toast.id !== id));
     }, action ? 6000 : 3200);
   }, []);
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((previous) => previous.filter((toast) => toast.id !== id));
   }, []);
 
   useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
@@ -329,30 +284,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('events', calendarEvents); }, [calendarEvents]);
   useEffect(() => { saveToStorage('habits', habits); }, [habits]);
   useEffect(() => { saveToStorage('goals', goals); }, [goals]);
-  useEffect(() => { saveToStorage('suggestions', aiSuggestions); }, [aiSuggestions]);
-  useEffect(() => { saveToStorage('assistant_decisions', assistantDecisions); }, [assistantDecisions]);
-  useEffect(() => { saveToStorage('mentor_profile', mentorProfile); }, [mentorProfile]);
-  useEffect(() => { saveToStorage('mentor_directive', dailyMentorDirective); }, [dailyMentorDirective]);
-  useEffect(() => {
-    const interval = window.setInterval(() => setAssistantClock(Date.now()), 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
+
   useEffect(() => {
     const sync = () => void syncNotificationTasks(tasks).catch((error) => {
-        console.warn('Could not sync notification schedule:', error);
-      });
+      console.warn('Could not sync notification schedule:', error);
+    });
     sync();
     window.addEventListener('lich-song-notifications-enabled', sync);
     return () => window.removeEventListener('lich-song-notifications-enabled', sync);
   }, [tasks]);
 
   useEffect(() => {
-    void getRedirectResult(auth).then((result) => {
-      if (result?.user) addToast('Đăng nhập Google thành công', 'success');
-    }).catch((error) => {
-      console.warn('Redirect sign-in error:', error);
-      addToast(authErrorMessage(error), 'error');
-    });
+    void getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) addToast('Đăng nhập Google thành công', 'success');
+      })
+      .catch((error) => {
+        console.warn('Redirect sign-in error:', error);
+        addToast(authErrorMessage(error), 'error');
+      });
   }, [addToast]);
 
   useEffect(() => {
@@ -373,7 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cloud) {
           const cloudHasData =
             cloud.tasks.length + cloud.deletedTasks.length + cloud.projects.length + cloud.events.length +
-            cloud.goals.length + cloud.habits.length + cloud.suggestions.length > 0;
+            cloud.goals.length + cloud.habits.length > 0;
 
           if (!cloudHasData) {
             const localSnapshot = {
@@ -383,7 +333,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               events: withoutSeed(calendarEvents, INITIAL_CALENDAR_EVENTS),
               goals: withoutSeed(goals, INITIAL_GOALS),
               habits: withoutSeed(habits, INITIAL_HABITS),
-              suggestions: withoutSeed(aiSuggestions, INITIAL_AI_SUGGESTIONS),
             };
             const localHasData = Object.values(localSnapshot).some((items) => items.length > 0);
             if (localHasData) await firestoreService.mergeUserData(currentUser.uid, localSnapshot);
@@ -393,9 +342,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubscribeCloud = firestoreService.subscribeUserData(
           currentUser.uid,
           (data) => {
-            // Each collection has its own Firestore listener. A snapshot from projects/goals/etc.
-            // must not re-apply an older task snapshot and undo an optimistic local edit/delete.
-            // Sync refs represent the last cloud state we accepted, not the latest local state.
             if (!sameEntities(tasksSyncRef.current, data.tasks)) {
               tasksSyncRef.current = data.tasks;
               setTasks(data.tasks);
@@ -420,10 +366,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               habitsSyncRef.current = data.habits;
               setHabits(data.habits);
             }
-            if (!sameEntities(suggestionsSyncRef.current, data.suggestions)) {
-              suggestionsSyncRef.current = data.suggestions;
-              setAiSuggestions(data.suggestions);
-            }
             cloudReadyRef.current = true;
           },
           () => addToast('Mất kết nối đồng bộ. Dữ liệu vẫn được giữ trên thiết bị.', 'warning'),
@@ -442,16 +384,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(tasksSyncRef.current, tasks)) return;
-    const previous = tasksSyncRef.current;
-    void firestoreService.syncTasks(user.uid, previous, tasks);
+    void firestoreService.syncTasks(user.uid, tasksSyncRef.current, tasks);
   }, [tasks, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(trashTasksSyncRef.current, trashTasks)) return;
-    const previous = trashTasksSyncRef.current;
     void syncEntityDiff(
       user.uid,
-      previous,
+      trashTasksSyncRef.current,
       trashTasks,
       firestoreService.saveDeletedTask,
       firestoreService.deleteDeletedTask,
@@ -460,48 +400,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(projectsSyncRef.current, projects)) return;
-    const previous = projectsSyncRef.current;
-    void syncEntityDiff(user.uid, previous, projects, firestoreService.saveProject, firestoreService.deleteProject);
+    void syncEntityDiff(user.uid, projectsSyncRef.current, projects, firestoreService.saveProject, firestoreService.deleteProject);
   }, [projects, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(eventsSyncRef.current, calendarEvents)) return;
-    const previous = eventsSyncRef.current;
-    void syncEntityDiff(user.uid, previous, calendarEvents, firestoreService.saveCalendarEvent, firestoreService.deleteCalendarEvent);
+    void syncEntityDiff(
+      user.uid,
+      eventsSyncRef.current,
+      calendarEvents,
+      firestoreService.saveCalendarEvent,
+      firestoreService.deleteCalendarEvent,
+    );
   }, [calendarEvents, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(habitsSyncRef.current, habits)) return;
-    const previous = habitsSyncRef.current;
-    void syncEntityDiff(user.uid, previous, habits, firestoreService.saveHabit, firestoreService.deleteHabit);
+    void syncEntityDiff(user.uid, habitsSyncRef.current, habits, firestoreService.saveHabit, firestoreService.deleteHabit);
   }, [habits, user]);
 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(goalsSyncRef.current, goals)) return;
-    const previous = goalsSyncRef.current;
-    void syncEntityDiff(user.uid, previous, goals, firestoreService.saveGoal, firestoreService.deleteGoal);
+    void syncEntityDiff(user.uid, goalsSyncRef.current, goals, firestoreService.saveGoal, firestoreService.deleteGoal);
   }, [goals, user]);
 
   useEffect(() => {
-    if (!user || !cloudReadyRef.current || sameEntities(suggestionsSyncRef.current, aiSuggestions)) return;
-    const previous = suggestionsSyncRef.current;
-    void syncEntityDiff(user.uid, previous, aiSuggestions, firestoreService.saveAiSuggestion, firestoreService.deleteAiSuggestion);
-  }, [aiSuggestions, user]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommandMenuOpen((prev) => !prev);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsCommandMenuOpen((previous) => !previous);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     try {
-      const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+      const standalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
       if (shouldUseRedirect(navigator.userAgent, standalone)) {
         await signInWithRedirect(auth, googleProvider);
         return;
@@ -512,37 +450,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Sign-in error:', error);
       addToast(authErrorMessage(error), 'error');
     }
-  };
+  }, [addToast]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await signOut(auth);
       addToast('Đã đăng xuất tài khoản', 'info');
-    } catch (err: any) {
-      console.warn('Logout error:', err);
+    } catch (error) {
+      console.warn('Logout error:', error);
     }
-  };
-
-  useEffect(() => {
-    let interval: any = null;
-    if (isFocusRunning && focusSecondsLeft > 0) {
-      interval = setInterval(() => {
-        setFocusSecondsLeft((sec) => sec - 1);
-      }, 1000);
-    } else if (focusSecondsLeft === 0 && isFocusRunning) {
-      setIsFocusRunning(false);
-      addToast(`Đã hoàn thành phiên tập trung cho "${focusTask?.title || 'nhiệm vụ'}"!`, 'success');
-      if (focusTask) {
-        const addedMinutes = Math.round(focusTotalSeconds / 60);
-        updateTask(focusTask.id, {
-          actualMinutes: (focusTask.actualMinutes || 0) + addedMinutes,
-        });
-      }
-    }
-    return () => clearInterval(interval);
-  }, [isFocusRunning, focusSecondsLeft, focusTask, focusTotalSeconds, addToast]);
-
-  const toggleAssistant = () => setIsAssistantOpen((prev) => !prev);
+  }, [addToast]);
 
   const createTaskRecord = useCallback((taskData: Partial<Task>, id: string): Task => ({
     id,
@@ -556,56 +473,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     plannedDate: taskData.plannedDate || getFormattedToday(0),
     startTime: taskData.startTime || undefined,
     estimatedMinutes: taskData.estimatedMinutes || 60,
-    actualMinutes: 0,
+    actualMinutes: taskData.actualMinutes || 0,
     subtasks: taskData.subtasks || [],
     notes: taskData.notes || '',
     tags: taskData.tags || [],
     reminder: taskData.reminder || undefined,
     recurrence: taskData.recurrence || 'none',
-    isTopPriority: !!taskData.isTopPriority,
-    createdAt: getFormattedToday(0),
+    isTopPriority: Boolean(taskData.isTopPriority),
+    createdAt: taskData.createdAt || getFormattedToday(0),
+    completedAt: taskData.completedAt,
   }), []);
 
   const addTask = useCallback((taskData: Partial<Task>): Task => {
-    const id = `task-${Date.now()}`;
-    const newTask = createTaskRecord(taskData, id);
-    setTasks((prev) => [newTask, ...prev]);
+    const newTask = createTaskRecord(taskData, `task-${Date.now()}`);
+    setTasks((previous) => [newTask, ...previous]);
+    recordUsageEvent('task_created', { category: newTask.category, priority: newTask.priority });
     addToast(`Đã thêm việc: "${newTask.title}"`, 'success');
     return newTask;
   }, [addToast, createTaskRecord]);
 
   const addTasks = useCallback((taskDataList: Partial<Task>[]): Task[] => {
     if (taskDataList.length === 0) return [];
-    const batchStamp = Date.now();
+    const stamp = Date.now();
     const newTasks = taskDataList.map((taskData, index) =>
-      createTaskRecord(
-        taskData,
-        `task-${batchStamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-      ),
+      createTaskRecord(taskData, `task-${stamp}-${index}-${Math.random().toString(36).slice(2, 8)}`),
     );
-    setTasks((prev) => [...newTasks, ...prev]);
+    setTasks((previous) => [...newTasks, ...previous]);
+    recordUsageEvent('task_batch_created', { count: newTasks.length });
     return newTasks;
   }, [createTaskRecord]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          const updated = { ...t, ...updates };
-          if (updates.status === 'done' && t.status !== 'done') {
-            updated.completedAt = getFormattedToday(0);
-          }
-          return updated;
+    recordUsageEvent('task_updated', { fieldCount: Object.keys(updates).length, statusChanged: Boolean(updates.status) });
+    setTasks((previous) =>
+      previous.map((task) => {
+        if (task.id !== id) return task;
+        const updated = { ...task, ...updates };
+        if (updates.status === 'done' && task.status !== 'done') {
+          updated.completedAt = getFormattedToday(0);
         }
-        return t;
-      })
+        return updated;
+      }),
     );
   }, []);
 
   const restoreTaskRecord = useCallback((record: DeletedTask, notify = true) => {
     const { deletedAt: _deletedAt, ...restored } = record;
-    setTrashTasks((prev) => prev.filter((task) => task.id !== record.id));
-    setTasks((prev) => [restored, ...prev.filter((task) => task.id !== record.id)]);
+    setTrashTasks((previous) => previous.filter((task) => task.id !== record.id));
+    setTasks((previous) => [restored, ...previous.filter((task) => task.id !== record.id)]);
+    recordUsageEvent('task_restored');
     if (notify) addToast(`Đã khôi phục “${record.title}”`, 'success');
   }, [addToast]);
 
@@ -617,7 +533,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const permanentlyDeleteTask = useCallback((id: string) => {
     const record = trashTasks.find((task) => task.id === id);
     if (!record) return;
-    setTrashTasks((prev) => prev.filter((task) => task.id !== id));
+    setTrashTasks((previous) => previous.filter((task) => task.id !== id));
+    recordUsageEvent('task_permanently_deleted');
     addToast(`Đã xóa vĩnh viễn “${record.title}”`, 'info');
   }, [trashTasks, addToast]);
 
@@ -630,8 +547,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletedAt: new Date().toISOString(),
     };
 
-    setTasks((prev) => prev.filter((task) => task.id !== id));
-    setTrashTasks((prev) => [deletedRecord, ...prev.filter((task) => task.id !== id)]);
+    setTasks((previous) => previous.filter((task) => task.id !== id));
+    setTrashTasks((previous) => [deletedRecord, ...previous.filter((task) => task.id !== id)]);
+    recordUsageEvent('task_deleted', { category: target.category });
     addToast(`Đã xóa “${target.title}”`, 'info', {
       label: 'Hoàn tác',
       onClick: () => restoreTaskRecord(deletedRecord, false),
@@ -646,294 +564,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .map((task) => task.id),
     );
     if (expiredIds.size === 0) return;
-    setTrashTasks((prev) => prev.filter((task) => !expiredIds.has(task.id)));
+    setTrashTasks((previous) => previous.filter((task) => !expiredIds.has(task.id)));
   }, [trashTasks]);
 
   const toggleTaskComplete = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          const isDone = t.status === 'done';
-          const newStatus = isDone ? 'todo' : 'done';
-          return {
-            ...t,
-            status: newStatus,
-            completedAt: !isDone ? getFormattedToday(0) : undefined,
-          };
-        }
-        return t;
-      })
+    const target = tasks.find((task) => task.id === id);
+    if (target) recordUsageEvent(target.status === 'done' ? 'task_reopened' : 'task_completed');
+    setTasks((previous) =>
+      previous.map((task) => {
+        if (task.id !== id) return task;
+        const isDone = task.status === 'done';
+        return {
+          ...task,
+          status: isDone ? 'todo' : 'done',
+          completedAt: isDone ? undefined : getFormattedToday(0),
+        };
+      }),
     );
-  }, []);
-
-  const undoAssistantDecision = useCallback((decisionId: string) => {
-    const decision = assistantDecisions.find((item) => item.id === decisionId && item.status === 'executed');
-    if (!decision) return;
-    setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
-    setAssistantDecisions((prev) =>
-      prev.map((item) =>
-        item.id === decisionId
-          ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-    addToast('Đã hoàn tác quyết định của trợ lý', 'info');
-  }, [assistantDecisions, addToast]);
-
-  const approveAssistantDecision = useCallback((decisionId: string) => {
-    const decision = assistantDecisions.find(
-      (item) => item.id === decisionId && item.mode === 'approval_required' && item.status === 'planned',
-    );
-    if (!decision) return;
-    setTasks((prev) => applyAssistantDecisionToTasks(prev, decision));
-    setAssistantDecisions((prev) =>
-      prev.map((item) =>
-        item.id === decisionId
-          ? { ...item, status: 'executed' as const, executedAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-    addToast('Đã áp dụng phương án của trợ lý', 'success', {
-      label: 'Hoàn tác',
-      onClick: () => {
-        setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
-        setAssistantDecisions((prev) =>
-          prev.map((item) =>
-            item.id === decisionId
-              ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
-              : item,
-          ),
-        );
-      },
-    });
-  }, [assistantDecisions, addToast]);
-
-  const rejectAssistantDecision = useCallback((decisionId: string) => {
-    const decision = assistantDecisions.find(
-      (item) => item.id === decisionId && item.mode === 'approval_required' && item.status === 'planned',
-    );
-    if (!decision) return;
-    setAssistantDecisions((prev) =>
-      prev.map((item) =>
-        item.id === decisionId
-          ? { ...item, status: 'rejected' as const }
-          : item,
-      ),
-    );
-    addToast('Đã giữ nguyên lịch hiện tại', 'info');
-  }, [assistantDecisions, addToast]);
-
-  const confirmMentorPrompt = useCallback(() => {
-    const bedtime = mentorPrompt?.suggestedBedtime || mentorProfile.bedtime;
-    setDailyMentorDirective({
-      date: getFormattedToday(0),
-      bedtime,
-      confirmed: true,
-    });
-    addToast(`Chốt ${bedtime} đi ngủ`, 'success');
-  }, [mentorPrompt, mentorProfile.bedtime, addToast]);
-
-  const refreshChiefOfStaff = useCallback(() => {
-    setAssistantClock(Date.now());
-  }, []);
-
-  useEffect(() => {
-    const evaluation = evaluateChiefOfStaff({
-      tasks,
-      calendarEvents,
-      habits,
-      now: new Date(assistantClock),
-      mentorProfile,
-      dailyDirective: dailyMentorDirective,
-    });
-    setAssistantBrief(evaluation.brief);
-    setMentorTimeline(evaluation.mentorTimeline);
-    setMentorPrompt(evaluation.mentorPrompt);
-
-    const approvalDecision = evaluation.decisions.find(
-      (item) =>
-        item.mode === 'approval_required' &&
-        !assistantDecisions.some((existing) => existing.id === item.id),
-    );
-    if (approvalDecision) {
-      setAssistantDecisions((prev) => [approvalDecision, ...prev].slice(0, 100));
-    }
-
-    const decision = evaluation.decisions.find(
-      (item) =>
-        (item.mode === 'auto' || item.mode === 'auto_notify') &&
-        !assistantDecisions.some((existing) => existing.id === item.id),
-    );
-    if (!decision) return;
-
-    const executed: AssistantDecisionRecord = {
-      ...decision,
-      status: 'executed',
-      executedAt: new Date().toISOString(),
-    };
-    setTasks((prev) => applyAssistantDecisionToTasks(prev, decision));
-    setAssistantDecisions((prev) => [executed, ...prev].slice(0, 100));
-
-    if (decision.mode === 'auto_notify') {
-      addToast(decision.summary, 'info', {
-        label: 'Hoàn tác',
-        onClick: () => {
-          setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
-          setAssistantDecisions((prev) =>
-            prev.map((item) =>
-              item.id === decision.id
-                ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
-                : item,
-            ),
-          );
-        },
-      });
-    }
-  }, [tasks, calendarEvents, habits, assistantClock, assistantDecisions, mentorProfile, dailyMentorDirective, addToast]);
+  }, [tasks]);
 
   const toggleTopPriority = useCallback((id: string) => {
-    setTasks((prev) => {
-      const target = prev.find((t) => t.id === id);
-      if (!target) return prev;
+    setTasks((previous) => {
+      const target = previous.find((task) => task.id === id);
+      if (!target) return previous;
       if (!target.isTopPriority) {
-        const currentTopCount = prev.filter((t) => t.isTopPriority && t.status !== 'done').length;
-        if (currentTopCount >= 3) {
+        const count = previous.filter((task) => task.isTopPriority && task.status !== 'done').length;
+        if (count >= 3) {
           addToast('Chỉ nên chọn tối đa 3 việc quan trọng nhất cho một ngày để duy trì sự tập trung.', 'warning');
-          return prev;
+          return previous;
         }
       }
-      return prev.map((t) => (t.id === id ? { ...t, isTopPriority: !t.isTopPriority } : t));
+      return previous.map((task) =>
+        task.id === id ? { ...task, isTopPriority: !task.isTopPriority } : task,
+      );
     });
   }, [addToast]);
 
   const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === taskId) {
-          const updatedSubtasks = t.subtasks.map((st) =>
-            st.id === subtaskId ? { ...st, completed: !st.completed } : st
-          );
-          return { ...t, subtasks: updatedSubtasks };
-        }
-        return t;
-      })
+    recordUsageEvent('subtask_toggled');
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.map((subtask) =>
+                subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask,
+              ),
+            }
+          : task,
+      ),
     );
   }, []);
 
   const addSubtask = useCallback((taskId: string, title: string, estimatedMinutes = 20) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
     const newSubtask = {
       id: `sub-${Date.now()}`,
-      title: title.trim(),
+      title: trimmed,
       completed: false,
       estimatedMinutes,
     };
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, subtasks: [...t.subtasks, newSubtask] } : t))
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.id === taskId ? { ...task, subtasks: [...task.subtasks, newSubtask] } : task,
+      ),
     );
+    recordUsageEvent('subtask_added', { estimatedMinutes });
     addToast('Đã thêm bước thực hiện mới', 'success');
   }, [addToast]);
 
-  const breakdownTaskWithAi = useCallback(async (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    addToast(`Đang phân tích và chia nhỏ: "${task.title}"...`, 'info');
-    try {
-      const res = await fetch('/api/gemini/breakdown-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskTitle: task.title,
-          taskDescription: task.description,
-          estimatedMinutes: task.estimatedMinutes,
-        }),
-      });
-      const data = await res.json();
-      if (data.subtasks && data.subtasks.length > 0) {
-        setTasks((prev) =>
-          prev.map((t) => {
-            if (t.id === taskId) {
-              return { ...t, subtasks: [...t.subtasks, ...data.subtasks] };
-            }
-            return t;
-          })
-        );
-        addToast(`Trợ lý đã chia "${task.title}" thành ${data.subtasks.length} bước nhỏ`, 'success');
-      }
-    } catch (e) {
-      console.error('AI breakdown error:', e);
-      addToast('Không thể chia nhỏ lúc này, vui lòng thử lại.', 'error');
-    }
-  }, [tasks, addToast]);
-
   const calculateProjectProgress = useCallback((projectId: string): number => {
-    const project = projects.find((p) => p.id === projectId);
+    const project = projects.find((item) => item.id === projectId);
     if (!project) return 0;
-    const projectTasks = tasks.filter((t) => t.projectId === projectId);
+    const projectTasks = tasks.filter((task) => task.projectId === projectId);
     const milestones = project.milestones || [];
-
     if (projectTasks.length === 0 && milestones.length === 0) return 0;
 
-    let milestoneScore = 0;
-    if (milestones.length > 0) {
-      const totalWeight = milestones.reduce((sum, m) => sum + (m.weight || 1), 0);
-      const doneWeight = milestones
-        .filter((m) => m.completed)
-        .reduce((sum, m) => sum + (m.weight || 1), 0);
-      milestoneScore = doneWeight / (totalWeight || 1);
-    }
+    const milestoneScore = milestones.length
+      ? milestones.filter((milestone) => milestone.completed).reduce((sum, milestone) => sum + (milestone.weight || 1), 0) /
+        (milestones.reduce((sum, milestone) => sum + (milestone.weight || 1), 0) || 1)
+      : 0;
 
-    let taskScore = 0;
-    if (projectTasks.length > 0) {
-      const totalTaskWeight = projectTasks.reduce(
-        (sum, t) => sum + (t.priority === 'urgent' || t.priority === 'high' ? 2 : 1),
-        0
-      );
-      const doneTaskWeight = projectTasks
-        .filter((t) => t.status === 'done')
-        .reduce((sum, t) => sum + (t.priority === 'urgent' || t.priority === 'high' ? 2 : 1), 0);
-      taskScore = doneTaskWeight / (totalTaskWeight || 1);
-    }
+    const taskScore = projectTasks.length
+      ? projectTasks.filter((task) => task.status === 'done').reduce(
+          (sum, task) => sum + (task.priority === 'urgent' || task.priority === 'high' ? 2 : 1),
+          0,
+        ) /
+        (projectTasks.reduce(
+          (sum, task) => sum + (task.priority === 'urgent' || task.priority === 'high' ? 2 : 1),
+          0,
+        ) || 1)
+      : 0;
 
-    if (milestones.length > 0 && projectTasks.length > 0) {
-      return Math.round((milestoneScore * 0.5 + taskScore * 0.5) * 100);
-    } else if (milestones.length > 0) {
-      return Math.round(milestoneScore * 100);
-    } else {
-      return Math.round(taskScore * 100);
-    }
+    if (milestones.length && projectTasks.length) return Math.round((milestoneScore * 0.5 + taskScore * 0.5) * 100);
+    if (milestones.length) return Math.round(milestoneScore * 100);
+    return Math.round(taskScore * 100);
   }, [projects, tasks]);
 
-  const addProject = useCallback((projData: Partial<Project>): Project => {
-    const newProj: Project = {
+  const addProject = useCallback((projectData: Partial<Project>): Project => {
+    const newProject: Project = {
       id: `proj-${Date.now()}`,
-      name: projData.name?.trim() || 'Dự án mới',
-      description: projData.description || '',
-      category: projData.category || 'work',
-      color: projData.color || '#3b82f6',
-      targetDate: projData.targetDate || getFormattedToday(30),
-      milestones: projData.milestones || [],
+      name: projectData.name?.trim() || 'Dự án mới',
+      description: projectData.description || '',
+      category: projectData.category || 'work',
+      color: projectData.color || '#3b82f6',
+      targetDate: projectData.targetDate || getFormattedToday(30),
+      milestones: projectData.milestones || [],
       recentActivity: [
         {
           id: `act-${Date.now()}`,
           timestamp: 'Vừa xong',
-          action: `Đã tạo dự án "${projData.name}"`,
+          action: `Đã tạo dự án "${projectData.name?.trim() || 'Dự án mới'}"`,
         },
       ],
-      aiHealthSummary: {
-        status: 'healthy',
-        score: 100,
-        summary: 'Dự án mới được khởi tạo với các mục tiêu ban đầu.',
-        recommendations: ['Lên danh sách các việc cần làm đầu tiên và gán cột mốc.'],
-      },
     };
-    setProjects((prev) => [newProj, ...prev]);
-    addToast(`Đã tạo dự án mới: "${newProj.name}"`, 'success');
-    return newProj;
+    setProjects((previous) => [newProject, ...previous]);
+    recordUsageEvent('project_created', { category: newProject.category });
+    addToast(`Đã tạo dự án mới: "${newProject.name}"`, 'success');
+    return newProject;
   }, [addToast]);
 
   const updateProject = useCallback((id: string, updates: Partial<Project>) => {
-    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+    recordUsageEvent('project_updated', { fieldCount: Object.keys(updates).length });
+    setProjects((previous) => previous.map((project) => (project.id === id ? { ...project, ...updates } : project)));
   }, []);
 
   const deleteProject = useCallback((id: string) => {
@@ -953,6 +707,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks(next.tasks);
     setTrashTasks(next.trashTasks);
     setCalendarEvents(next.calendarEvents);
+    recordUsageEvent('project_deleted', { affectedTaskCount: next.affectedTaskCount });
     addToast(
       next.affectedTaskCount > 0
         ? `Đã xóa “${project.name}” và ${next.affectedTaskCount} công việc`
@@ -962,27 +717,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [projects, tasks, trashTasks, calendarEvents, addToast]);
 
   const toggleMilestone = useCallback((projectId: string, milestoneId: string) => {
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id === projectId) {
-          const updatedMilestones = p.milestones.map((m) =>
-            m.id === milestoneId ? { ...m, completed: !m.completed } : m
-          );
-          return {
-            ...p,
-            milestones: updatedMilestones,
-            recentActivity: [
-              {
-                id: `act-${Date.now()}`,
-                timestamp: 'Vừa xong',
-                action: 'Đã cập nhật trạng thái cột mốc dự án',
-              },
-              ...p.recentActivity.slice(0, 4),
-            ],
-          };
-        }
-        return p;
-      })
+    setProjects((previous) =>
+      previous.map((project) => {
+        if (project.id !== projectId) return project;
+        return {
+          ...project,
+          milestones: project.milestones.map((milestone) =>
+            milestone.id === milestoneId ? { ...milestone, completed: !milestone.completed } : milestone,
+          ),
+          recentActivity: [
+            {
+              id: `act-${Date.now()}`,
+              timestamp: 'Vừa xong',
+              action: 'Đã cập nhật trạng thái cột mốc dự án',
+            },
+            ...project.recentActivity.slice(0, 4),
+          ],
+        };
+      }),
     );
   }, []);
 
@@ -1000,39 +752,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       location: eventData.location,
       color: eventData.color || '#3b82f6',
     };
-    setCalendarEvents((prev) => [...prev, newEvent]);
+    setCalendarEvents((previous) => [...previous, newEvent]);
+    recordUsageEvent('calendar_event_created', { type: newEvent.type });
     addToast(`Đã thêm vào lịch: "${newEvent.title}" lúc ${newEvent.startTime}`, 'success');
     return newEvent;
   }, [addToast]);
 
   const updateCalendarEvent = useCallback((id: string, updates: Partial<CalendarEvent>) => {
-    setCalendarEvents((prev) => prev.map((ev) => (ev.id === id ? { ...ev, ...updates } : ev)));
+    recordUsageEvent('calendar_event_updated', { fieldCount: Object.keys(updates).length });
+    setCalendarEvents((previous) => previous.map((event) => (event.id === id ? { ...event, ...updates } : event)));
   }, []);
 
   const deleteCalendarEvent = useCallback((id: string) => {
-    setCalendarEvents((prev) => prev.filter((ev) => ev.id !== id));
+    recordUsageEvent('calendar_event_deleted');
+    setCalendarEvents((previous) => previous.filter((event) => event.id !== id));
     addToast('Đã xóa sự kiện khỏi lịch', 'info');
   }, [addToast]);
 
-  const scheduleTaskIntoCalendar = useCallback((taskId: string, date: string, startTime: string, durationMinutes = 60) => {
-    const task = tasks.find((t) => t.id === taskId);
+  const scheduleTaskIntoCalendar = useCallback((
+    taskId: string,
+    date: string,
+    startTime: string,
+    durationMinutes = 60,
+  ) => {
+    const task = tasks.find((item) => item.id === taskId);
     if (!task) return;
+    recordUsageEvent('task_scheduled', { durationMinutes });
 
-    const [h, m] = startTime.split(':').map(Number);
-    const totalMinutes = h * 60 + m + durationMinutes;
-    const endH = Math.min(23, Math.floor(totalMinutes / 60));
-    const endM = totalMinutes % 60;
-    const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    const [hour, minute] = startTime.split(':').map(Number);
+    const totalMinutes = hour * 60 + minute + durationMinutes;
+    const endHour = Math.min(23, Math.floor(totalMinutes / 60));
+    const endMinute = totalMinutes % 60;
+    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
 
-    updateTask(taskId, {
-      plannedDate: date,
-      startTime,
-      estimatedMinutes: durationMinutes,
-    });
+    updateTask(taskId, { plannedDate: date, startTime, estimatedMinutes: durationMinutes });
 
-    const existingEv = calendarEvents.find((ev) => ev.taskId === taskId && ev.date === date);
-    if (existingEv) {
-      updateCalendarEvent(existingEv.id, { startTime, endTime });
+    const existing = calendarEvents.find((event) => event.taskId === taskId && event.date === date);
+    if (existing) {
+      updateCalendarEvent(existing.id, { startTime, endTime });
     } else {
       addCalendarEvent({
         title: task.title,
@@ -1048,56 +805,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tasks, calendarEvents, updateTask, updateCalendarEvent, addCalendarEvent]);
 
-  const autoScheduleWithAi = useCallback(async (date: string) => {
-    const unscheduled = tasks.filter(
-      (t) => t.status !== 'done' && (!t.plannedDate || !t.startTime)
-    );
-    const existingForDay = calendarEvents.filter((ev) => ev.date === date);
-
-    try {
-      const res = await fetch('/api/gemini/smart-schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date,
-          unscheduledTasks: unscheduled.map((t) => ({
-            id: t.id,
-            title: t.title,
-            priority: t.priority,
-            estimatedMinutes: t.estimatedMinutes,
-            deadline: t.deadline,
-          })),
-          existingEvents: existingForDay.map((e) => ({
-            title: e.title,
-            startTime: e.startTime,
-            endTime: e.endTime,
-          })),
-        }),
-      });
-      const data = await res.json();
-      return data;
-    } catch (e) {
-      console.error('Smart schedule error:', e);
-      return {
-        proposedSchedule: [],
-        summary: 'Không thể kết nối dịch vụ xếp lịch AI lúc này.',
-      };
-    }
-  }, [tasks, calendarEvents]);
-
   const toggleHabitForDate = useCallback((habitId: string, date: string) => {
-    setHabits((prev) =>
-      prev.map((h) => {
-        if (h.id === habitId) {
-          const exists = h.completedDates.includes(date);
-          const newDates = exists
-            ? h.completedDates.filter((d) => d !== date)
-            : [...h.completedDates, date];
-          const newStreak = exists ? Math.max(0, h.streak - 1) : h.streak + 1;
-          return { ...h, completedDates: newDates, streak: newStreak };
-        }
-        return h;
-      })
+    recordUsageEvent('habit_toggled');
+    setHabits((previous) =>
+      previous.map((habit) => {
+        if (habit.id !== habitId) return habit;
+        const exists = habit.completedDates.includes(date);
+        return {
+          ...habit,
+          completedDates: exists
+            ? habit.completedDates.filter((item) => item !== date)
+            : [...habit.completedDates, date],
+          streak: exists ? Math.max(0, habit.streak - 1) : habit.streak + 1,
+        };
+      }),
     );
   }, []);
 
@@ -1106,24 +827,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `hab-${Date.now()}`,
       name: habitData.name?.trim() || 'Thói quen mới',
       category: habitData.category || 'health',
+      frequency: habitData.frequency,
+      targetTime: habitData.targetTime,
       targetDaysPerWeek: habitData.targetDaysPerWeek || 7,
       preferredTime: habitData.preferredTime,
       durationMinutes: habitData.durationMinutes || 15,
       streak: 0,
+      bestStreak: habitData.bestStreak,
       completedDates: [],
       description: habitData.description,
     };
-    setHabits((prev) => [...prev, newHabit]);
+    setHabits((previous) => [...previous, newHabit]);
+    recordUsageEvent('habit_created', { category: newHabit.category || 'unknown' });
     addToast(`Đã thêm thói quen: "${newHabit.name}"`, 'success');
     return newHabit;
   }, [addToast]);
 
   const updateHabit = useCallback((id: string, updates: Partial<Habit>) => {
-    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, ...updates } : h)));
+    recordUsageEvent('habit_updated', { fieldCount: Object.keys(updates).length });
+    setHabits((previous) => previous.map((habit) => (habit.id === id ? { ...habit, ...updates } : habit)));
   }, []);
 
   const deleteHabit = useCallback((id: string) => {
-    setHabits((prev) => prev.filter((h) => h.id !== id));
+    recordUsageEvent('habit_deleted');
+    setHabits((previous) => previous.filter((habit) => habit.id !== id));
     addToast('Đã xóa thói quen', 'info');
   }, [addToast]);
 
@@ -1132,285 +859,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `goal-${Date.now()}`,
       title: goalData.title?.trim() || 'Mục tiêu mới',
       type: goalData.type || 'work',
+      category: goalData.category,
       targetDate: goalData.targetDate || getFormattedToday(90),
       progress: goalData.progress || 0,
       keyResults: goalData.keyResults || [],
+      linkedProjectId: goalData.linkedProjectId,
       linkedProjectIds: goalData.linkedProjectIds || [],
       notes: goalData.notes || '',
     };
-    setGoals((prev) => [...prev, newGoal]);
+    setGoals((previous) => [...previous, newGoal]);
+    recordUsageEvent('goal_created', { type: newGoal.type || newGoal.category || 'unknown' });
     addToast(`Đã thêm mục tiêu: "${newGoal.title}"`, 'success');
     return newGoal;
   }, [addToast]);
 
   const updateGoal = useCallback((id: string, updates: Partial<Goal>) => {
-    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...updates } : g)));
+    recordUsageEvent('goal_updated', { fieldCount: Object.keys(updates).length });
+    setGoals((previous) => previous.map((goal) => (goal.id === id ? { ...goal, ...updates } : goal)));
   }, []);
 
   const deleteGoal = useCallback((id: string) => {
-    setGoals((prev) => prev.filter((g) => g.id !== id));
+    recordUsageEvent('goal_deleted');
+    setGoals((previous) => previous.filter((goal) => goal.id !== id));
     addToast('Đã xóa mục tiêu', 'info');
   }, [addToast]);
-
-  const applyAiSuggestion = useCallback((suggestionId: string) => {
-    const sug = aiSuggestions.find((s) => s.id === suggestionId);
-    if (!sug) return;
-
-    if (sug.actionType === 'reschedule_task') {
-      const { taskId, newDate, newTime } = sug.payload;
-      updateTask(taskId, { plannedDate: newDate, startTime: newTime });
-      addToast('Đã dời lịch công việc theo đề xuất của trợ lý', 'success');
-    } else if (sug.actionType === 'fill_gap') {
-      const { taskId, date, startTime, endTime } = sug.payload;
-      updateTask(taskId, { plannedDate: date, startTime });
-      const task = tasks.find((t) => t.id === taskId);
-      if (task) {
-        addCalendarEvent({
-          title: task.title,
-          type: 'task',
-          date,
-          startTime,
-          endTime,
-          taskId,
-          color: '#3b82f6',
-        });
-      }
-      addToast('Đã lấp khoảng trống bằng công việc phù hợp', 'success');
-    } else if (sug.actionType === 'breakdown_task') {
-      breakdownTaskWithAi(sug.payload.taskId);
-    }
-
-    setAiSuggestions((prev) =>
-      prev.map((s) => (s.id === suggestionId ? { ...s, status: 'applied' } : s))
-    );
-  }, [aiSuggestions, tasks, updateTask, addCalendarEvent, breakdownTaskWithAi, addToast]);
-
-  const dismissAiSuggestion = useCallback((suggestionId: string) => {
-    setAiSuggestions((prev) =>
-      prev.map((s) => (s.id === suggestionId ? { ...s, status: 'dismissed' } : s))
-    );
-    addToast('Đã bỏ qua đề xuất', 'info');
-  }, [addToast]);
-
-  const parseAndConfirmInput = useCallback(async (prompt: string): Promise<ParsedInputResult> => {
-    try {
-      const res = await fetch('/api/gemini/parse-input', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          baseDate: getFormattedToday(0),
-        }),
-      });
-      const data: ParsedInputResult = await res.json();
-      return data;
-    } catch (e) {
-      console.error('Parse input error:', e);
-      return {
-        title: prompt,
-        type: 'task',
-        date: getFormattedToday(0),
-        startTime: '09:00',
-        estimatedMinutes: 60,
-        priority: 'medium',
-        relatedProject: 'Công việc chung',
-        reminder: '15 phút trước',
-        rawInput: prompt,
-      };
-    }
-  }, []);
-
-  const confirmParsedInput = useCallback((parsed: ParsedInputResult) => {
-    const matchProj = projects.find(
-      (p) => p.name.toLowerCase() === parsed.relatedProject.toLowerCase()
-    );
-
-    if (parsed.type === 'habit') {
-      addHabit({
-        name: parsed.title,
-        category: 'health',
-        preferredTime: parsed.startTime,
-        durationMinutes: parsed.estimatedMinutes || 30,
-      });
-    } else if (parsed.type === 'event') {
-      const [h, m] = (parsed.startTime || '09:00').split(':').map(Number);
-      const totalMinutes = h * 60 + m + (parsed.estimatedMinutes || 60);
-      const endH = Math.floor(totalMinutes / 60);
-      const endM = totalMinutes % 60;
-      const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-
-      addCalendarEvent({
-        title: parsed.title,
-        type: 'meeting',
-        date: parsed.date,
-        startTime: parsed.startTime || '09:00',
-        endTime,
-        projectId: matchProj?.id,
-      });
-    } else {
-      addTask({
-        title: parsed.title,
-        category: matchProj?.category || 'work',
-        projectId: matchProj?.id,
-        priority: parsed.priority,
-        plannedDate: parsed.date,
-        startTime: parsed.startTime,
-        estimatedMinutes: parsed.estimatedMinutes,
-        reminder: parsed.reminder,
-        isTopPriority: parsed.priority === 'urgent',
-      });
-    }
-  }, [projects, addHabit, addCalendarEvent, addTask]);
-
-  const sendChatMessage = useCallback(async (text: string) => {
-    const now = new Date();
-    const todayDate = getFormattedToday(0);
-    const tomorrowDate = getFormattedToday(1);
-    const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: 'user',
-      text,
-      timestamp: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setChatMessages((prev) => [...prev, userMsg]);
-
-    // Local parsing is context for Gemini only. It must never generate the chat reply
-    // or mutate the schedule before Gemini has reasoned about the request.
-    const localInstructionHint = parseMentorInstruction(
-      text,
-      now,
-      dailyMentorDirective?.bedtime || mentorProfile.bedtime,
-    );
-
-    const context = {
-      currentLocalTime: `${todayDate} ${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`,
-      todayDate,
-      tomorrowDate,
-      topTasks: tasks.filter((t) => t.isTopPriority && t.status !== 'done'),
-      totalTasksToday: tasks.filter((t) => t.plannedDate === todayDate),
-      tasksTomorrow: tasks.filter((t) => t.plannedDate === tomorrowDate && t.status !== 'done'),
-      calendarEventsToday: calendarEvents.filter((e) => e.date === todayDate),
-      calendarEventsTomorrow: calendarEvents.filter((e) => e.date === tomorrowDate),
-      projects: projects.map((p) => ({ name: p.name, targetDate: p.targetDate })),
-      mentorProfile,
-      dailyMentorDirective,
-      mentorTimeline,
-      localInstructionHint,
-    };
-
-    try {
-      const res = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...chatMessages, userMsg],
-          context,
-        }),
-      });
-
-      const rawBody = await res.text();
-      let data: any = {};
-      try {
-        data = rawBody ? JSON.parse(rawBody) : {};
-      } catch {
-        throw new Error(`Gemini endpoint trả dữ liệu không hợp lệ (HTTP ${res.status}).`);
-      }
-
-      if (!res.ok) {
-        const detail = typeof data.error === 'string'
-          ? data.error
-          : typeof data.message === 'string'
-            ? data.message
-            : `Gemini request thất bại (HTTP ${res.status}).`;
-        throw new Error(detail);
-      }
-
-      if (!data.aiAvailable || typeof data.reply !== 'string' || !data.reply.trim()) {
-        throw new Error('Gemini không trả về câu trả lời hợp lệ.');
-      }
-
-      if (data.mentorAction?.type === 'set_bedtime' && /^\d{2}:\d{2}$/.test(String(data.mentorAction.bedtime || ''))) {
-        setDailyMentorDirective({
-          date: data.mentorAction.date || todayDate,
-          bedtime: data.mentorAction.bedtime,
-          confirmed: true,
-        });
-        setAssistantClock(Date.now());
-      } else if (data.mentorAction?.type === 'set_mentor_profile' && data.mentorAction.name) {
-        setMentorProfile((previous) => ({
-          ...previous,
-          id: `custom:${String(data.mentorAction.name).toLowerCase().replace(/\s+/g, '-')}`,
-          name: String(data.mentorAction.name),
-          bedtime: /^\d{2}:\d{2}$/.test(String(data.mentorAction.bedtime || ''))
-            ? data.mentorAction.bedtime
-            : previous.bedtime,
-        }));
-        setAssistantClock(Date.now());
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        sender: 'assistant',
-        text: data.reply.trim(),
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        proposedAction: data.proposedAction,
-      };
-      setChatMessages((prev) => [...prev, assistantMsg]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('Gemini chat error:', error);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-${Date.now() + 1}`,
-          sender: 'assistant',
-          text: `Lỗi Gemini: ${message}`,
-          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    }
-  }, [chatMessages, tasks, calendarEvents, projects, mentorProfile, dailyMentorDirective, mentorTimeline]);
-
-  const applyAssistantAction = useCallback((messageId: string) => {
-    const msg = chatMessages.find((m) => m.id === messageId);
-    if (!msg || !msg.proposedAction) return;
-
-    const { type, data } = msg.proposedAction;
-    if (type === 'create_task') {
-      addTask(data);
-    } else if (type === 'reschedule_task') {
-      updateTask(data.taskId, { plannedDate: data.date, startTime: data.startTime });
-      addToast('Đã dời lịch theo đề xuất của trợ lý', 'success');
-    } else if (type === 'add_event') {
-      addCalendarEvent(data);
-    }
-
-    setChatMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId && m.proposedAction
-          ? { ...m, proposedAction: { ...m.proposedAction, applied: true } }
-          : m
-      )
-    );
-  }, [chatMessages, addTask, updateTask, addCalendarEvent, addToast]);
 
   const startFocusSession = useCallback((task: Task, minutes = 25) => {
     setFocusTask(task);
     setFocusTotalSeconds(minutes * 60);
     setFocusSecondsLeft(minutes * 60);
     setIsFocusRunning(true);
+    recordUsageEvent('focus_started', { minutes });
     addToast(`Bắt đầu phiên tập trung: "${task.title}" (${minutes} phút)`, 'info');
   }, [addToast]);
 
   const pauseFocusSession = useCallback(() => {
+    recordUsageEvent('focus_paused');
     setIsFocusRunning(false);
   }, []);
-
   const resumeFocusSession = useCallback(() => {
+    recordUsageEvent('focus_resumed');
     setIsFocusRunning(true);
   }, []);
 
   const stopFocusSession = useCallback((markComplete = false) => {
+    recordUsageEvent('focus_stopped', { markComplete });
     setIsFocusRunning(false);
     if (focusTask) {
       const elapsedMinutes = Math.max(1, Math.round((focusTotalSeconds - focusSecondsLeft) / 60));
@@ -1418,12 +911,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         actualMinutes: (focusTask.actualMinutes || 0) + elapsedMinutes,
         status: markComplete ? 'done' : focusTask.status,
       });
-      if (markComplete) {
-        addToast(`Đã hoàn thành xuất sắc nhiệm vụ "${focusTask.title}"!`, 'success');
-      }
+      if (markComplete) addToast(`Đã hoàn thành nhiệm vụ "${focusTask.title}"!`, 'success');
     }
     setFocusTask(null);
   }, [focusTask, focusTotalSeconds, focusSecondsLeft, updateTask, addToast]);
+
+  useEffect(() => {
+    if (!isFocusRunning) return;
+    if (focusSecondsLeft <= 0) {
+      setIsFocusRunning(false);
+      if (focusTask) {
+        const addedMinutes = Math.round(focusTotalSeconds / 60);
+        updateTask(focusTask.id, {
+          actualMinutes: (focusTask.actualMinutes || 0) + addedMinutes,
+        });
+      }
+      addToast(`Đã hoàn thành phiên tập trung cho "${focusTask?.title || 'nhiệm vụ'}"!`, 'success');
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setFocusSecondsLeft((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isFocusRunning, focusSecondsLeft, focusTask, focusTotalSeconds, updateTask, addToast]);
 
   return (
     <AppContext.Provider
@@ -1432,19 +943,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         signInWithGoogle,
         logout,
         currentView,
-        setCurrentView,
+        setCurrentView: changeCurrentView,
         activeTab: currentView as NavTab,
-        setActiveTab: setCurrentView as (tab: NavTab) => void,
-        isAssistantOpen,
-        setIsAssistantOpen,
-        toggleAssistant,
+        setActiveTab: changeCurrentView as (tab: NavTab) => void,
         isCommandMenuOpen,
         setIsCommandMenuOpen,
         isMorningPlanningOpen,
         setIsMorningPlanningOpen,
         isEveningReviewOpen,
         setIsEveningReviewOpen,
-        openTaskModal: (task?: Task) => setEditingTask(task || createTaskDraft(getFormattedToday(0))),
+        openTaskModal,
         openFocusSession: (task: Task) => startFocusSession(task),
         tasks,
         trashTasks,
@@ -1452,19 +960,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         calendarEvents,
         habits,
         goals,
-        aiSuggestions,
         lifeMetrics,
-        chatMessages,
-        assistantBrief,
-        assistantDecisions,
-        mentorProfile,
-        mentorTimeline,
-        mentorPrompt,
-        confirmMentorPrompt,
-        undoAssistantDecision,
-        approveAssistantDecision,
-        rejectAssistantDecision,
-        refreshChiefOfStaff,
         addTask,
         addTasks,
         updateTask,
@@ -1475,7 +971,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTopPriority,
         toggleSubtask,
         addSubtask,
-        breakdownTaskWithAi,
         addProject,
         updateProject,
         deleteProject,
@@ -1485,7 +980,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCalendarEvent,
         deleteCalendarEvent,
         scheduleTaskIntoCalendar,
-        autoScheduleWithAi,
         toggleHabitForDate,
         addHabit,
         updateHabit,
@@ -1493,12 +987,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addGoal,
         updateGoal,
         deleteGoal,
-        applyAiSuggestion,
-        dismissAiSuggestion,
-        sendChatMessage,
-        applyAssistantAction,
-        parseAndConfirmInput,
-        confirmParsedInput,
         focusTask,
         isFocusRunning,
         focusSecondsLeft,

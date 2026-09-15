@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, Plus, Star, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskPriority } from '../../types';
 import { isTaskDraft } from '../../services/taskDraft';
@@ -20,7 +20,6 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
   const [task, setTask] = useState({ ...initialTask });
   const [newSubtask, setNewSubtask] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [breakingDown, setBreakingDown] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const draft = isTaskDraft(task);
 
@@ -42,28 +41,6 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
       ],
     }));
     setNewSubtask('');
-  };
-
-  const breakdown = async () => {
-    if (!task.title.trim()) return;
-    setBreakingDown(true);
-    try {
-      const response = await fetch('/api/gemini/breakdown-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskTitle: task.title,
-          taskDescription: task.description,
-          estimatedMinutes: task.estimatedMinutes,
-        }),
-      });
-      const data = await response.json();
-      if (Array.isArray(data.subtasks)) {
-        setTask((current) => ({ ...current, subtasks: [...current.subtasks, ...data.subtasks] }));
-      }
-    } finally {
-      setBreakingDown(false);
-    }
   };
 
   return (
@@ -149,15 +126,6 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
               <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
                 Nhiệm vụ nhỏ ({task.subtasks.length})
               </h3>
-              <button
-                type="button"
-                onClick={breakdown}
-                disabled={breakingDown || !task.title.trim()}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-600 disabled:opacity-40"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                {breakingDown ? 'Đang chia…' : 'AI chia nhỏ'}
-              </button>
             </div>
 
             <div className="space-y-2">
@@ -235,9 +203,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
             className="mt-4 flex w-full items-center justify-between border-t border-slate-100 py-4 text-sm font-semibold text-slate-500"
           >
             <span>Tùy chọn thêm</span>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-            />
+            <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
 
           {showAdvanced ? (
@@ -252,16 +218,13 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
               <div className="grid grid-cols-2 gap-2.5">
                 <label className="rounded-xl border border-slate-200 p-3 text-xs text-slate-400">
                   <span className="mb-1 flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Ngày làm
+                    <Calendar className="h-3 w-3" /> Ngày làm
                   </span>
                   <input
                     type="date"
                     lang="vi-VN"
                     value={task.plannedDate || ''}
-                    onChange={(event) =>
-                      setTask({ ...task, plannedDate: event.target.value || undefined })
-                    }
+                    onChange={(event) => setTask({ ...task, plannedDate: event.target.value || undefined })}
                     className="w-full bg-transparent font-semibold text-slate-700 outline-none"
                   />
                 </label>
@@ -272,9 +235,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
                     min="5"
                     step="5"
                     value={task.estimatedMinutes}
-                    onChange={(event) =>
-                      setTask({ ...task, estimatedMinutes: Number(event.target.value) })
-                    }
+                    onChange={(event) => setTask({ ...task, estimatedMinutes: Number(event.target.value) })}
                     className="w-full bg-transparent font-semibold text-slate-700 outline-none"
                   />
                 </label>
@@ -282,9 +243,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
 
               <select
                 value={task.projectId || ''}
-                onChange={(event) =>
-                  setTask({ ...task, projectId: event.target.value || undefined })
-                }
+                onChange={(event) => setTask({ ...task, projectId: event.target.value || undefined })}
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none"
               >
                 <option value="">Không thuộc dự án</option>
@@ -300,17 +259,13 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
                   type="date"
                   lang="vi-VN"
                   value={task.deadline || ''}
-                  onChange={(event) =>
-                    setTask({ ...task, deadline: event.target.value || undefined })
-                  }
+                  onChange={(event) => setTask({ ...task, deadline: event.target.value || undefined })}
                   aria-label="Hạn chót"
                   className="h-11 min-w-0 rounded-xl border border-slate-200 px-3 text-sm outline-none"
                 />
                 <select
                   value={task.recurrence || 'none'}
-                  onChange={(event) =>
-                    setTask({ ...task, recurrence: event.target.value as Task['recurrence'] })
-                  }
+                  onChange={(event) => setTask({ ...task, recurrence: event.target.value as Task['recurrence'] })}
                   className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none"
                 >
                   <option value="none">Không lặp</option>
@@ -335,7 +290,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
             <button
               type="button"
               onClick={() => setEditingTask(null)}
-              className="h-12 flex-1 rounded-2xl bg-slate-100/90 text-sm font-bold text-slate-500 hover:bg-slate-200/80 transition"
+              className="h-12 flex-1 rounded-2xl bg-slate-100/90 text-sm font-bold text-slate-500 transition hover:bg-slate-200/80"
             >
               Hủy
             </button>
@@ -353,12 +308,18 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-bold text-slate-950">Xóa nhiệm vụ?</h2>
-            <p className="mt-2 break-words text-sm leading-6 text-slate-500">“{task.title}” sẽ được chuyển vào Thùng rác và có thể khôi phục trong 30 ngày.</p>
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500">
+              “{task.title}” sẽ được chuyển vào Thùng rác và có thể khôi phục trong 30 ngày.
+            </p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" onClick={() => setPendingDelete(false)} className="h-12 rounded-xl bg-slate-100 text-sm font-bold text-slate-600">Hủy</button>
               <button
                 type="button"
-                onClick={() => { deleteTask(task.id); setPendingDelete(false); setEditingTask(null); }}
+                onClick={() => {
+                  deleteTask(task.id);
+                  setPendingDelete(false);
+                  setEditingTask(null);
+                }}
                 className="h-12 rounded-xl bg-rose-600 text-sm font-bold text-white active:bg-rose-700"
               >
                 Xóa việc

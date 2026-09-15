@@ -12,7 +12,6 @@
         "workStart": { "type": "string" },
         "workEnd": { "type": "string" },
         "timezone": { "type": "string" },
-        "aiRecommendationLevel": { "type": "string" },
         "createdAt": { "type": "string" }
       },
       "required": ["uid", "email"]
@@ -101,21 +100,6 @@
         "userId": { "type": "string" }
       },
       "required": ["name", "userId"]
-    },
-    "AiSuggestion": {
-      "title": "AiSuggestion",
-      "description": "AI recommendation for scheduling, workload or task breakdown",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "reason": { "type": "string" },
-        "expectedImpact": { "type": "string" },
-        "actionType": { "type": "string" },
-        "payload": { "type": "object" },
-        "status": { "type": "string" },
-        "userId": { "type": "string" }
-      },
-      "required": ["title", "reason", "status", "userId"]
     }
   },
   "firestore": {
@@ -142,10 +126,6 @@
     "/users/{userId}/habits/{habitId}": {
       "schema": "Habit",
       "description": "User daily habits"
-    },
-    "/users/{userId}/aiSuggestions/{suggestionId}": {
-      "schema": "AiSuggestion",
-      "description": "AI suggestions proposed to the user"
     }
   }
 }

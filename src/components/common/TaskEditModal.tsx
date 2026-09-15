@@ -44,7 +44,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
       <section className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-100 px-4 sm:px-5">
           <button

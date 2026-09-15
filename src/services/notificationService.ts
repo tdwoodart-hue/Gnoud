@@ -1,5 +1,9 @@
 import { Task } from '../types';
-import { getReminderPolicy } from './notificationPolicy';
+import {
+  buildTaskReminderSchedule,
+  getNotificationPreferences,
+  NotificationPreferences,
+} from './notificationPolicy';
 import { NotificationState, notificationErrorMessage, resolveNotificationState, shouldRenewPushSubscription } from './notificationStatus';
 
 const DEVICE_ID_KEY = 'lich_song_push_device_id';
@@ -83,18 +87,26 @@ export async function disablePushNotifications(): Promise<void> {
   });
 }
 
-export async function syncNotificationTasks(tasks: Task[]): Promise<void> {
+export async function syncNotificationTasks(
+  tasks: Task[],
+  preferences: NotificationPreferences = getNotificationPreferences(),
+): Promise<void> {
   if (!supportsPushNotifications() || Notification.permission !== 'granted') return;
   const scheduledTasks = tasks
-    .filter((task) => task.plannedDate && task.startTime && task.status !== 'done')
-    .map((task) => ({
-      id: task.id,
-      title: task.title,
-      plannedDate: task.plannedDate,
-      startTime: task.startTime,
-      status: task.status,
-      policy: getReminderPolicy(task.priority, Boolean(task.isTopPriority)),
-    }));
+    .filter((task) => task.plannedDate && task.status !== 'done')
+    .map((task) => {
+      const schedule = buildTaskReminderSchedule(task.plannedDate!, task.startTime, preferences);
+      return {
+        id: task.id,
+        title: task.title,
+        plannedDate: task.plannedDate,
+        startTime: schedule.startTime,
+        actualStartTime: schedule.actualStartTime,
+        status: task.status,
+        policy: schedule.policy,
+      };
+    })
+    .filter((task) => task.policy.leadMinutes.length > 0);
   await fetch('/api/notifications/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

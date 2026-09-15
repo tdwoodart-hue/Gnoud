@@ -8,8 +8,16 @@ interface ScheduledTask {
   title: string;
   plannedDate: string;
   startTime: string;
+  actualStartTime?: string | null;
   status: string;
-  policy: { leadMinutes: number[]; chaseMinutes: number | null; level: 'Nhẹ' | 'Vừa' | 'Mạnh' };
+  policy: {
+    leadMinutes: number[];
+    chaseMinutes: number | null;
+    level: 'Nhẹ' | 'Vừa' | 'Mạnh';
+    previousDayLeadMinutes?: number | null;
+    beforeStartMinutes?: number | null;
+    atStartEnabled?: boolean;
+  };
 }
 
 interface DeviceSchedule {
@@ -63,25 +71,32 @@ function dueAt(task: ScheduledTask): number {
   return new Date(`${task.plannedDate}T${task.startTime}:00+07:00`).getTime();
 }
 
+function beforeTitle(minutes: number): string {
+  if (minutes === 60) return 'Còn 1 giờ';
+  if (minutes === 120) return 'Còn 2 giờ';
+  return `Còn ${minutes} phút`;
+}
+
 function notificationFor(task: ScheduledTask, now: number): { key: string; title: string; body: string } | null {
+  if (!task.policy || !Object.prototype.hasOwnProperty.call(task.policy, 'previousDayLeadMinutes')) return null;
   const start = dueAt(task);
   const minute = 60_000;
   for (const lead of task.policy.leadMinutes) {
     const target = start - lead * minute;
-    if (now >= target && now < target + 90_000) {
-      return lead === 0
-        ? { key: `${task.id}:start`, title: 'Đến giờ bắt đầu', body: task.title }
-        : { key: `${task.id}:lead:${lead}`, title: `Còn ${lead} phút`, body: task.title };
-    }
-  }
-  if (task.policy.chaseMinutes && now > start) {
-    const chaseNumber = Math.floor((now - start) / (task.policy.chaseMinutes * minute));
-    if (chaseNumber >= 1) {
+    if (now < target || now >= target + 90_000) continue;
+
+    if (lead === task.policy.previousDayLeadMinutes) {
       return {
-        key: `${task.id}:chase:${chaseNumber}`,
-        title: task.policy.level === 'Mạnh' ? 'Bắt đầu ngay' : 'Việc đang chờ bạn',
-        body: `${task.title} vẫn chưa được hoàn thành.`,
+        key: `${task.id}:previous-day:${lead}`,
+        title: task.actualStartTime ? `Ngày mai · ${task.actualStartTime}` : 'Ngày mai',
+        body: task.title,
       };
+    }
+    if (lead === task.policy.beforeStartMinutes) {
+      return { key: `${task.id}:before:${lead}`, title: beforeTitle(lead), body: task.title };
+    }
+    if (lead === 0 && task.policy.atStartEnabled) {
+      return { key: `${task.id}:start`, title: 'Đến giờ bắt đầu', body: task.title };
     }
   }
   return null;
@@ -153,7 +168,7 @@ export function createNotificationRouter(): Router {
     try {
       await webpush.sendNotification(device.subscription, JSON.stringify({
         title: 'Thông báo đã hoạt động',
-        body: 'Lịch Sống sẽ nhắc và thúc theo mức độ của từng việc.',
+        body: 'Lịch Sống sẽ nhắc theo các mốc bạn chọn trong Cài đặt.',
         tag: 'lich-song-test',
         url: '/',
       }));

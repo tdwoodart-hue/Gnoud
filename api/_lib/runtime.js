@@ -51,27 +51,36 @@ function dueAt(task) {
   return new Date(`${task.plannedDate}T${task.startTime}:00+07:00`).getTime();
 }
 
+function beforeTitle(minutes) {
+  if (minutes === 60) return 'Còn 1 giờ';
+  if (minutes === 120) return 'Còn 2 giờ';
+  return `Còn ${minutes} phút`;
+}
+
 export function notificationForTask(task, now, sent = new Set()) {
   if (task.status === 'done') return null;
+  if (!task.policy || !Object.prototype.hasOwnProperty.call(task.policy, 'previousDayLeadMinutes')) return null;
   const start = dueAt(task);
   const minute = 60_000;
   for (const lead of task.policy.leadMinutes) {
     const target = start - lead * minute;
-    const key = lead === 0 ? `${task.id}:start` : `${task.id}:lead:${lead}`;
-    if (now >= target && now < target + 5 * minute && !sent.has(key)) {
-      return lead === 0
-        ? { key, title: 'Đến giờ bắt đầu', body: task.title }
-        : { key, title: `Còn ${lead} phút`, body: task.title };
+    if (now < target || now >= target + 5 * minute) continue;
+
+    let key;
+    let title;
+    if (lead === task.policy.previousDayLeadMinutes) {
+      key = `${task.id}:previous-day:${lead}`;
+      title = task.actualStartTime ? `Ngày mai · ${task.actualStartTime}` : 'Ngày mai';
+    } else if (lead === task.policy.beforeStartMinutes) {
+      key = `${task.id}:before:${lead}`;
+      title = beforeTitle(lead);
+    } else if (lead === 0 && task.policy.atStartEnabled) {
+      key = `${task.id}:start`;
+      title = 'Đến giờ bắt đầu';
+    } else {
+      continue;
     }
-  }
-  if (task.policy.chaseMinutes && now > start) {
-    const chaseNumber = Math.floor((now - start) / (task.policy.chaseMinutes * minute));
-    const key = `${task.id}:chase:${chaseNumber}`;
-    if (chaseNumber >= 1 && !sent.has(key)) return {
-      key,
-      title: task.policy.level === 'Mạnh' ? 'Bắt đầu ngay' : 'Việc đang chờ bạn',
-      body: `${task.title} vẫn chưa được hoàn thành.`,
-    };
+    if (!sent.has(key)) return { key, title, body: task.title };
   }
   return null;
 }

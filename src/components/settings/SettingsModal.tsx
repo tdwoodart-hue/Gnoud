@@ -19,8 +19,10 @@ import {
   getNotificationSchedulerReady,
   getNotificationState,
   sendTestNotification,
+  syncNotificationTasks,
 } from '../../services/notificationService';
 import { NotificationState } from '../../services/notificationStatus';
+import { getNotificationPreferences, saveNotificationPreferences } from '../../services/notificationPolicy';
 import { formatDisplayDate } from '../../data/mockData';
 import { buildChatGPTSnapshot, downloadChatGPTSnapshot } from '../../services/dataSnapshot';
 import { getTelemetrySnapshot, recordUsageEvent } from '../../services/usageTelemetry';
@@ -41,6 +43,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     goals,
   } = useApp();
   const [state, setState] = useState<NotificationState>('default');
+  const [reminderPreferences, setReminderPreferences] = useState(() => getNotificationPreferences());
   const [busy, setBusy] = useState(false);
   const [schedulerReady, setSchedulerReady] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -53,7 +56,10 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   };
 
   useEffect(() => {
-    if (isOpen) void refresh();
+    if (isOpen) {
+      setReminderPreferences(getNotificationPreferences());
+      void refresh();
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -94,6 +100,15 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateReminderPreferences = (updates: Partial<typeof reminderPreferences>) => {
+    const next = saveNotificationPreferences({ ...reminderPreferences, ...updates });
+    setReminderPreferences(next);
+    void syncNotificationTasks(tasks, next).catch((error) => {
+      console.warn('Could not sync reminder preferences:', error);
+      addToast('Đã lưu trên máy nhưng chưa đồng bộ lịch nhắc.', 'warning');
+    });
   };
 
   const exportData = () => {
@@ -190,6 +205,66 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                     {busy ? 'Đang xử lý…' : state === 'server_unavailable' ? 'Cần cấu hình VAPID trên server' : state === 'needs_install' ? 'Cài app rồi bật thông báo' : 'Bật thông báo'}
                   </button>
                 )}
+              </div>
+              <div className="border-t border-slate-100">
+                <div className="flex min-h-14 items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">Nhắc hôm trước</p>
+                    <p className="text-xs text-slate-400">Báo các việc của ngày mai vào giờ mày chọn</p>
+                  </div>
+                  <input
+                    type="time"
+                    value={reminderPreferences.previousDayTime}
+                    disabled={!reminderPreferences.previousDayEnabled}
+                    onChange={(event) => updateReminderPreferences({ previousDayTime: event.target.value })}
+                    className="h-9 w-[92px] rounded-xl border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none disabled:opacity-40"
+                    aria-label="Giờ nhắc hôm trước"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateReminderPreferences({ previousDayEnabled: !reminderPreferences.previousDayEnabled })}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${reminderPreferences.previousDayEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    aria-label="Bật tắt nhắc hôm trước"
+                    aria-pressed={reminderPreferences.previousDayEnabled}
+                  >
+                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${reminderPreferences.previousDayEnabled ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex min-h-14 items-center gap-3 border-t border-slate-100 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">Nhắc trước khi bắt đầu</p>
+                    <p className="text-xs text-slate-400">Chỉ áp dụng cho việc có giờ bắt đầu</p>
+                  </div>
+                  <select
+                    value={reminderPreferences.beforeStartMinutes}
+                    onChange={(event) => updateReminderPreferences({ beforeStartMinutes: Number(event.target.value) as 0 | 15 | 30 | 60 | 120 })}
+                    className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none"
+                    aria-label="Thời gian nhắc trước"
+                  >
+                    <option value={0}>Tắt</option>
+                    <option value={15}>15 phút</option>
+                    <option value={30}>30 phút</option>
+                    <option value={60}>1 giờ</option>
+                    <option value={120}>2 giờ</option>
+                  </select>
+                </div>
+
+                <div className="flex min-h-14 items-center gap-3 border-t border-slate-100 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">Nhắc đúng giờ</p>
+                    <p className="text-xs text-slate-400">Gửi thêm một thông báo khi việc bắt đầu</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateReminderPreferences({ atStartEnabled: !reminderPreferences.atStartEnabled })}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${reminderPreferences.atStartEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    aria-label="Bật tắt nhắc đúng giờ"
+                    aria-pressed={reminderPreferences.atStartEnabled}
+                  >
+                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${reminderPreferences.atStartEnabled ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
               </div>
             </div>
           </section>

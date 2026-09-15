@@ -80,24 +80,24 @@ export const GoalsView: React.FC = () => {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Mục tiêu trung hạn & Dài hạn</h1>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Định hình hướng đi, theo dõi kết quả then chốt (Key Results) và ngăn ngừa mục tiêu bị lãng quên
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Mục tiêu & OKR</h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Định hình hướng đi, theo dõi kết quả then chốt (Key Results) và không để mục tiêu bị lãng quên
           </p>
         </div>
 
         <button
           onClick={() => setIsAddingGoal(true)}
-          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs self-start"
+          className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs self-start active:scale-95"
         >
-          <Plus className="w-3.5 h-3.5" /> Tạo mục tiêu mới
+          <Plus className="w-4 h-4" /> Mục tiêu mới
         </button>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl border border-stone-200/60 self-start">
+      <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/70 self-start">
         {(
           [
             { id: 'all', label: 'Tất cả mục tiêu' },
@@ -109,10 +109,10 @@ export const GoalsView: React.FC = () => {
           <button
             key={tab.id}
             onClick={() => setActiveCategory(tab.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeCategory === tab.id
-                ? 'bg-white text-stone-900 shadow-xs'
-                : 'text-stone-600 hover:text-stone-900'
+                ? 'border border-indigo-100/70 bg-white text-indigo-700 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             {tab.label}
@@ -121,19 +121,27 @@ export const GoalsView: React.FC = () => {
       </div>
 
       {/* Goals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         {filteredGoals.map((g) => {
           const linkedProject = projects.find((p) => p.id === g.linkedProjectId);
-          const isNeglected = g.progress < 30; // Flag for neglected goal detection
+          const isNeglected = g.progress < 30;
 
           return (
             <div
               key={g.id}
-              className="bg-white p-5 rounded-2xl border border-stone-200/90 shadow-xs space-y-4 flex flex-col justify-between"
+              className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xs space-y-4 flex flex-col justify-between transition hover:border-slate-300/80 hover:shadow-sm"
             >
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-700">
+                  <span
+                    className={`text-[11px] font-bold px-3 py-1 rounded-full border ${
+                      g.category === 'work'
+                        ? 'border-indigo-100 bg-indigo-50/80 text-indigo-700'
+                        : g.category === 'personal'
+                        ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700'
+                        : 'border-purple-100 bg-purple-50/80 text-purple-700'
+                    }`}
+                  >
                     {g.category === 'work'
                       ? 'Công việc'
                       : g.category === 'personal'
@@ -142,65 +150,65 @@ export const GoalsView: React.FC = () => {
                   </span>
 
                   {isNeglected && (
-                    <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md flex items-center gap-1 border border-amber-200/60">
-                      <AlertCircle className="w-3 h-3" /> Cần chú ý tiến độ
+                    <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full flex items-center gap-1 border border-amber-200/70">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Cần chú ý tiến độ
                     </span>
                   )}
                 </div>
 
-                <h3 className="font-bold text-stone-900 text-base leading-snug">{g.title}</h3>
+                <h3 className="font-bold text-slate-900 text-base leading-snug">{g.title}</h3>
 
                 {linkedProject && (
-                  <span className="text-[11px] text-stone-500 flex items-center gap-1">
-                    <Layers className="w-3 h-3 text-stone-400" />
-                    Thuộc dự án: <strong className="text-stone-700">{linkedProject.name}</strong>
+                  <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-slate-400" />
+                    Dự án: <strong className="text-slate-700 font-semibold">{linkedProject.name}</strong>
                   </span>
                 )}
               </div>
 
               {/* Progress Bar */}
-              <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                <div className="flex justify-between text-xs font-semibold text-stone-800">
-                  <span>Tiến độ hoàn thành</span>
-                  <span>{g.progress}%</span>
+              <div className="space-y-1.5 pt-3 border-t border-slate-100">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-500">Tiến độ hoàn thành</span>
+                  <span className="tabular-nums text-indigo-600 font-bold">{g.progress}%</span>
                 </div>
-                <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                   <div
-                    className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
                     style={{ width: `${g.progress}%` }}
                   />
                 </div>
-                <div className="text-[10px] text-stone-400 text-right">
+                <div className="text-[11px] text-slate-400 text-right">
                   Thời hạn: {g.targetDate}
                 </div>
               </div>
 
               {/* Key Results */}
               {g.keyResults.length > 0 && (
-                <div className="pt-2 border-t border-stone-100 space-y-2">
-                  <span className="text-[11px] font-bold text-stone-600 uppercase tracking-wider block">
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                     Kết quả then chốt (Key Results)
                   </span>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {g.keyResults.map((kr) => {
                       const krProgress = Math.round((kr.current / kr.target) * 100);
                       return (
                         <div
                           key={kr.id}
-                          className="p-2 bg-stone-50 rounded-xl border border-stone-200/60 text-xs flex items-center justify-between gap-2"
+                          className="p-3 bg-slate-50/70 rounded-2xl border border-slate-200/60 text-xs flex items-center justify-between gap-2.5"
                         >
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-stone-800 block truncate">
+                            <span className="font-semibold text-slate-800 block truncate">
                               {kr.title}
                             </span>
-                            <span className="text-[10px] text-stone-500">
+                            <span className="text-[11px] text-slate-400 mt-0.5 block">
                               {kr.current}/{kr.target} {kr.unit} ({krProgress}%)
                             </span>
                           </div>
 
                           <button
                             onClick={() => handleIncrementKr(g, kr.id, kr.current, kr.target)}
-                            className="px-2 py-0.5 bg-white hover:bg-stone-200 text-stone-700 border border-stone-200 text-[10px] font-medium rounded-md transition-colors"
+                            className="h-8 px-2.5 bg-white hover:bg-indigo-50/80 text-indigo-700 border border-indigo-100 text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95"
                           >
                             +20%
                           </button>
@@ -218,37 +226,37 @@ export const GoalsView: React.FC = () => {
       {/* New Goal Modal */}
       {isAddingGoal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <h3 className="text-base font-bold text-stone-900">Tạo mục tiêu mới</h3>
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Tạo mục tiêu mới</h3>
               <button
                 onClick={() => setIsAddingGoal(false)}
-                className="text-stone-400 hover:text-stone-600"
+                className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateGoal} className="space-y-3">
+            <form onSubmit={handleCreateGoal} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Mục tiêu chính</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Mục tiêu chính</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Đạt doanh thu 500tr từ dòng sản phẩm Senko..."
+                  placeholder="Ví dụ: Đạt doanh thu 500tr từ dòng sản phẩm..."
                   value={goalTitle}
                   onChange={(e) => setGoalTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">Loại hình</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Loại hình</label>
                   <select
                     value={goalCategory}
                     onChange={(e) => setGoalCategory(e.target.value as any)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg"
+                    className="h-11 w-full px-3 text-xs font-semibold bg-white border border-slate-200/80 rounded-2xl text-slate-800 outline-none"
                   >
                     <option value="work">Công việc</option>
                     <option value="personal">Cá nhân</option>
@@ -257,18 +265,18 @@ export const GoalsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">Hạn hoàn thành</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hạn hoàn thành</label>
                   <input
                     type="date"
                     value={goalTargetDate}
                     onChange={(e) => setGoalTargetDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg"
+                    className="h-11 w-full px-3 text-xs font-semibold bg-white border border-slate-200/80 rounded-2xl text-slate-800 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-stone-100">
-                <label className="block text-xs font-semibold text-stone-700">
+              <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700">
                   Kết quả then chốt (Key Results)
                 </label>
                 <input
@@ -276,28 +284,28 @@ export const GoalsView: React.FC = () => {
                   placeholder="Kết quả 1: Sản xuất đủ 100 bộ sản phẩm..."
                   value={goalKr1}
                   onChange={(e) => setGoalKr1(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 outline-none focus:border-indigo-500"
                 />
                 <input
                   type="text"
-                  placeholder="Kết quả 2: Chạy chiến dịch truyền thông đạt 10.000 tương tác..."
+                  placeholder="Kết quả 2: Chạy chiến dịch đạt 10.000 tương tác..."
                   value={goalKr2}
                   onChange={(e) => setGoalKr2(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg text-stone-800"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-2 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsAddingGoal(false)}
-                  className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-800"
+                  className="h-10 px-4 rounded-xl border border-slate-200/70 bg-slate-100/80 text-xs font-bold text-slate-600 transition hover:bg-slate-200/70"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
+                  className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95"
                 >
                   Lưu mục tiêu
                 </button>

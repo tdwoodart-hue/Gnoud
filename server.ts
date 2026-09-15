@@ -209,58 +209,96 @@ Chỉ trả về JSON thuần túy, không có markdown codeblock.`;
 });
 
 // 2. Interactive AI Assistant endpoint
+const CHAT_MODELS = [
+  process.env.GEMINI_CHAT_MODEL,
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-2.5-flash',
+].filter((model, index, list): model is string => Boolean(model) && list.indexOf(model) === index);
+
 app.post("/api/gemini/chat", async (req, res) => {
-  const { messages, context } = req.body;
+  const { messages, context } = req.body || {};
   const ai = getGenAI();
+  const safeMessages = Array.isArray(messages) ? messages.slice(-12) : [];
+  const lastMessage = safeMessages[safeMessages.length - 1]?.text || "Xin chào";
 
   if (!ai) {
-    return res.json({
-      reply: "Chào bạn! Tôi là trợ lý Lịch Sống. Tôi có thể giúp bạn sắp xếp thứ tự ưu tiên, phân tích thời gian biểu và đề xuất giải pháp tối ưu cho ngày hôm nay.",
-      proposedAction: null,
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY chưa được cấu hình cho server.',
+      aiAvailable: false,
+      errorCode: 'missing_api_key',
     });
   }
 
-  try {
-    const systemInstruction = `Bạn là Trợ lý AI cá nhân cao cấp của ứng dụng 'Lịch Sống' tại Việt Nam.
-Giọng điệu: Thân thiện, điềm tĩnh, thông minh, ngắn gọn, thấu hiểu và hỗ trợ.
-Không bao giờ tự ý thay đổi lịch trình của người dùng mà KHÔNG hỏi ý kiến và đề xuất hành động rõ ràng.
-Người dùng có các dự án: 'The Luvin', 'Ra mắt Senko', 'Concept hộp nhẫn LEGO', 'Kế hoạch nội dung bảng từ tính', 'Việc cá nhân'.
+  const systemInstruction = `Mày là người quản lý cá nhân/mentor của ứng dụng Lịch Sống, không phải chatbot hỗ trợ chung chung.
+Mục tiêu: giúp người dùng có một ngày tốt nhất có thể bằng cách nhìn toàn bộ lịch, công việc, thói quen và các chuẩn sống đã thống nhất.
 
-Ngữ cảnh hiện tại của người dùng:
+Cách hành xử:
+- Nói tiếng Việt tự nhiên, ngắn, thẳng, có quan điểm. Xưng "tao" khi người dùng xưng "tao/mày".
+- Mày là người quản lý: phải cân nhắc giờ hiện tại, lịch tập, việc còn lại hôm nay, lịch sáng mai và chuẩn ngủ hiện tại trước khi đồng ý hay phản đối.
+- Khi người dùng phản đối một kế hoạch (ví dụ "22h ngủ hơi khó" hoặc "10h ngủ quá sớm"), phải hiểu đó là feedback và đưa ra phương án thay thế cụ thể. Không được chỉ lặp lại giờ ngủ hiện tại.
+- Nếu người dùng nói giờ ngủ hiện tại quá sớm và ngữ cảnh không có lý do mạnh để giữ nguyên, chọn một mốc muộn hơn hợp lý (thường 30-60 phút), nói ngắn gọn vì sao, rồi trả mentorAction=set_bedtime. Nếu sáng mai có lịch sớm hoặc có lý do sức khỏe/lịch trình rõ ràng, có thể không đồng ý hoàn toàn và chọn phương án dung hòa.
+- Với thay đổi ít rủi ro và dễ đảo ngược, hãy quyết đoán và đưa hành động để app tự áp dụng. Với deadline cứng, lịch hẹn với người khác, xóa dữ liệu hoặc việc quan trọng thì không tự ý thay đổi.
+- Không bịa lịch sinh hoạt riêng của người nổi tiếng. Nếu người dùng tự cung cấp một chuẩn, có thể dùng chuẩn đó.
+- Phải dựa vào ngữ cảnh hiện tại bên dưới; không trả lời kiểu "hãy cho tôi biết" nếu đã đủ dữ liệu.
+- localInstructionHint chỉ là gợi ý parser cục bộ, không phải quyết định. Mày phải tự suy luận và có thể bác bỏ gợi ý đó.
+- Toàn bộ câu trả lời hiển thị cho người dùng phải do mày tạo trong trường reply; client không có câu trả lời mẫu thay thế.
+
+Ngữ cảnh hiện tại:
 ${JSON.stringify(context || {}, null, 2)}
 
-Hãy trả lời bằng tiếng Việt tự nhiên và nếu phù hợp, kèm theo một đề xuất hành động (proposedAction) cụ thể để người dùng có thể bấm nút "Áp dụng" hoặc "Từ chối".
-Định dạng JSON trả về:
+Trả về JSON hợp lệ duy nhất theo cấu trúc:
 {
-  "reply": "Nội dung phản hồi súc tích bằng tiếng Việt",
-  "proposedAction": {
-    "type": "reschedule_task" | "create_task" | "breakdown_task" | "block_focus_time",
-    "description": "Mô tả ngắn gọn hành động được đề xuất",
-    "data": { ...thông tin chi tiết của hành động... }
-  } hoặc null nếu chỉ là giải đáp trò chuyện
+  "reply": "phản hồi cụ thể, ngắn gọn, có lý do",
+  "mentorAction": null | {
+    "type": "set_bedtime" | "set_mentor_profile",
+    "date": "YYYY-MM-DD nếu áp dụng cho một ngày",
+    "bedtime": "HH:mm nếu có",
+    "name": "tên mentor/profile nếu có"
+  },
+  "proposedAction": null | {
+    "type": "create_task" | "reschedule_task" | "add_event",
+    "description": "mô tả hành động",
+    "data": {}
+  }
 }`;
 
-    const lastMessage = messages[messages.length - 1]?.text || "Xin chào";
+  const contents = safeMessages.length
+    ? safeMessages.map((message: any) => ({
+        role: message.sender === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(message.text || '') }],
+      }))
+    : lastMessage;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: lastMessage,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        temperature: 0.4,
-      },
-    });
-
-    const parsed = JSON.parse(response.text?.trim() || "{}");
-    return res.json(parsed);
-  } catch (err) {
-    console.error("Gemini chat error:", err);
-    return res.json({
-      reply: "Tôi đã nhận được thông tin. Bạn có muốn tôi giúp rà soát 3 việc quan trọng nhất cho hôm nay không?",
-      proposedAction: null,
-    });
+  const errors: string[] = [];
+  for (const model of CHAT_MODELS) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.35,
+        },
+      });
+      const raw = response.text?.trim() || '{}';
+      const parsed = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim());
+      if (!parsed.reply || typeof parsed.reply !== 'string') throw new Error('Gemini returned no reply');
+      return res.json({ ...parsed, aiAvailable: true, modelUsed: model });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${model}: ${message}`);
+      console.warn(`Gemini chat failed with ${model}:`, err);
+    }
   }
+
+  console.error('Gemini chat failed on all configured models:', errors);
+  return res.status(502).json({
+    error: `Gemini không trả lời được. ${errors.join(' | ')}`,
+    aiAvailable: false,
+    errorCode: 'all_models_failed',
+  });
 });
 
 // 3. Task breakdown endpoint

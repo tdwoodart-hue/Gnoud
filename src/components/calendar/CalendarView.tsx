@@ -55,57 +55,72 @@ export const CalendarView: React.FC = () => {
   return (
     <div className="mx-auto min-w-0 w-full max-w-2xl overflow-x-hidden">
       <PageHeader
-        title="Lịch"
+        title="Lịch biểu"
         action={
           <button
             type="button"
             onClick={() => openTaskModal()}
-            className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 text-white"
-            aria-label="Thêm"
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-600 text-white shadow-xs transition hover:bg-indigo-700 active:scale-95"
+            aria-label="Thêm việc"
           >
             <Plus className="h-5 w-5" />
           </button>
         }
       />
 
-      <div className="mb-5 flex min-w-0 items-center justify-between rounded-2xl bg-white p-2 ring-1 ring-slate-200">
-        <button type="button" onClick={() => move(-1)} className="p-2 text-slate-400" aria-label="Ngày trước">
-          <ChevronLeft />
+      <div className="mb-5 flex min-w-0 items-center justify-between rounded-2xl border border-slate-200/70 bg-white p-2 shadow-xs">
+        <button
+          type="button"
+          onClick={() => move(-1)}
+          className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Ngày trước"
+        >
+          <ChevronLeft className="h-5 w-5" />
         </button>
-        <button type="button" onClick={() => setDate(new Date())} className="min-w-0 text-center">
-          <p className="truncate text-sm font-bold capitalize">{dateLabel(date)}</p>
-          {key !== iso(new Date()) && <span className="text-[11px] font-semibold text-blue-600">Về hôm nay</span>}
+        <button
+          type="button"
+          onClick={() => setDate(new Date())}
+          className="min-w-0 px-3 py-1 text-center transition hover:bg-slate-50 rounded-xl"
+        >
+          <p className="truncate text-sm font-bold text-slate-900 capitalize">{dateLabel(date)}</p>
+          {key !== iso(new Date()) && <span className="text-[11px] font-semibold text-indigo-600">Về hôm nay</span>}
         </button>
-        <button type="button" onClick={() => move(1)} className="p-2 text-slate-400" aria-label="Ngày sau">
-          <ChevronRight />
+        <button
+          type="button"
+          onClick={() => move(1)}
+          className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Ngày sau"
+        >
+          <ChevronRight className="h-5 w-5" />
         </button>
       </div>
 
       {items.length === 0 ? (
         <EmptyState
           title="Ngày này đang trống"
+          description="Chưa có sự kiện hoặc công việc nào được lên lịch cho ngày này."
           action={
             <button
               type="button"
               onClick={() => openTaskModal()}
-              className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
+              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700"
             >
-              Thêm việc
+              Lên lịch công việc
             </button>
           }
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex min-h-[70px] min-w-0 items-center gap-4 rounded-2xl bg-white px-4 ring-1 ring-slate-200"
+              className="flex min-h-[70px] min-w-0 items-center gap-3.5 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-xs transition hover:border-slate-300/80 hover:shadow-sm"
             >
-              <div className="w-11 shrink-0 text-sm font-bold text-slate-700">{item.time}</div>
-              <span className="h-9 w-1 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+              <div className="w-12 shrink-0 text-xs font-bold text-slate-600 tabular-nums">{item.time}</div>
+              <span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{item.title}</p>
-                {item.end && <p className="mt-1 text-xs text-slate-400">đến {item.end}</p>}
+                <p className="truncate text-sm font-semibold text-slate-800">{item.title}</p>
+                {item.end && <p className="mt-0.5 text-xs text-slate-400">đến {item.end}</p>}
               </div>
             </div>
           ))}

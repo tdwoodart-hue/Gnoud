@@ -254,6 +254,37 @@ export const firestoreService = {
     }
   },
 
+  async syncTasks(userId: string, previous: Task[], next: Task[]) {
+    try {
+      const previousById = new Map(previous.map((task) => [task.id, task]));
+      const nextById = new Map(next.map((task) => [task.id, task]));
+      const batch = writeBatch(db);
+      let writeCount = 0;
+
+      next.forEach((task) => {
+        const before = previousById.get(task.id);
+        if (!before || JSON.stringify(before) !== JSON.stringify(task)) {
+          batch.set(
+            doc(db, 'users', userId, 'tasks', task.id),
+            firestoreSafe({ ...task, userId }),
+          );
+          writeCount += 1;
+        }
+      });
+
+      previous.forEach((task) => {
+        if (!nextById.has(task.id)) {
+          batch.delete(doc(db, 'users', userId, 'tasks', task.id));
+          writeCount += 1;
+        }
+      });
+
+      if (writeCount > 0) await batch.commit();
+    } catch (e) {
+      console.warn('Error syncing tasks batch to Firestore:', e);
+    }
+  },
+
   async saveTask(userId: string, task: Task) {
     try {
       await saveEntity(userId, 'tasks', task);

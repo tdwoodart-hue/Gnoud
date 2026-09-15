@@ -48,31 +48,31 @@ export const HabitsView: React.FC = () => {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Thói quen & Kỷ luật bản thân</h1>
-          <p className="text-xs text-stone-500 mt-0.5">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Thói quen & Kỷ luật</h1>
+          <p className="text-xs text-slate-400 mt-1">
             Duy trì chuỗi ngày liên tiếp (streak) và xây dựng lối sống cân bằng, bền vững
           </p>
         </div>
 
         <button
           onClick={() => setIsAddingHabit(true)}
-          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs self-start"
+          className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs self-start active:scale-95"
         >
-          <Plus className="w-3.5 h-3.5" /> Tạo thói quen mới
+          <Plus className="w-4 h-4" /> Thói quen mới
         </button>
       </div>
 
       {/* Habits Card List */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200/70 shadow-xs overflow-hidden">
         {/* Table Header */}
-        <div className="p-4 border-b border-stone-100 grid grid-cols-12 gap-2 text-xs font-bold uppercase tracking-wider text-stone-500">
+        <div className="px-5 py-3.5 border-b border-slate-100 grid grid-cols-12 gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/50">
           <div className="col-span-5 sm:col-span-4">Thói quen</div>
           <div className="col-span-2 hidden sm:block text-center">Chuỗi ngày (Streak)</div>
-          <div className="col-span-7 sm:col-span-6 grid grid-cols-7 gap-1 text-center">
+          <div className="col-span-7 sm:col-span-6 grid grid-cols-7 gap-1.5 text-center">
             {daysOfWeek.map((d, i) => (
-              <span key={d} className={i === 1 ? 'text-blue-600 font-extrabold' : ''}>
+              <span key={d} className={i === 1 ? 'text-indigo-600 font-extrabold' : ''}>
                 {d}
               </span>
             ))}
@@ -80,7 +80,7 @@ export const HabitsView: React.FC = () => {
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-stone-100">
+        <div className="divide-y divide-slate-100">
           {habits.map((h) => {
             // Calculate completed count in the 7-day window
             const completedInWeek = weekDates.filter((d) => h.completedDates.includes(d)).length;
@@ -89,35 +89,35 @@ export const HabitsView: React.FC = () => {
             return (
               <div
                 key={h.id}
-                className="p-4 grid grid-cols-12 gap-2 items-center hover:bg-stone-50/60 transition-colors"
+                className="px-5 py-4 grid grid-cols-12 gap-2 items-center hover:bg-slate-50/60 transition-colors"
               >
                 {/* Name & Target Info */}
-                <div className="col-span-5 sm:col-span-4 space-y-0.5">
-                  <span className="text-sm font-semibold text-stone-900 block leading-snug">
+                <div className="col-span-5 sm:col-span-4 space-y-1">
+                  <span className="text-sm font-bold text-slate-800 block leading-snug">
                     {h.name}
                   </span>
-                  <div className="flex items-center gap-2 text-[11px] text-stone-400 font-mono">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-stone-400" />
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
                       {h.targetTime} ({h.durationMinutes}p)
                     </span>
-                    <span>• {weekPercentage}% tuần này</span>
+                    <span className="hidden sm:inline font-medium">· {weekPercentage}% tuần này</span>
                   </div>
                 </div>
 
                 {/* Streak */}
                 <div className="col-span-2 hidden sm:flex items-center justify-center gap-1.5 text-xs">
-                  <span className="flex items-center gap-1 font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/60">
-                    <Flame className="w-3.5 h-3.5 fill-current" />
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/70">
+                    <Flame className="w-3.5 h-3.5 fill-current text-amber-500" />
                     {h.streak} ngày
                   </span>
-                  <span className="text-[10px] text-stone-400" title="Kỷ lục cao nhất">
-                    (Max: {h.bestStreak})
+                  <span className="text-[11px] font-semibold text-slate-400" title="Kỷ lục cao nhất">
+                    (Max {h.bestStreak})
                   </span>
                 </div>
 
                 {/* 7-day check grid */}
-                <div className="col-span-7 sm:col-span-6 grid grid-cols-7 gap-1">
+                <div className="col-span-7 sm:col-span-6 grid grid-cols-7 gap-1.5">
                   {weekDates.map((dateStr, idx) => {
                     const isDone = h.completedDates.includes(dateStr);
                     const isToday = dateStr === getFormattedToday(0);
@@ -129,10 +129,10 @@ export const HabitsView: React.FC = () => {
                           onClick={() => toggleHabitDate(h.id, dateStr)}
                           className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
                             isDone
-                              ? 'bg-emerald-600 text-white shadow-2xs'
+                              ? 'bg-emerald-500 text-white shadow-xs'
                               : isToday
-                              ? 'border-2 border-dashed border-blue-400 hover:bg-blue-50 text-stone-300'
-                              : 'bg-stone-100 hover:bg-stone-200 text-transparent hover:text-stone-400'
+                              ? 'border-2 border-dashed border-indigo-400 bg-indigo-50/50 hover:bg-indigo-100/60 text-indigo-400'
+                              : 'bg-slate-100/80 hover:bg-slate-200/80 text-transparent hover:text-slate-400'
                           }`}
                           title={`${dateStr}: ${isDone ? 'Đã hoàn thành' : 'Chưa đánh dấu'}`}
                         >
@@ -149,10 +149,12 @@ export const HabitsView: React.FC = () => {
       </div>
 
       {/* Motivational insight banner */}
-      <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/80 flex items-start gap-3">
-        <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-        <div className="text-xs text-stone-700 leading-relaxed space-y-1">
-          <span className="font-bold text-emerald-900 block">Lời khuyên duy trì phong độ:</span>
+      <div className="p-5 bg-emerald-50/70 rounded-3xl border border-emerald-200/60 flex items-start gap-3.5 shadow-xs">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-600">
+          <Sparkles className="w-4 h-4" />
+        </div>
+        <div className="text-xs text-slate-600 leading-relaxed space-y-1">
+          <span className="font-bold text-emerald-950 block text-sm">Lời khuyên duy trì phong độ</span>
           Duy trì thói quen đi bộ và học tiếng Anh liên tiếp 14 ngày đã giúp bạn tăng khả năng tập trung buổi sáng thêm 25%. Trợ lý đã tự động chừa 30 phút buổi tối để bạn không bị các việc đột xuất chiếm mất.
         </div>
       </div>
@@ -160,65 +162,65 @@ export const HabitsView: React.FC = () => {
       {/* New Habit Modal */}
       {isAddingHabit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <h3 className="text-base font-bold text-stone-900">Tạo thói quen mới</h3>
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Tạo thói quen mới</h3>
               <button
                 onClick={() => setIsAddingHabit(false)}
-                className="text-stone-400 hover:text-stone-600"
+                className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateHabit} className="space-y-3">
+            <form onSubmit={handleCreateHabit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Tên thói quen</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Tên thói quen</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Thiền định buổi sáng, Đọc sách 20 trang..."
                   value={habitName}
                   onChange={(e) => setHabitName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-stone-200 rounded-lg text-stone-800 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">Khung giờ thực hiện</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Khung giờ thực hiện</label>
                   <input
                     type="time"
                     value={habitTargetTime}
                     onChange={(e) => setHabitTargetTime(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">Thời lượng (phút)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Thời lượng (phút)</label>
                   <input
                     type="number"
                     min="5"
                     step="5"
                     value={habitDuration}
                     onChange={(e) => setHabitDuration(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200/80 rounded-2xl text-slate-800 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-2 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsAddingHabit(false)}
-                  className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-800"
+                  className="h-10 px-4 rounded-xl border border-slate-200/70 bg-slate-100/80 text-xs font-bold text-slate-600 transition hover:bg-slate-200/70"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
+                  className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95"
                 >
                   Bắt đầu thói quen
                 </button>

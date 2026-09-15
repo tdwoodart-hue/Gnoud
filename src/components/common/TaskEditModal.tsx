@@ -10,9 +10,9 @@ export const TaskEditModal: React.FC = () => {
 };
 
 const priorities: Array<{ value: TaskPriority; label: string; active: string }> = [
-  { value: 'medium', label: 'Thường', active: 'border-blue-200 bg-blue-50 text-blue-700' },
-  { value: 'high', label: 'Quan trọng', active: 'border-amber-200 bg-amber-50 text-amber-700' },
-  { value: 'urgent', label: 'Khẩn cấp', active: 'border-rose-200 bg-rose-50 text-rose-700' },
+  { value: 'medium', label: 'Thường', active: 'border-indigo-100 bg-indigo-50/80 text-indigo-700 shadow-xs' },
+  { value: 'high', label: 'Quan trọng', active: 'border-amber-200/70 bg-amber-50 text-amber-800 shadow-xs' },
+  { value: 'urgent', label: 'Khẩn cấp', active: 'border-rose-200/70 bg-rose-50 text-rose-700 shadow-xs' },
 ];
 
 const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
@@ -335,15 +335,15 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
             <button
               type="button"
               onClick={() => setEditingTask(null)}
-              className="h-12 flex-1 rounded-xl bg-slate-100 text-sm font-semibold text-slate-500"
+              className="h-12 flex-1 rounded-2xl bg-slate-100/90 text-sm font-bold text-slate-500 hover:bg-slate-200/80 transition"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="h-12 flex-[2] rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm shadow-blue-600/20"
+              className="h-12 flex-[2] rounded-2xl bg-indigo-600 text-sm font-bold text-white shadow-xs transition hover:bg-indigo-700 active:scale-[0.98]"
             >
-              {draft ? 'Thêm việc' : 'Lưu'}
+              {draft ? 'Thêm việc' : 'Lưu thay đổi'}
             </button>
           </div>
         </form>

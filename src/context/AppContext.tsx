@@ -27,6 +27,18 @@ import { authErrorMessage, shouldUseRedirect } from '../services/authFlow';
 import { firestoreService, type DeletedTask } from '../services/firestoreService';
 import { syncNotificationTasks } from '../services/notificationService';
 import { createTaskDraft } from '../services/taskDraft';
+import {
+  applyAssistantDecisionToTasks,
+  evaluateChiefOfStaff,
+  parseMentorInstruction,
+  undoAssistantDecisionInTasks,
+  type AssistantDecisionRecord,
+  type ChiefOfStaffBrief,
+  type DailyMentorDirective,
+  type MentorProfile,
+  type MentorPrompt,
+  type MentorTimelineItem,
+} from '../services/personalChiefOfStaff';
 
 export interface ToastMessage {
   id: string;
@@ -64,7 +76,18 @@ interface AppContextType {
   aiSuggestions: AiSuggestion[];
   lifeMetrics: LifeMetric[];
   chatMessages: ChatMessage[];
+  assistantBrief: ChiefOfStaffBrief | null;
+  assistantDecisions: AssistantDecisionRecord[];
+  mentorProfile: MentorProfile;
+  mentorTimeline: MentorTimelineItem[];
+  mentorPrompt: MentorPrompt | null;
+  confirmMentorPrompt: () => void;
+  undoAssistantDecision: (decisionId: string) => void;
+  approveAssistantDecision: (decisionId: string) => void;
+  rejectAssistantDecision: (decisionId: string) => void;
+  refreshChiefOfStaff: () => void;
   addTask: (taskData: Partial<Task>) => Task;
+  addTasks: (taskDataList: Partial<Task>[]) => Task[];
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   restoreTask: (id: string) => void;
@@ -121,6 +144,12 @@ const AppContext = createContext<AppContextType | null>(null);
 const STORAGE_KEY_PREFIX = 'lich_song_';
 const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_MENTOR_PROFILE: MentorProfile = {
+  id: 'disciplined',
+  name: 'Kỷ luật cao',
+  bedtime: '22:00',
+  wakeTime: '06:00',
+};
 
 export const cascadeProjectDeletion = (
   projectId: string,
@@ -233,12 +262,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [goals, setGoals] = useState<Goal[]>(() => loadFromStorage('goals', INITIAL_GOALS));
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>(() => loadFromStorage('suggestions', INITIAL_AI_SUGGESTIONS));
   const [lifeMetrics] = useState<LifeMetric[]>(() => loadFromStorage('life_metrics', INITIAL_LIFE_METRICS));
+  const [assistantBrief, setAssistantBrief] = useState<ChiefOfStaffBrief | null>(null);
+  const [assistantDecisions, setAssistantDecisions] = useState<AssistantDecisionRecord[]>(() =>
+    loadFromStorage('assistant_decisions', []),
+  );
+  const [assistantClock, setAssistantClock] = useState(() => Date.now());
+  const [mentorProfile, setMentorProfile] = useState<MentorProfile>(() =>
+    loadFromStorage('mentor_profile', DEFAULT_MENTOR_PROFILE),
+  );
+  const [dailyMentorDirective, setDailyMentorDirective] = useState<DailyMentorDirective | null>(() =>
+    loadFromStorage('mentor_directive', null),
+  );
+  const [mentorTimeline, setMentorTimeline] = useState<MentorTimelineItem[]>([]);
+  const [mentorPrompt, setMentorPrompt] = useState<MentorPrompt | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
     {
       id: 'msg-welcome',
       sender: 'assistant',
-      text: 'Chào bạn! Tôi là trợ lý Lịch Sống. Hãy thêm việc đầu tiên, tôi sẽ giúp bạn sắp xếp và theo dõi tiến độ.',
+      text: 'Tao sẽ giúp mày giữ ngày gọn, thực tế và có kỷ luật. Cứ nói thẳng lịch hoặc điều mày muốn thay đổi.',
       timestamp: '08:00',
     },
   ]);
@@ -288,6 +330,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('habits', habits); }, [habits]);
   useEffect(() => { saveToStorage('goals', goals); }, [goals]);
   useEffect(() => { saveToStorage('suggestions', aiSuggestions); }, [aiSuggestions]);
+  useEffect(() => { saveToStorage('assistant_decisions', assistantDecisions); }, [assistantDecisions]);
+  useEffect(() => { saveToStorage('mentor_profile', mentorProfile); }, [mentorProfile]);
+  useEffect(() => { saveToStorage('mentor_directive', dailyMentorDirective); }, [dailyMentorDirective]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setAssistantClock(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
   useEffect(() => {
     const sync = () => void syncNotificationTasks(tasks).catch((error) => {
         console.warn('Could not sync notification schedule:', error);
@@ -394,7 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!user || !cloudReadyRef.current || sameEntities(tasksSyncRef.current, tasks)) return;
     const previous = tasksSyncRef.current;
-    void syncEntityDiff(user.uid, previous, tasks, firestoreService.saveTask, firestoreService.deleteTask);
+    void firestoreService.syncTasks(user.uid, previous, tasks);
   }, [tasks, user]);
 
   useEffect(() => {
@@ -495,33 +544,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleAssistant = () => setIsAssistantOpen((prev) => !prev);
 
-  const addTask = useCallback((taskData: Partial<Task>): Task => {
-    const newTask: Task = {
-      id: `task-${Date.now()}`,
-      title: taskData.title?.trim() || 'Nhiệm vụ mới',
-      description: taskData.description || '',
-      category: taskData.category || 'work',
-      projectId: taskData.projectId || undefined,
-      status: taskData.status || 'todo',
-      priority: taskData.priority || 'medium',
-      deadline: taskData.deadline || undefined,
-      plannedDate: taskData.plannedDate || getFormattedToday(0),
-      startTime: taskData.startTime || undefined,
-      estimatedMinutes: taskData.estimatedMinutes || 60,
-      actualMinutes: 0,
-      subtasks: taskData.subtasks || [],
-      notes: taskData.notes || '',
-      tags: taskData.tags || [],
-      reminder: taskData.reminder || undefined,
-      recurrence: taskData.recurrence || 'none',
-      isTopPriority: !!taskData.isTopPriority,
-      createdAt: getFormattedToday(0),
-    };
+  const createTaskRecord = useCallback((taskData: Partial<Task>, id: string): Task => ({
+    id,
+    title: taskData.title?.trim() || 'Nhiệm vụ mới',
+    description: taskData.description || '',
+    category: taskData.category || 'work',
+    projectId: taskData.projectId || undefined,
+    status: taskData.status || 'todo',
+    priority: taskData.priority || 'medium',
+    deadline: taskData.deadline || undefined,
+    plannedDate: taskData.plannedDate || getFormattedToday(0),
+    startTime: taskData.startTime || undefined,
+    estimatedMinutes: taskData.estimatedMinutes || 60,
+    actualMinutes: 0,
+    subtasks: taskData.subtasks || [],
+    notes: taskData.notes || '',
+    tags: taskData.tags || [],
+    reminder: taskData.reminder || undefined,
+    recurrence: taskData.recurrence || 'none',
+    isTopPriority: !!taskData.isTopPriority,
+    createdAt: getFormattedToday(0),
+  }), []);
 
+  const addTask = useCallback((taskData: Partial<Task>): Task => {
+    const id = `task-${Date.now()}`;
+    const newTask = createTaskRecord(taskData, id);
     setTasks((prev) => [newTask, ...prev]);
     addToast(`Đã thêm việc: "${newTask.title}"`, 'success');
     return newTask;
-  }, [addToast]);
+  }, [addToast, createTaskRecord]);
+
+  const addTasks = useCallback((taskDataList: Partial<Task>[]): Task[] => {
+    if (taskDataList.length === 0) return [];
+    const batchStamp = Date.now();
+    const newTasks = taskDataList.map((taskData, index) =>
+      createTaskRecord(
+        taskData,
+        `task-${batchStamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      ),
+    );
+    setTasks((prev) => [...newTasks, ...prev]);
+    return newTasks;
+  }, [createTaskRecord]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     setTasks((prev) =>
@@ -601,6 +665,131 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
   }, []);
+
+  const undoAssistantDecision = useCallback((decisionId: string) => {
+    const decision = assistantDecisions.find((item) => item.id === decisionId && item.status === 'executed');
+    if (!decision) return;
+    setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
+    setAssistantDecisions((prev) =>
+      prev.map((item) =>
+        item.id === decisionId
+          ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+    addToast('Đã hoàn tác quyết định của trợ lý', 'info');
+  }, [assistantDecisions, addToast]);
+
+  const approveAssistantDecision = useCallback((decisionId: string) => {
+    const decision = assistantDecisions.find(
+      (item) => item.id === decisionId && item.mode === 'approval_required' && item.status === 'planned',
+    );
+    if (!decision) return;
+    setTasks((prev) => applyAssistantDecisionToTasks(prev, decision));
+    setAssistantDecisions((prev) =>
+      prev.map((item) =>
+        item.id === decisionId
+          ? { ...item, status: 'executed' as const, executedAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+    addToast('Đã áp dụng phương án của trợ lý', 'success', {
+      label: 'Hoàn tác',
+      onClick: () => {
+        setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
+        setAssistantDecisions((prev) =>
+          prev.map((item) =>
+            item.id === decisionId
+              ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
+              : item,
+          ),
+        );
+      },
+    });
+  }, [assistantDecisions, addToast]);
+
+  const rejectAssistantDecision = useCallback((decisionId: string) => {
+    const decision = assistantDecisions.find(
+      (item) => item.id === decisionId && item.mode === 'approval_required' && item.status === 'planned',
+    );
+    if (!decision) return;
+    setAssistantDecisions((prev) =>
+      prev.map((item) =>
+        item.id === decisionId
+          ? { ...item, status: 'rejected' as const }
+          : item,
+      ),
+    );
+    addToast('Đã giữ nguyên lịch hiện tại', 'info');
+  }, [assistantDecisions, addToast]);
+
+  const confirmMentorPrompt = useCallback(() => {
+    const bedtime = mentorPrompt?.suggestedBedtime || mentorProfile.bedtime;
+    setDailyMentorDirective({
+      date: getFormattedToday(0),
+      bedtime,
+      confirmed: true,
+    });
+    addToast(`Chốt ${bedtime} đi ngủ`, 'success');
+  }, [mentorPrompt, mentorProfile.bedtime, addToast]);
+
+  const refreshChiefOfStaff = useCallback(() => {
+    setAssistantClock(Date.now());
+  }, []);
+
+  useEffect(() => {
+    const evaluation = evaluateChiefOfStaff({
+      tasks,
+      calendarEvents,
+      habits,
+      now: new Date(assistantClock),
+      mentorProfile,
+      dailyDirective: dailyMentorDirective,
+    });
+    setAssistantBrief(evaluation.brief);
+    setMentorTimeline(evaluation.mentorTimeline);
+    setMentorPrompt(evaluation.mentorPrompt);
+
+    const approvalDecision = evaluation.decisions.find(
+      (item) =>
+        item.mode === 'approval_required' &&
+        !assistantDecisions.some((existing) => existing.id === item.id),
+    );
+    if (approvalDecision) {
+      setAssistantDecisions((prev) => [approvalDecision, ...prev].slice(0, 100));
+    }
+
+    const decision = evaluation.decisions.find(
+      (item) =>
+        (item.mode === 'auto' || item.mode === 'auto_notify') &&
+        !assistantDecisions.some((existing) => existing.id === item.id),
+    );
+    if (!decision) return;
+
+    const executed: AssistantDecisionRecord = {
+      ...decision,
+      status: 'executed',
+      executedAt: new Date().toISOString(),
+    };
+    setTasks((prev) => applyAssistantDecisionToTasks(prev, decision));
+    setAssistantDecisions((prev) => [executed, ...prev].slice(0, 100));
+
+    if (decision.mode === 'auto_notify') {
+      addToast(decision.summary, 'info', {
+        label: 'Hoàn tác',
+        onClick: () => {
+          setTasks((prev) => undoAssistantDecisionInTasks(prev, decision));
+          setAssistantDecisions((prev) =>
+            prev.map((item) =>
+              item.id === decision.id
+                ? { ...item, status: 'undone' as const, undoneAt: new Date().toISOString() }
+                : item,
+            ),
+          );
+        },
+      });
+    }
+  }, [tasks, calendarEvents, habits, assistantClock, assistantDecisions, mentorProfile, dailyMentorDirective, addToast]);
 
   const toggleTopPriority = useCallback((id: string) => {
     setTasks((prev) => {
@@ -1074,20 +1263,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [projects, addHabit, addCalendarEvent, addTask]);
 
   const sendChatMessage = useCallback(async (text: string) => {
+    const now = new Date();
+    const todayDate = getFormattedToday(0);
+    const tomorrowDate = getFormattedToday(1);
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: 'user',
       text,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     };
     setChatMessages((prev) => [...prev, userMsg]);
 
+    // Local parsing is context for Gemini only. It must never generate the chat reply
+    // or mutate the schedule before Gemini has reasoned about the request.
+    const localInstructionHint = parseMentorInstruction(
+      text,
+      now,
+      dailyMentorDirective?.bedtime || mentorProfile.bedtime,
+    );
+
     const context = {
-      todayDate: getFormattedToday(0),
+      currentLocalTime: `${todayDate} ${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`,
+      todayDate,
+      tomorrowDate,
       topTasks: tasks.filter((t) => t.isTopPriority && t.status !== 'done'),
-      totalTasksToday: tasks.filter((t) => t.plannedDate === getFormattedToday(0)),
-      calendarEventsToday: calendarEvents.filter((e) => e.date === getFormattedToday(0)),
+      totalTasksToday: tasks.filter((t) => t.plannedDate === todayDate),
+      tasksTomorrow: tasks.filter((t) => t.plannedDate === tomorrowDate && t.status !== 'done'),
+      calendarEventsToday: calendarEvents.filter((e) => e.date === todayDate),
+      calendarEventsTomorrow: calendarEvents.filter((e) => e.date === tomorrowDate),
       projects: projects.map((p) => ({ name: p.name, targetDate: p.targetDate })),
+      mentorProfile,
+      dailyMentorDirective,
+      mentorTimeline,
+      localInstructionHint,
     };
 
     try {
@@ -1099,28 +1307,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           context,
         }),
       });
-      const data = await res.json();
+
+      const rawBody = await res.text();
+      let data: any = {};
+      try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        throw new Error(`Gemini endpoint trả dữ liệu không hợp lệ (HTTP ${res.status}).`);
+      }
+
+      if (!res.ok) {
+        const detail = typeof data.error === 'string'
+          ? data.error
+          : typeof data.message === 'string'
+            ? data.message
+            : `Gemini request thất bại (HTTP ${res.status}).`;
+        throw new Error(detail);
+      }
+
+      if (!data.aiAvailable || typeof data.reply !== 'string' || !data.reply.trim()) {
+        throw new Error('Gemini không trả về câu trả lời hợp lệ.');
+      }
+
+      if (data.mentorAction?.type === 'set_bedtime' && /^\d{2}:\d{2}$/.test(String(data.mentorAction.bedtime || ''))) {
+        setDailyMentorDirective({
+          date: data.mentorAction.date || todayDate,
+          bedtime: data.mentorAction.bedtime,
+          confirmed: true,
+        });
+        setAssistantClock(Date.now());
+      } else if (data.mentorAction?.type === 'set_mentor_profile' && data.mentorAction.name) {
+        setMentorProfile((previous) => ({
+          ...previous,
+          id: `custom:${String(data.mentorAction.name).toLowerCase().replace(/\s+/g, '-')}`,
+          name: String(data.mentorAction.name),
+          bedtime: /^\d{2}:\d{2}$/.test(String(data.mentorAction.bedtime || ''))
+            ? data.mentorAction.bedtime
+            : previous.bedtime,
+        }));
+        setAssistantClock(Date.now());
+      }
+
       const assistantMsg: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         sender: 'assistant',
-        text: data.reply || 'Tôi có thể hỗ trợ bạn điều chỉnh kế hoạch.',
+        text: data.reply.trim(),
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         proposedAction: data.proposedAction,
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
-    } catch (e) {
-      console.error('Chat error:', e);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Gemini chat error:', error);
       setChatMessages((prev) => [
         ...prev,
         {
           id: `msg-${Date.now() + 1}`,
           sender: 'assistant',
-          text: 'Tôi đã ghi nhận. Hãy cho tôi biết bạn muốn điều chỉnh gì thêm cho hôm nay nhé.',
+          text: `Lỗi Gemini: ${message}`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     }
-  }, [chatMessages, tasks, calendarEvents, projects]);
+  }, [chatMessages, tasks, calendarEvents, projects, mentorProfile, dailyMentorDirective, mentorTimeline]);
 
   const applyAssistantAction = useCallback((messageId: string) => {
     const msg = chatMessages.find((m) => m.id === messageId);
@@ -1206,7 +1455,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         aiSuggestions,
         lifeMetrics,
         chatMessages,
+        assistantBrief,
+        assistantDecisions,
+        mentorProfile,
+        mentorTimeline,
+        mentorPrompt,
+        confirmMentorPrompt,
+        undoAssistantDecision,
+        approveAssistantDecision,
+        rejectAssistantDecision,
+        refreshChiefOfStaff,
         addTask,
+        addTasks,
         updateTask,
         deleteTask,
         restoreTask,

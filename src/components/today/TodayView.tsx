@@ -15,33 +15,22 @@ import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getFormattedToday } from '../../data/mockData';
 import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
+import {
+  TASK_SWIPE_ACTION_WIDTH,
+  TASK_SWIPE_MAX_DISTANCE,
+  TASK_SWIPE_START_THRESHOLD,
+  resolveTaskSwipeRelease,
+  shouldStartTaskSwipe,
+  type TaskSwipeReleaseAction,
+} from '../../services/taskSwipe';
 
-const SWIPE_ACTION_WIDTH = 88;
-const SWIPE_MAX_DISTANCE = 180;
-const SWIPE_OPEN_THRESHOLD = 44;
-const SWIPE_HARD_DELETE_DISTANCE = 132;
-const SWIPE_FAST_DELETE_DISTANCE = 72;
-const SWIPE_FAST_DELETE_VELOCITY = -0.85;
-const SWIPE_START_THRESHOLD = 8;
+const SWIPE_ACTION_WIDTH = TASK_SWIPE_ACTION_WIDTH;
+const SWIPE_MAX_DISTANCE = TASK_SWIPE_MAX_DISTANCE;
+const SWIPE_START_THRESHOLD = TASK_SWIPE_START_THRESHOLD;
 
-export type SwipeReleaseAction = 'close' | 'open' | 'delete';
-
-export const resolveSwipeRelease = (offset: number, velocityX: number): SwipeReleaseAction => {
-  if (
-    offset <= -SWIPE_HARD_DELETE_DISTANCE ||
-    (offset <= -SWIPE_FAST_DELETE_DISTANCE && velocityX <= SWIPE_FAST_DELETE_VELOCITY)
-  ) {
-    return 'delete';
-  }
-  if (offset <= -SWIPE_OPEN_THRESHOLD) return 'open';
-  return 'close';
-};
-
-export const shouldStartSwipe = (deltaX: number, deltaY: number): boolean => {
-  const horizontal = Math.abs(deltaX);
-  const vertical = Math.abs(deltaY);
-  return horizontal >= SWIPE_START_THRESHOLD && horizontal > vertical;
-};
+export type SwipeReleaseAction = TaskSwipeReleaseAction;
+export const resolveSwipeRelease = resolveTaskSwipeRelease;
+export const shouldStartSwipe = shouldStartTaskSwipe;
 
 const SwipeTodayTaskRow: React.FC<{
   task: Task;
@@ -114,6 +103,17 @@ const SwipeTodayTaskRow: React.FC<{
       return;
     }
 
+    if (action === 'complete') {
+      setSwipeOffset(SWIPE_MAX_DISTANCE);
+      onSwipeOpen(null);
+      resetPointer();
+      window.setTimeout(() => {
+        if (!isDone) onToggle();
+        setSwipeOffset(0);
+      }, 120);
+      return;
+    }
+
     const shouldOpen = action === 'open';
     setSwipeOffset(shouldOpen ? -SWIPE_ACTION_WIDTH : 0);
     onSwipeOpen(shouldOpen ? task.id : null);
@@ -135,7 +135,21 @@ const SwipeTodayTaskRow: React.FC<{
 
   return (
     <div data-swipe-shell className={`relative overflow-hidden rounded-2xl ${startsRegularGroup ? 'mt-7' : ''}`}>
-      <div className="pointer-events-none absolute inset-y-[1px] right-[1px] w-[180px] overflow-hidden rounded-r-[15px] bg-rose-500">
+      <div
+        className={`pointer-events-none absolute inset-[1px] rounded-[15px] bg-emerald-500 text-white transition-opacity ${
+          offset > 0 ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div className="absolute inset-y-0 left-0 flex items-center gap-2 pl-6 text-xs font-bold">
+          <Check className="h-5 w-5 stroke-[3]" />
+          Xong
+        </div>
+      </div>
+      <div
+        className={`pointer-events-none absolute inset-[1px] overflow-hidden rounded-[15px] bg-rose-500 transition-opacity ${
+          offset < 0 ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
         <button
           type="button"
           onClick={onRequestDelete}
@@ -155,7 +169,7 @@ const SwipeTodayTaskRow: React.FC<{
           isImportant
             ? 'min-h-[84px] border-indigo-100 bg-gradient-to-r from-indigo-50/40 via-white to-white py-4 shadow-xs hover:border-indigo-200/80 hover:shadow-sm'
             : 'min-h-[68px] border-slate-200/70 bg-white py-3.5 shadow-xs hover:border-slate-300/80 hover:shadow-sm'
-        } ${isDone ? '!border-slate-200/50 !bg-slate-50/70 opacity-60' : ''}`}
+        } ${isDone ? '!border-slate-200/70 !bg-slate-50' : ''}`}
         style={{ transform: `translateX(${offset}px)`, touchAction: 'pan-y' }}
         onPointerDown={(event) => {
           startXRef.current = event.clientX;
@@ -182,7 +196,8 @@ const SwipeTodayTaskRow: React.FC<{
             event.currentTarget.setPointerCapture?.(event.pointerId);
           }
 
-          const next = Math.max(-SWIPE_MAX_DISTANCE, Math.min(0, startOffsetRef.current + deltaX));
+          const maxRight = isDone ? 0 : SWIPE_MAX_DISTANCE;
+          const next = Math.max(-SWIPE_MAX_DISTANCE, Math.min(maxRight, startOffsetRef.current + deltaX));
           setSwipeOffset(next);
         }}
         onPointerUp={(event) => finishDrag(event.clientX)}
@@ -208,7 +223,7 @@ const SwipeTodayTaskRow: React.FC<{
           type="button"
           onClick={(event) => {
             if (blockClickAfterDrag(event)) return;
-            if (offsetRef.current < 0) {
+            if (offsetRef.current !== 0) {
               setSwipeOffset(0);
               onSwipeOpen(null);
               return;
@@ -260,18 +275,17 @@ export const TodayView: React.FC = () => {
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
 
   const today = getFormattedToday(0);
-  const todayTasks = useMemo(
+  const allTodayTasks = useMemo(
     () =>
       tasks
-        .filter((task) => task.plannedDate === today || task.isTopPriority)
+        .filter((task) => task.plannedDate === today || (task.isTopPriority && task.status !== 'done'))
         .toSorted((a, b) => {
-          if (a.status === 'done' && b.status !== 'done') return 1;
-          if (a.status !== 'done' && b.status === 'done') return -1;
           if (a.isTopPriority !== b.isTopPriority) return a.isTopPriority ? -1 : 1;
           return (a.startTime || '99:99').localeCompare(b.startTime || '99:99');
         }),
     [tasks, today],
   );
+  const todayTasks = useMemo(() => allTodayTasks.filter((task) => task.status !== 'done'), [allTodayTasks]);
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
 
@@ -455,13 +469,13 @@ export const TodayView: React.FC = () => {
     );
   }
 
-  const completedCount = todayTasks.filter((task) => task.status === 'done').length;
+  const completedCount = allTodayTasks.filter((task) => task.status === 'done').length;
 
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Hôm nay"
-        meta={`${completedCount}/${todayTasks.length}`}
+        meta={`${completedCount}/${allTodayTasks.length}`}
         action={
           <button
             type="button"
@@ -511,8 +525,10 @@ export const TodayView: React.FC = () => {
             <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl border border-emerald-100 bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-6 w-6" />
             </div>
-            <p className="font-semibold text-slate-800">Hôm nay chưa có việc nào</p>
-            <p className="mt-1 text-xs text-slate-400">Hãy thêm các việc cần hoàn thành trong ngày</p>
+            <p className="font-semibold text-slate-800">{allTodayTasks.length > 0 ? 'Xong hết việc hôm nay' : 'Hôm nay chưa có việc nào'}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {allTodayTasks.length > 0 ? 'Việc đã hoàn thành được ẩn để danh sách gọn hơn' : 'Hãy thêm các việc cần hoàn thành trong ngày'}
+            </p>
             <button
               type="button"
               onClick={() => openTaskModal()}

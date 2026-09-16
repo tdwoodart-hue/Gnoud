@@ -17,13 +17,18 @@ import { parseProjectPlanFile } from '../../services/taskDraft';
 import {
   applyTaskScope,
   buildCompactTaskBuckets,
-  bundleTasksByProject,
   getTaskDate,
   TaskScope,
 } from '../../services/taskListLayout';
 import { formatDisplayDate } from '../../data/mockData';
 import { PageHeader } from '../common/PageHeader';
 import { EmptyState } from '../common/EmptyState';
+import {
+  TASK_SWIPE_MAX_DISTANCE,
+  TASK_SWIPE_START_THRESHOLD,
+  resolveTaskSwipeRelease,
+  shouldStartTaskSwipe,
+} from '../../services/taskSwipe';
 
 type Filter = 'open' | 'done' | 'all';
 type ViewMode = 'tasks' | 'projects';
@@ -65,48 +70,150 @@ const TaskRow: React.FC<{
   nested?: boolean;
 }> = ({ task, projectName, statusLabel, toggleTaskComplete, openTaskModal, nested = false }) => {
   const date = getTaskDate(task);
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startXRef = useRef<number | null>(null);
+  const startYRef = useRef<number | null>(null);
+  const startTimeRef = useRef(0);
+  const offsetRef = useRef(0);
+  const didDragRef = useRef(false);
+  const isSwipingRef = useRef(false);
+
+  const setSwipeOffset = (next: number) => {
+    offsetRef.current = next;
+    setOffset(next);
+  };
+
+  const resetPointer = () => {
+    startXRef.current = null;
+    startYRef.current = null;
+    isSwipingRef.current = false;
+    setDragging(false);
+  };
+
+  const finishDrag = (clientX: number) => {
+    if (startXRef.current === null || !isSwipingRef.current) {
+      resetPointer();
+      return;
+    }
+
+    const elapsed = Math.max(1, performance.now() - startTimeRef.current);
+    const velocityX = (clientX - startXRef.current) / elapsed;
+    const action = resolveTaskSwipeRelease(offsetRef.current, velocityX);
+
+    if (action === 'complete' && task.status !== 'done') {
+      setSwipeOffset(TASK_SWIPE_MAX_DISTANCE);
+      resetPointer();
+      window.setTimeout(() => {
+        toggleTaskComplete(task.id);
+        setSwipeOffset(0);
+      }, 120);
+      return;
+    }
+
+    setSwipeOffset(0);
+    resetPointer();
+  };
+
+  const cancelDrag = () => {
+    setSwipeOffset(0);
+    resetPointer();
+  };
+
+  const blockClickAfterDrag = (event: React.MouseEvent) => {
+    if (!didDragRef.current) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    didDragRef.current = false;
+    return true;
+  };
 
   return (
-    <div
-      className={`flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-3.5 shadow-xs transition hover:border-slate-300/80 hover:shadow-sm ${
-        nested ? 'ml-3 border-l-2 border-l-indigo-100 bg-slate-50/60 shadow-none' : ''
-      }`}
-    >
-      <button
-        type="button"
-        onClick={() => toggleTaskComplete(task.id)}
-        aria-label={task.status === 'done' ? 'Mở lại' : 'Hoàn thành'}
-        className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2 transition active:scale-95 ${
-          task.status === 'done'
-            ? 'border-emerald-500 bg-emerald-500 text-white'
-            : 'border-slate-300 hover:border-indigo-400'
-        }`}
-      >
-        {task.status === 'done' && <Check className="h-3.5 w-3.5 stroke-[3]" />}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => openTaskModal(task)}
-        className="min-w-0 flex-1 py-2.5 text-left"
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${priorityColor[task.priority]}`} />
-          <p
-            className={`truncate text-sm font-semibold ${
-              task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'
-            }`}
-          >
-            {task.title}
-          </p>
+    <div className={`relative overflow-hidden rounded-2xl ${nested ? 'ml-3' : ''}`}>
+      <div className="pointer-events-none absolute inset-y-[1px] left-[1px] flex w-[180px] items-center rounded-l-[15px] bg-emerald-500 pl-6 text-white">
+        <div className="flex items-center gap-2 text-xs font-bold">
+          <Check className="h-5 w-5 stroke-[3]" />
+          Xong
         </div>
-        <p className="mt-0.5 truncate text-[11px] text-slate-400">
-          {[date ? formatDisplayDate(date) : '', task.startTime, projectName || statusLabel[task.status]]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-      </button>
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+      </div>
+
+      <div
+        className={`relative z-10 flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-3.5 shadow-xs hover:border-slate-300/80 hover:shadow-sm ${
+          dragging ? '' : 'transition-transform duration-200 ease-out'
+        } ${nested ? 'border-l-2 border-l-indigo-100 bg-slate-50/60 shadow-none' : ''}`}
+        style={{ transform: `translateX(${offset}px)`, touchAction: 'pan-y' }}
+        onPointerDown={(event) => {
+          startXRef.current = event.clientX;
+          startYRef.current = event.clientY;
+          startTimeRef.current = performance.now();
+          didDragRef.current = false;
+          isSwipingRef.current = false;
+        }}
+        onPointerMove={(event) => {
+          if (startXRef.current === null || startYRef.current === null) return;
+          const deltaX = event.clientX - startXRef.current;
+          const deltaY = event.clientY - startYRef.current;
+
+          if (!isSwipingRef.current) {
+            if (Math.abs(deltaY) >= TASK_SWIPE_START_THRESHOLD && Math.abs(deltaY) > Math.abs(deltaX)) {
+              resetPointer();
+              return;
+            }
+            if (!shouldStartTaskSwipe(deltaX, deltaY)) return;
+            isSwipingRef.current = true;
+            didDragRef.current = true;
+            setDragging(true);
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+          }
+
+          const maxRight = task.status === 'done' ? 0 : TASK_SWIPE_MAX_DISTANCE;
+          setSwipeOffset(Math.max(0, Math.min(maxRight, deltaX)));
+        }}
+        onPointerUp={(event) => finishDrag(event.clientX)}
+        onPointerCancel={cancelDrag}
+      >
+        <button
+          type="button"
+          onClick={(event) => {
+            if (blockClickAfterDrag(event)) return;
+            toggleTaskComplete(task.id);
+          }}
+          aria-label={task.status === 'done' ? 'Mở lại' : 'Hoàn thành'}
+          className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2 transition active:scale-95 ${
+            task.status === 'done'
+              ? 'border-emerald-500 bg-emerald-500 text-white'
+              : 'border-slate-300 hover:border-indigo-400'
+          }`}
+        >
+          {task.status === 'done' && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={(event) => {
+            if (blockClickAfterDrag(event)) return;
+            openTaskModal(task);
+          }}
+          className="min-w-0 flex-1 py-2.5 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${priorityColor[task.priority]}`} />
+            <p
+              className={`truncate text-sm font-semibold ${
+                task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'
+              }`}
+            >
+              {task.title}
+            </p>
+          </div>
+          <p className="mt-0.5 truncate text-[11px] text-slate-400">
+            {[date ? formatDisplayDate(date) : '', task.startTime, projectName || statusLabel[task.status]]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </button>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+      </div>
     </div>
   );
 };
@@ -125,19 +232,9 @@ const TaskGroup: React.FC<TaskGroupProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [showAll, setShowAll] = useState(false);
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const rows = useMemo(() => bundleTasksByProject(tasks, projectNames, 2), [tasks, projectNames]);
+  const rows = tasks;
 
   if (tasks.length === 0) return null;
-
-  const toggleProject = (projectId: string) => {
-    setExpandedProjects((current) => {
-      const next = new Set(current);
-      if (next.has(projectId)) next.delete(projectId);
-      else next.add(projectId);
-      return next;
-    });
-  };
 
   if (collapsible && collapsed) {
     return (
@@ -181,69 +278,16 @@ const TaskGroup: React.FC<TaskGroupProps> = ({
       </div>
 
       <div className="space-y-2">
-        {visibleRows.map((row) => {
-          if (row.kind === 'task') {
-            return (
-              <TaskRow
-                key={`${bundleKey}-task-${row.task.id}`}
-                task={row.task}
-                projectName={row.task.projectId ? projectNames.get(row.task.projectId) : undefined}
-                statusLabel={statusLabel}
-                toggleTaskComplete={toggleTaskComplete}
-                openTaskModal={openTaskModal}
-              />
-            );
-          }
-
-          const expanded = expandedProjects.has(row.projectId);
-          const first = row.tasks[0];
-          const last = row.tasks[row.tasks.length - 1];
-          const firstDate = getTaskDate(first);
-          const lastDate = getTaskDate(last);
-          const dateText =
-            firstDate && lastDate && firstDate !== lastDate
-              ? `${formatDisplayDate(firstDate)} → ${formatDisplayDate(lastDate)}`
-              : firstDate
-                ? formatDisplayDate(firstDate)
-                : 'Chưa xếp lịch';
-
-          return (
-            <div key={`${bundleKey}-project-${row.projectId}`} className="space-y-2">
-              <button
-                type="button"
-                onClick={() => toggleProject(row.projectId)}
-                className="flex min-h-[58px] w-full items-center gap-3 rounded-2xl border border-indigo-100/80 bg-indigo-50/45 px-3.5 text-left transition hover:bg-indigo-50/80"
-              >
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-indigo-600 ring-1 ring-indigo-100">
-                  <FolderKanban className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-slate-900">{row.projectName}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                    {row.tasks.length} việc · {dateText}
-                  </p>
-                </div>
-                <ChevronDown className={`h-4 w-4 shrink-0 text-indigo-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-              </button>
-
-              {expanded ? (
-                <div className="space-y-1.5">
-                  {row.tasks.map((task) => (
-                    <TaskRow
-                      key={`${bundleKey}-nested-${task.id}`}
-                      task={task}
-                      projectName={row.projectName}
-                      statusLabel={statusLabel}
-                      toggleTaskComplete={toggleTaskComplete}
-                      openTaskModal={openTaskModal}
-                      nested
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {visibleRows.map((task) => (
+          <TaskRow
+            key={`${bundleKey}-task-${task.id}`}
+            task={task}
+            projectName={task.projectId ? projectNames.get(task.projectId) : undefined}
+            statusLabel={statusLabel}
+            toggleTaskComplete={toggleTaskComplete}
+            openTaskModal={openTaskModal}
+          />
+        ))}
       </div>
 
       {hiddenRows > 0 ? (
@@ -252,7 +296,7 @@ const TaskGroup: React.FC<TaskGroupProps> = ({
           onClick={() => setShowAll(true)}
           className="h-10 w-full rounded-xl border border-dashed border-slate-200 text-xs font-semibold text-slate-500 transition hover:border-slate-300 hover:bg-slate-50"
         >
-          Xem thêm {hiddenRows} nhóm/việc
+          Xem thêm {hiddenRows} việc
         </button>
       ) : showAll && rows.length > compactLimit ? (
         <button

@@ -18,8 +18,10 @@ import {
   enablePushNotifications,
   getNotificationSchedulerReady,
   getNotificationState,
+  scheduleReminderTest,
   sendTestNotification,
   syncNotificationTasks,
+  type ReminderScheduleTestKind,
 } from '../../services/notificationService';
 import { NotificationState } from '../../services/notificationStatus';
 import { getNotificationPreferences, saveNotificationPreferences } from '../../services/notificationPolicy';
@@ -45,6 +47,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const [state, setState] = useState<NotificationState>('default');
   const [reminderPreferences, setReminderPreferences] = useState(() => getNotificationPreferences());
   const [busy, setBusy] = useState(false);
+  const [testingReminder, setTestingReminder] = useState<ReminderScheduleTestKind | null>(null);
   const [schedulerReady, setSchedulerReady] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [pendingPermanentDeleteId, setPendingPermanentDeleteId] = useState<string | null>(null);
@@ -99,6 +102,20 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
       addToast(error instanceof Error ? error.message : 'Không thể gửi', 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testScheduledReminder = async (kind: ReminderScheduleTestKind) => {
+    setTestingReminder(kind);
+    try {
+      const result = await scheduleReminderTest(kind, tasks, reminderPreferences);
+      const expectedTime = new Date(result.firesAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      addToast(`Đã lên lịch test · chờ khoảng 1–2 phút (${expectedTime})`, 'success');
+    } catch (error) {
+      await refresh();
+      addToast(error instanceof Error ? error.message : 'Không thể lên lịch test', 'error');
+    } finally {
+      setTestingReminder(null);
     }
   };
 
@@ -264,6 +281,37 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                   >
                     <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${reminderPreferences.atStartEnabled ? 'left-6' : 'left-1'}`} />
                   </button>
+                </div>
+
+                <div className="border-t border-slate-100 px-4 py-3">
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold text-slate-800">Kiểm tra lịch nhắc</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {!active
+                        ? 'Bật thông báo trước khi kiểm tra'
+                        : !schedulerReady
+                          ? 'Lịch tự động chưa kết nối'
+                          : 'Dùng cron thật · chờ khoảng 1–2 phút'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void testScheduledReminder('previous-day')}
+                      disabled={!active || !schedulerReady || Boolean(testingReminder)}
+                      className="h-10 rounded-xl bg-indigo-50 px-3 text-xs font-bold text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      {testingReminder === 'previous-day' ? 'Đang lên lịch…' : 'Test hôm trước'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void testScheduledReminder('before-start')}
+                      disabled={!active || !schedulerReady || Boolean(testingReminder)}
+                      className="h-10 rounded-xl bg-indigo-50 px-3 text-xs font-bold text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      {testingReminder === 'before-start' ? 'Đang lên lịch…' : 'Test trước 1 giờ'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

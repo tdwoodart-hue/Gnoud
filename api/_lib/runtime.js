@@ -3,6 +3,7 @@ import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin
 import { getFirestore } from 'firebase-admin/firestore';
 
 let database = null;
+const SCHEDULER_CATCH_UP_MINUTES = 30;
 
 function adminApp() {
   if (getApps().length) return getApps()[0];
@@ -64,7 +65,9 @@ export function notificationForTask(task, now, sent = new Set()) {
   const minute = 60_000;
   for (const lead of task.policy.leadMinutes) {
     const target = start - lead * minute;
-    const deadline = lead === task.policy.beforeStartMinutes ? start : target + 5 * minute;
+    const deadline = lead === task.policy.beforeStartMinutes
+      ? start
+      : target + SCHEDULER_CATCH_UP_MINUTES * minute;
     if (now < target || now >= deadline) continue;
 
     let key;

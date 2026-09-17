@@ -1,0 +1,39 @@
+name: Notification scheduler
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: notification-scheduler
+  cancel-in-progress: false
+
+jobs:
+  trigger-notifications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger production notification scheduler
+        shell: bash
+        env:
+          CRON_URL: https://gnoud.vercel.app/api/notifications/cron
+        run: |
+          set -euo pipefail
+
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=gnoud-notification-cron")"
+
+          oidc_token="$(printf '%s' "$oidc_response" | node -e \
+            "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => { const value = JSON.parse(input).value; if (!value) process.exit(2); process.stdout.write(value); });")"
+
+          curl --fail --silent --show-error \
+            --retry 2 \
+            --retry-delay 10 \
+            -H "Authorization: Bearer ${oidc_token}" \
+            "$CRON_URL"

@@ -1,8 +1,9 @@
+import { authorizeCronRequest } from '../_lib/cronAuth.js';
 import { adminDb, configureWebPush, notificationForTask, requireMethod, sendNotification, serverError } from '../_lib/runtime.js';
 
 export default async function handler(req: any, res: any) {
   if (!requireMethod(req, res, 'GET')) return;
-  if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
+  if (!await authorizeCronRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
   try {
     configureWebPush();
     const snapshot = await adminDb().collection('pushDevices').limit(500).get();

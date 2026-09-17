@@ -9,7 +9,7 @@ function adminApp() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return initializeApp({ credential: applicationDefault() });
   const serviceAccount = JSON.parse(raw);
-  if (serviceAccount.private_key) serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  if (serviceAccount.private_key) serviceAccount.private_key = serviceAccount.private_key.replace(/\\\\n/g, '\\n');
   return initializeApp({ credential: cert(serviceAccount) });
 }
 
@@ -64,7 +64,8 @@ export function notificationForTask(task, now, sent = new Set()) {
   const minute = 60_000;
   for (const lead of task.policy.leadMinutes) {
     const target = start - lead * minute;
-    if (now < target || now >= target + 5 * minute) continue;
+    const deadline = lead === task.policy.beforeStartMinutes ? start : target + 5 * minute;
+    if (now < target || now >= deadline) continue;
 
     let key;
     let title;

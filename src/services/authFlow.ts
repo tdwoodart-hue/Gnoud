@@ -1,5 +1,7 @@
-export function shouldUseRedirect(userAgent: string, standalone: boolean): boolean {
-  return standalone || /iPhone|iPad|iPod|Android/i.test(userAgent);
+export function shouldUseRedirect(_userAgent: string, _standalone: boolean): boolean {
+  // The app is hosted outside Firebase Hosting. Cross-domain redirect auth can
+  // lose its session on Safari/mobile browsers, so keep Google auth on popup.
+  return false;
 }
 
 export function authErrorMessage(error: unknown): string {

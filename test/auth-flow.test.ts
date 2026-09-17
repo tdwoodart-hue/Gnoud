@@ -2,8 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { authErrorMessage, shouldUseRedirect } from '../src/services/authFlow';
 
-test('installed iPhone app uses redirect instead of popup', () => {
-  assert.equal(shouldUseRedirect('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', true), true);
+test('installed iPhone app uses popup instead of cross-domain redirect', () => {
+  assert.equal(shouldUseRedirect('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', true), false);
+});
+
+test('Android browser uses popup instead of cross-domain redirect', () => {
+  assert.equal(shouldUseRedirect('Mozilla/5.0 (Linux; Android 15)', false), false);
 });
 
 test('desktop browser keeps popup flow', () => {

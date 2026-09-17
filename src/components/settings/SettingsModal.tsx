@@ -109,6 +109,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     setTestingReminder(kind);
     try {
       const result = await scheduleReminderTest(kind, tasks, reminderPreferences);
+      await refresh();
       const expectedTime = new Date(result.firesAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
       addToast(`Đã lên lịch test · chờ khoảng 1–2 phút (${expectedTime})`, 'success');
     } catch (error) {
@@ -287,18 +288,16 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                   <div className="mb-3">
                     <p className="text-sm font-semibold text-slate-800">Kiểm tra lịch nhắc</p>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {!active
-                        ? 'Bật thông báo trước khi kiểm tra'
-                        : !schedulerReady
-                          ? 'Lịch tự động chưa kết nối'
-                          : 'Dùng cron thật · chờ khoảng 1–2 phút'}
+                      {active && schedulerReady
+                        ? 'Dùng cron thật · chờ khoảng 1–2 phút'
+                        : 'Bấm test để app tự bật và kiểm tra thông báo'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => void testScheduledReminder('previous-day')}
-                      disabled={!active || !schedulerReady || Boolean(testingReminder)}
+                      disabled={busy || Boolean(testingReminder)}
                       className="h-10 rounded-xl bg-indigo-50 px-3 text-xs font-bold text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       {testingReminder === 'previous-day' ? 'Đang lên lịch…' : 'Test hôm trước'}
@@ -306,7 +305,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                     <button
                       type="button"
                       onClick={() => void testScheduledReminder('before-start')}
-                      disabled={!active || !schedulerReady || Boolean(testingReminder)}
+                      disabled={busy || Boolean(testingReminder)}
                       className="h-10 rounded-xl bg-indigo-50 px-3 text-xs font-bold text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       {testingReminder === 'before-start' ? 'Đang lên lịch…' : 'Test trước 1 giờ'}

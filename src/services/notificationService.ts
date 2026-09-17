@@ -51,19 +51,21 @@ export async function getNotificationState(): Promise<NotificationState> {
   return resolveNotificationState(Notification.permission, Boolean(subscription), await serverIsReady());
 }
 
-export async function enablePushNotifications(): Promise<void> {
+async function registerPushNotifications(dispatchEnabledEvent: boolean): Promise<void> {
   if (!supportsPushNotifications()) throw new Error('Thiết bị này không hỗ trợ thông báo web.');
   if (!isInstalledPwa() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
     throw new Error('Hãy thêm Lịch Sống vào Màn hình chính trước.');
   }
-  const permission = await Notification.requestPermission();
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Bạn chưa cho phép gửi thông báo.');
 
   const registration = await navigator.serviceWorker.register('/sw.js');
   const response = await fetch('/api/notifications/public-key');
   if (!response.ok) throw new Error(await notificationErrorMessage(response));
   const { publicKey } = await response.json();
-  const subscription = await registration.pushManager.subscribe({
+  const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
   });
@@ -72,8 +74,12 @@ export async function enablePushNotifications(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId(), subscription }),
   });
-  if (!registerResponse.ok) console.warn('Automatic reminders are not ready:', await notificationErrorMessage(registerResponse));
-  window.dispatchEvent(new Event('lich-song-notifications-enabled'));
+  if (!registerResponse.ok) throw new Error(await notificationErrorMessage(registerResponse));
+  if (dispatchEnabledEvent) window.dispatchEvent(new Event('lich-song-notifications-enabled'));
+}
+
+export async function enablePushNotifications(): Promise<void> {
+  await registerPushNotifications(true);
 }
 
 export async function disablePushNotifications(): Promise<void> {
@@ -226,12 +232,17 @@ export async function scheduleReminderTest(
   tasks: Task[],
   preferences: NotificationPreferences = getNotificationPreferences(),
 ): Promise<ReminderScheduleTestResult> {
-  if (!supportsPushNotifications() || Notification.permission !== 'granted') {
-    throw new Error('Hãy bật thông báo trước khi kiểm tra lịch nhắc.');
-  }
+  if (!supportsPushNotifications()) throw new Error('Thiết bị này không hỗ trợ thông báo web.');
+
   const registration = await navigator.serviceWorker.getRegistration();
   const subscription = await registration?.pushManager.getSubscription();
-  if (!subscription) throw new Error('Thiết bị chưa đăng ký nhận thông báo. Hãy bật lại thông báo.');
+  if (Notification.permission !== 'granted' || !subscription) {
+    await registerPushNotifications(false);
+  }
+
+  if (!await getNotificationSchedulerReady()) {
+    throw new Error('Lịch nhắc tự động chưa kết nối với server.');
+  }
 
   const plan = buildReminderScheduleTestTask(kind);
   const { firesAt, waitSeconds, ...testTask } = plan;

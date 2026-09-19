@@ -1,12 +1,16 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Beef,
   ChevronLeft,
   ChevronRight,
+  Database,
+  Download,
+  FileUp,
   Flame,
   Footprints,
   Plus,
   Scale,
+  Search,
   Settings2,
   Trash2,
   UtensilsCrossed,
@@ -33,6 +37,17 @@ import {
   toLocalIso,
   upsertDailyMetric,
 } from '../../services/nutritionService';
+import {
+  FOOD_CSV_TEMPLATE,
+  FoodItem,
+  STARTER_FOODS,
+  foodLibraryToJson,
+  loadFoodLibrary,
+  makeCustomFood,
+  mergeFoods,
+  parseFoodFile,
+  saveFoodLibrary,
+} from '../../services/foodLibraryService';
 
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -231,7 +246,9 @@ const DailyMetricsCard: React.FC<DailyMetricsCardProps> = ({
 
 interface AddEntryModalProps {
   date: string;
+  foods: FoodItem[];
   onClose: () => void;
+  onManageFoods: () => void;
   onAdd: (entry: {
     name: string;
     meal: MealType;
@@ -242,14 +259,33 @@ interface AddEntryModalProps {
   }) => void;
 }
 
-const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, onClose, onAdd }) => {
+const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onManageFoods, onAdd }) => {
   const [name, setName] = useState('');
   const [meal, setMeal] = useState<MealType>('lunch');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
+  const [foodQuery, setFoodQuery] = useState('');
   const [error, setError] = useState('');
+
+  const matchedFoods = useMemo(() => {
+    const query = foodQuery.trim().toLocaleLowerCase('vi');
+    if (!query) return foods.slice(0, 6);
+    return foods
+      .filter((food) => `${food.name} ${food.category || ''}`.toLocaleLowerCase('vi').includes(query))
+      .slice(0, 8);
+  }, [foodQuery, foods]);
+
+  const applyFood = (food: FoodItem) => {
+    setName(food.name);
+    setCalories(String(food.calories));
+    setProtein(String(food.protein));
+    setCarbs(String(food.carbs));
+    setFat(String(food.fat));
+    setFoodQuery('');
+    setError('');
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -296,6 +332,50 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, onClose, onAdd }) =
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/45 p-3.5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-slate-700">Chọn nhanh từ kho thức ăn</p>
+                <p className="mt-0.5 text-[10px] text-slate-400">Chọn món để tự điền kcal và macro.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onManageFoods}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[10px] font-bold text-indigo-600 shadow-xs transition hover:bg-indigo-50"
+              >
+                <Database className="h-3.5 w-3.5" />
+                Quản lý file
+              </button>
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                value={foodQuery}
+                onChange={(event) => setFoodQuery(event.target.value)}
+                placeholder="Tìm trứng, chuối, cơm..."
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-hidden transition focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100"
+              />
+            </div>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+              {matchedFoods.length === 0 ? (
+                <p className="px-2 py-2 text-[10px] text-slate-400">Không có món phù hợp. Có thể tạo món mới trong Kho thức ăn.</p>
+              ) : matchedFoods.map((food) => (
+                <button
+                  key={food.id}
+                  type="button"
+                  onClick={() => applyFood(food)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11px] font-bold text-slate-700">{food.name}</span>
+                    <span className="block truncate text-[9px] font-medium text-slate-400">{food.serving}{food.category ? ` · ${food.category}` : ''}</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] font-bold tabular-nums text-indigo-600">{number.format(food.calories)} kcal</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold text-slate-600">Món / bữa ăn</span>
             <input
@@ -364,6 +444,222 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, onClose, onAdd }) =
           Thêm vào ngày
         </button>
       </form>
+    </div>
+  );
+};
+
+interface FoodLibraryModalProps {
+  foods: FoodItem[];
+  onClose: () => void;
+  onChange: (foods: FoodItem[]) => void;
+}
+
+const downloadTextFile = (name: string, content: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
+
+const FoodLibraryModal: React.FC<FoodLibraryModalProps> = ({ foods, onClose, onChange }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const [name, setName] = useState('');
+  const [serving, setServing] = useState('100 g');
+  const [category, setCategory] = useState('');
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [fat, setFat] = useState('');
+
+  const visibleFoods = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('vi');
+    if (!normalized) return foods;
+    return foods.filter((food) =>
+      `${food.name} ${food.serving} ${food.category || ''}`.toLocaleLowerCase('vi').includes(normalized),
+    );
+  }, [foods, query]);
+
+  const importFile = async (file?: File) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const imported = parseFoodFile(text, file.name);
+      if (!imported.length) {
+        setStatus('Không đọc được món hợp lệ. Kiểm tra đúng cột name, serving, calories, protein, carbs, fat.');
+        return;
+      }
+      onChange(mergeFoods(foods, imported));
+      setStatus(`Đã nhập ${imported.length} món từ ${file.name}. Món trùng tên + khẩu phần sẽ được cập nhật.`);
+    } catch (error) {
+      console.warn('Could not import food file:', error);
+      setStatus('File không hợp lệ. Hỗ trợ CSV hoặc JSON.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const addCustomFood = (event: FormEvent) => {
+    event.preventDefault();
+    const numeric = [calories, protein, carbs, fat].map(Number);
+    if (!name.trim() || !serving.trim() || numeric.some((value) => !Number.isFinite(value) || value < 0)) {
+      setStatus('Nhập đủ tên, khẩu phần và các chỉ số không âm.');
+      return;
+    }
+
+    const food = makeCustomFood({
+      name: name.trim(),
+      serving: serving.trim(),
+      category: category.trim() || undefined,
+      calories: numeric[0],
+      protein: numeric[1],
+      carbs: numeric[2],
+      fat: numeric[3],
+    });
+    onChange(mergeFoods(foods, [food]));
+    setName('');
+    setCalories('');
+    setProtein('');
+    setCarbs('');
+    setFat('');
+    setStatus(`Đã thêm ${food.name} vào kho.`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200/80 bg-white shadow-2xl sm:rounded-[28px]">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">Kho thức ăn</h2>
+            <p className="mt-1 text-xs text-slate-400">Upload file để thêm hàng loạt hoặc tự tạo món rồi xuất lại thành file JSON.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+            aria-label="Đóng"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5 sm:p-6">
+          <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              className="hidden"
+              onChange={(event) => void importFile(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-[11px] font-bold text-white shadow-xs transition hover:bg-indigo-700"
+            >
+              <FileUp className="h-3.5 w-3.5" /> Upload CSV/JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadTextFile('food-library-template.csv', FOOD_CSV_TEMPLATE, 'text/csv;charset=utf-8')}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" /> File mẫu CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadTextFile('foods.json', foodLibraryToJson(foods), 'application/json;charset=utf-8')}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" /> Xuất foods.json
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(STARTER_FOODS);
+                setStatus('Đã khôi phục kho món mẫu.');
+              }}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+            >
+              Khôi phục món mẫu
+            </button>
+          </section>
+
+          <div className="mt-3 rounded-xl bg-slate-50 px-3.5 py-3 text-[10px] leading-relaxed text-slate-500">
+            <strong className="text-slate-700">Cấu trúc file:</strong> name, serving, calories, protein, carbs, fat, category. CSV dùng dấu phẩy hoặc chấm phẩy. JSON có thể là mảng món hoặc <code>{'{ "foods": [...] }'}</code>.
+          </div>
+          {status && <p className="mt-2 text-[11px] font-semibold text-indigo-600">{status}</p>}
+
+          <form onSubmit={addCustomFood} className="mt-5 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-4">
+            <div className="mb-3">
+              <h3 className="text-xs font-bold text-slate-800">Tạo một món mới</h3>
+              <p className="mt-0.5 text-[10px] text-slate-400">Dùng khi món không có sẵn trong file.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Tên món" className="col-span-2 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100 sm:col-span-1" />
+              <input value={serving} onChange={(event) => setServing(event.target.value)} placeholder="Khẩu phần: 100 g / 1 quả" className="col-span-2 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100 sm:col-span-1" />
+              <input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Nhóm: Trái cây..." className="col-span-2 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100" />
+              {[
+                ['kcal', calories, setCalories],
+                ['Protein (g)', protein, setProtein],
+                ['Carb (g)', carbs, setCarbs],
+                ['Fat (g)', fat, setFat],
+              ].map(([placeholder, value, setter]) => (
+                <input
+                  key={placeholder as string}
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={value as string}
+                  onChange={(event) => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)}
+                  placeholder={placeholder as string}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100"
+                />
+              ))}
+            </div>
+            <button type="submit" className="mt-3 h-10 w-full rounded-xl bg-slate-900 text-xs font-bold text-white transition hover:bg-slate-800">Lưu vào kho thức ăn</button>
+          </form>
+
+          <section className="mt-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-800">Danh sách món</h3>
+                <p className="mt-0.5 text-[10px] text-slate-400">{foods.length} món trong kho</p>
+              </div>
+              <div className="relative w-48 max-w-[55%]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm món" className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[11px] outline-hidden focus:border-indigo-300" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {visibleFoods.map((food) => (
+                <div key={food.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[11px] font-bold text-slate-700">{food.name}</p>
+                      {food.source && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold uppercase text-slate-400">{food.source === 'starter' ? 'mẫu' : food.source === 'custom' ? 'tự tạo' : 'import'}</span>}
+                    </div>
+                    <p className="mt-0.5 truncate text-[9px] text-slate-400">{food.serving} · P {decimal.format(food.protein)} · C {decimal.format(food.carbs)} · F {decimal.format(food.fat)}</p>
+                  </div>
+                  <p className="shrink-0 text-[10px] font-bold tabular-nums text-slate-700">{number.format(food.calories)} kcal</p>
+                  <button type="button" onClick={() => onChange(foods.filter((item) => item.id !== food.id))} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-300 transition hover:bg-rose-50 hover:text-rose-500" aria-label={`Xóa ${food.name}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              {visibleFoods.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-[11px] text-slate-400">Không tìm thấy món.</p>}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 };
@@ -559,14 +855,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onClose, onSave 
 
 export const NutritionView: React.FC = () => {
   const [nutrition, setNutrition] = useState(() => loadNutritionState());
+  const [foods, setFoods] = useState(() => loadFoodLibrary());
   const [mode, setMode] = useState<'day' | 'week'>('day');
   const [selectedDate, setSelectedDate] = useState(() => toLocalIso(new Date()));
   const [addOpen, setAddOpen] = useState(false);
+  const [foodLibraryOpen, setFoodLibraryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     saveNutritionState(nutrition);
   }, [nutrition]);
+
+  useEffect(() => {
+    saveFoodLibrary(foods);
+  }, [foods]);
 
   const profile = nutrition.profile;
   const tdee = Math.round(calculateTdee(profile) / 10) * 10;
@@ -809,14 +1111,24 @@ export const NutritionView: React.FC = () => {
                 <h2 className="text-sm font-bold text-slate-900">Bữa ăn</h2>
                 <p className="mt-0.5 text-[11px] text-slate-400">{dayEntries.length} mục đã ghi</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setAddOpen(true)}
-                className="flex h-9 items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-bold text-white shadow-xs transition hover:bg-indigo-700 active:scale-95"
-              >
-                <Plus className="h-4 w-4" />
-                Thêm
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFoodLibraryOpen(true)}
+                  className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+                >
+                  <Database className="h-3.5 w-3.5" />
+                  Kho món
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-bold text-white shadow-xs transition hover:bg-indigo-700 active:scale-95"
+                >
+                  <Plus className="h-4 w-4" />
+                  Thêm
+                </button>
+              </div>
             </div>
 
             {dayEntries.length === 0 ? (
@@ -1049,7 +1361,25 @@ export const NutritionView: React.FC = () => {
         </div>
       )}
 
-      {addOpen && <AddEntryModal date={selectedDate} onClose={() => setAddOpen(false)} onAdd={addEntry} />}
+      {addOpen && (
+        <AddEntryModal
+          date={selectedDate}
+          foods={foods}
+          onClose={() => setAddOpen(false)}
+          onManageFoods={() => {
+            setAddOpen(false);
+            setFoodLibraryOpen(true);
+          }}
+          onAdd={addEntry}
+        />
+      )}
+      {foodLibraryOpen && (
+        <FoodLibraryModal
+          foods={foods}
+          onClose={() => setFoodLibraryOpen(false)}
+          onChange={setFoods}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal
           profile={profile}

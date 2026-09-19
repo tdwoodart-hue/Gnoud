@@ -8,7 +8,7 @@ import {
   BookOpen,
   DollarSign,
   Users,
-  Sparkles,
+  PenLine,
   Calendar,
   Save,
   Plus,
@@ -225,7 +225,7 @@ export const LifeView: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-stone-100 pb-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <PenLine className="w-3.5 h-3.5 text-indigo-600" />
               Nhật ký phản chiếu cuối ngày
             </h3>
             <span className="text-[11px] text-stone-400">Ghi lại suy nghĩ & lòng biết ơn</span>

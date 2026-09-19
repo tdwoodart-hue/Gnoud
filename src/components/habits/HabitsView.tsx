@@ -8,7 +8,6 @@ import {
   Calendar,
   Clock,
   RotateCcw,
-  Sparkles,
   TrendingUp,
   X,
 } from 'lucide-react';
@@ -151,11 +150,11 @@ export const HabitsView: React.FC = () => {
       {/* Motivational insight banner */}
       <div className="p-5 bg-emerald-50/70 rounded-3xl border border-emerald-200/60 flex items-start gap-3.5 shadow-xs">
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-600">
-          <Sparkles className="w-4 h-4" />
+          <TrendingUp className="w-4 h-4" />
         </div>
         <div className="text-xs text-slate-600 leading-relaxed space-y-1">
           <span className="font-bold text-emerald-950 block text-sm">Lời khuyên duy trì phong độ</span>
-          Duy trì thói quen đi bộ và học tiếng Anh liên tiếp 14 ngày đã giúp bạn tăng khả năng tập trung buổi sáng thêm 25%. Trợ lý đã tự động chừa 30 phút buổi tối để bạn không bị các việc đột xuất chiếm mất.
+          Duy trì thói quen đi bộ và học tiếng Anh liên tiếp giúp tăng khả năng tập trung buổi sáng và củng cố kỷ luật bản thân. Hãy dành 30 phút đều đặn mỗi tối để luôn giữ vững nhịp sinh hoạt tích cực.
         </div>
       </div>
 

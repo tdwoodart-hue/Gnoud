@@ -1,6 +1,8 @@
 {
-  "name": "Lịch Sống",
+  "name": "Lịch Sống - Quản lý Công việc & Cuộc sống",
   "description": "Ứng dụng quản lý công việc, thời gian, mục tiêu, thói quen và cuộc sống cá nhân.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

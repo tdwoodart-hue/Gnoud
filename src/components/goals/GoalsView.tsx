@@ -10,7 +10,6 @@ import {
   AlertCircle,
   Calendar,
   Layers,
-  Sparkles,
   ArrowRight,
   X,
 } from 'lucide-react';

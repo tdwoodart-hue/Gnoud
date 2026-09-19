@@ -7,14 +7,34 @@ import {
   Circle,
   Clock3,
   Edit2,
+  ImageOff,
+  ImagePlus,
+  Link2,
   ListChecks,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getFormattedToday } from '../../data/mockData';
 import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
+import { fileToCompactDataUrl } from '../../services/imageAttachmentService';
+import { parseManualReferenceList } from '../../services/manualReferenceService';
+import {
+  bootstrapReferenceLibrary,
+  deleteReferenceLibraryItem,
+  getReferenceLibraryItem,
+  loadReferenceLibraryCache,
+  makeReferenceLibraryItem,
+  makeReferenceLibraryItemFromUrl,
+  ReferenceLibraryItem,
+  removeReferenceLibraryItem,
+  saveReferenceLibraryCache,
+  saveReferenceLibraryItem,
+  subscribeReferenceLibrary,
+  upsertReferenceLibraryItem,
+} from '../../services/referenceLibraryService';
 import {
   TASK_SWIPE_ACTION_WIDTH,
   TASK_SWIPE_MAX_DISTANCE,
@@ -257,14 +277,187 @@ const SwipeTodayTaskRow: React.FC<{
   );
 };
 
+interface ReferenceImagePickerProps {
+  label: string;
+  image?: ReferenceLibraryItem;
+  onPick: (label: string, file?: File) => void;
+  onLink: (label: string, url: string) => void;
+  onRemove: (label: string) => void;
+  compact?: boolean;
+}
+
+const ReferenceImagePicker: React.FC<ReferenceImagePickerProps> = ({
+  label,
+  image,
+  onPick,
+  onLink,
+  onRemove,
+  compact = false,
+}) => {
+  const box = compact ? 'h-12 w-12' : 'h-14 w-14';
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState('');
+
+  const openLinkDialog = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setLinkValue(image?.source === 'url' ? image.dataUrl : '');
+    setLinkOpen(true);
+  };
+
+  const submitLink = (event: React.FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const value = linkValue.trim();
+    if (!value) return;
+    onLink(label, value);
+    setLinkOpen(false);
+  };
+
+  return (
+    <div className={`group relative ${box} shrink-0`}>
+      {image ? (
+        <>
+          <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            <img src={image.dataUrl} alt="" className="h-full w-full object-cover" />
+            <label className="absolute inset-0 grid cursor-pointer place-items-center bg-black/0 text-[9px] font-bold text-transparent transition group-hover:bg-black/45 group-hover:text-white">
+              Đổi
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  void onPick(label, event.target.files?.[0]);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove(label);
+            }}
+            className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-white bg-slate-700 text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100"
+            aria-label={`Bỏ ảnh dùng chung của ${label}`}
+            title="Bỏ ảnh dùng chung"
+          >
+            <ImageOff className="h-2.5 w-2.5" />
+          </button>
+        </>
+      ) : (
+        <label className="grid h-full w-full cursor-pointer place-items-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600">
+          <ImagePlus className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              void onPick(label, event.target.files?.[0]);
+              event.currentTarget.value = '';
+            }}
+          />
+        </label>
+      )}
+
+      <button
+        type="button"
+        onClick={openLinkDialog}
+        className="absolute -bottom-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full border border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 active:scale-95"
+        aria-label={`Gắn ảnh bằng link cho ${label}`}
+        title="Gắn ảnh bằng link"
+      >
+        <Link2 className="h-2.5 w-2.5" />
+      </button>
+
+      {linkOpen ? (
+        <div
+          className="fixed inset-0 z-[180] grid place-items-center bg-slate-950/35 px-4 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Gắn link ảnh cho ${label}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.target === event.currentTarget) setLinkOpen(false);
+          }}
+        >
+          <form
+            onSubmit={submitLink}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-slate-900">Gắn link ảnh</h3>
+                <p className="mt-1 truncate text-xs text-slate-400">{label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkOpen(false)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200"
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">Link ảnh trực tiếp</span>
+              <input
+                autoFocus
+                type="url"
+                inputMode="url"
+                value={linkValue}
+                onChange={(event) => setLinkValue(event.target.value)}
+                placeholder="https://.../image.jpg"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+              />
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                Dán URL ảnh mở trực tiếp được trên trình duyệt, ví dụ .jpg, .png hoặc .webp.
+              </p>
+            </label>
+
+            {image?.source === 'url' ? (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                <img src={image.dataUrl} alt="Ảnh hiện tại" className="max-h-44 w-full object-contain" />
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setLinkOpen(false)}
+                className="h-11 rounded-xl bg-slate-100 text-sm font-bold text-slate-600 transition hover:bg-slate-200"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={!linkValue.trim()}
+                className="h-11 rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Gắn ảnh
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 export const TodayView: React.FC = () => {
   const {
+    user,
     tasks,
     projects,
     toggleTaskComplete,
     toggleSubtask,
     setEditingTask,
     openTaskModal,
+    addToast,
     deleteTask,
   } = useApp();
 
@@ -273,6 +466,41 @@ export const TodayView: React.FC = () => {
   );
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
+  const [referenceLibrary, setReferenceLibrary] = useState<ReferenceLibraryItem[]>(() => loadReferenceLibraryCache());
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe = () => {};
+
+    if (!user) {
+      setReferenceLibrary(loadReferenceLibraryCache());
+      return () => {};
+    }
+
+    void bootstrapReferenceLibrary(user.uid)
+      .then((items) => {
+        if (cancelled) return;
+        setReferenceLibrary(items);
+        unsubscribe = subscribeReferenceLibrary(
+          user.uid,
+          (next) => {
+            if (!cancelled) setReferenceLibrary(next);
+          },
+          () => {
+            if (!cancelled) addToast('Không thể đồng bộ kho ảnh tham khảo.', 'warning');
+          },
+        );
+      })
+      .catch((error) => {
+        console.warn('Could not load reference library:', error);
+        if (!cancelled) addToast('Đang dùng kho ảnh trên thiết bị này.', 'warning');
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [user?.uid, addToast]);
 
   const today = getFormattedToday(0);
   const allTodayTasks = useMemo(
@@ -308,6 +536,55 @@ export const TodayView: React.FC = () => {
           : selectedTask.priority === 'low'
             ? 'Nhẹ'
             : 'Thường';
+    const referenceLines = parseManualReferenceList(selectedTask.description);
+
+    const chooseReferenceImage = async (label: string, file?: File) => {
+      if (!file) return;
+      try {
+        const dataUrl = await fileToCompactDataUrl(file);
+        const item = makeReferenceLibraryItem(label, dataUrl, file.name);
+        setReferenceLibrary((current) => {
+          const next = upsertReferenceLibraryItem(current, item);
+          saveReferenceLibraryCache(next);
+          return next;
+        });
+        await saveReferenceLibraryItem(user?.uid, item);
+        addToast(`Đã nhớ ảnh cho “${item.label}”`, 'success');
+      } catch (error) {
+        addToast(error instanceof Error ? error.message : 'Không thể thêm ảnh.', 'error');
+      }
+    };
+
+    const chooseReferenceImageUrl = async (label: string, url: string) => {
+      try {
+        const item = makeReferenceLibraryItemFromUrl(label, url);
+        setReferenceLibrary((current) => {
+          const next = upsertReferenceLibraryItem(current, item);
+          saveReferenceLibraryCache(next);
+          return next;
+        });
+        await saveReferenceLibraryItem(user?.uid, item);
+        addToast(`Đã gắn link ảnh cho “${item.label}”`, 'success');
+      } catch (error) {
+        addToast(error instanceof Error ? error.message : 'Link ảnh không hợp lệ.', 'error');
+      }
+    };
+
+    const clearReferenceImage = async (label: string) => {
+      const item = getReferenceLibraryItem(referenceLibrary, label);
+      if (!item) return;
+      setReferenceLibrary((current) => {
+        const next = removeReferenceLibraryItem(current, item.id);
+        saveReferenceLibraryCache(next);
+        return next;
+      });
+      try {
+        await deleteReferenceLibraryItem(user?.uid, item.id);
+      } catch (error) {
+        console.warn('Could not delete shared reference image:', error);
+        addToast('Ảnh đã bỏ trên máy này nhưng chưa đồng bộ được lên cloud.', 'warning');
+      }
+    };
 
     return (
       <div data-testid="task-detail-page" className="fixed inset-0 z-[100] overflow-y-auto bg-[#fafbfc] text-slate-900">
@@ -367,7 +644,41 @@ export const TodayView: React.FC = () => {
             </div>
 
             {selectedTask.description ? (
-              <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-slate-600">{selectedTask.description}</p>
+              referenceLines.length > 0 ? (
+                <div className="mt-5">
+                  <div className="mb-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Các bước / tham khảo</p>
+                  </div>
+                  <div className="space-y-2.5">
+                    {referenceLines.map((reference, index) => {
+                      const image = getReferenceLibraryItem(referenceLibrary, reference.label);
+                      return (
+                        <div
+                          key={reference.id}
+                          className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/35 p-3"
+                        >
+                          <ReferenceImagePicker
+                            label={reference.label}
+                            image={image}
+                            onPick={chooseReferenceImage}
+                            onLink={chooseReferenceImageUrl}
+                            onRemove={clearReferenceImage}
+                          />
+                          <span className="w-5 shrink-0 text-[11px] font-bold tabular-nums text-slate-400">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words text-sm font-semibold leading-5 text-slate-800">{reference.label}</p>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-slate-600">{selectedTask.description}</p>
+              )
             ) : null}
 
             <button
@@ -413,35 +724,55 @@ export const TodayView: React.FC = () => {
 
             {selectedTask.subtasks.length > 0 ? (
               <div className="space-y-2.5">
-                {selectedTask.subtasks.map((subtask, index) => (
-                  <button
-                    key={subtask.id}
-                    type="button"
-                    onClick={() => toggleSubtask(selectedTask.id, subtask.id)}
-                    className={`flex min-h-14 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition ${
-                      subtask.completed
-                        ? 'border border-transparent bg-slate-50 text-slate-400'
-                        : 'border border-slate-200/70 bg-white text-slate-800 shadow-xs hover:border-slate-300'
-                    }`}
-                  >
-                    {subtask.completed ? (
-                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-                    ) : (
-                      <Circle className="h-5 w-5 shrink-0 text-slate-300" />
-                    )}
-                    <span className="w-5 shrink-0 text-[11px] font-bold tabular-nums text-slate-400">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span className={`min-w-0 flex-1 text-sm font-medium ${subtask.completed ? 'line-through' : ''}`}>
-                      {subtask.title}
-                    </span>
-                    {subtask.estimatedMinutes ? (
-                      <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-                        {subtask.estimatedMinutes}p
+                {selectedTask.subtasks.map((subtask, index) => {
+                  const image = getReferenceLibraryItem(referenceLibrary, subtask.title);
+                  return (
+                    <div
+                      key={subtask.id}
+                      className={`flex min-h-16 w-full items-center gap-3 rounded-2xl px-3 py-2.5 transition ${
+                        subtask.completed
+                          ? 'border border-transparent bg-slate-50 text-slate-400'
+                          : 'border border-slate-200/70 bg-white text-slate-800 shadow-xs hover:border-slate-300'
+                      }`}
+                    >
+                      <ReferenceImagePicker
+                        compact
+                        label={subtask.title}
+                        image={image}
+                        onPick={chooseReferenceImage}
+                        onLink={chooseReferenceImageUrl}
+                        onRemove={clearReferenceImage}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleSubtask(selectedTask.id, subtask.id)}
+                        className="shrink-0"
+                        aria-label={subtask.completed ? 'Đánh dấu chưa hoàn thành' : 'Hoàn thành bước'}
+                      >
+                        {subtask.completed ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-slate-300" />
+                        )}
+                      </button>
+                      <span className="w-5 shrink-0 text-[11px] font-bold tabular-nums text-slate-400">
+                        {String(index + 1).padStart(2, '0')}
                       </span>
-                    ) : null}
-                  </button>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => toggleSubtask(selectedTask.id, subtask.id)}
+                        className={`min-w-0 flex-1 text-left text-sm font-medium ${subtask.completed ? 'line-through' : ''}`}
+                      >
+                        <span className="block break-words">{subtask.title}</span>
+                      </button>
+                      {subtask.estimatedMinutes ? (
+                        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+                          {subtask.estimatedMinutes}p
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-8 text-center">

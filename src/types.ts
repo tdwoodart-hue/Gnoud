@@ -15,10 +15,17 @@ export interface Subtask {
   estimatedMinutes?: number;
 }
 
+export interface TaskReferenceImage {
+  id: string;
+  dataUrl: string;
+  fileName?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
   description?: string;
+  referenceImages?: TaskReferenceImage[];
   category: TaskCategory;
   projectId?: string;
   status: TaskStatus;

@@ -145,6 +145,10 @@ export function getEntriesForDate(entries: NutritionEntry[], date: string): Nutr
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+export function removeNutritionEntry(entries: NutritionEntry[], id: string): NutritionEntry[] {
+  return entries.filter((entry) => entry.id !== id);
+}
+
 export function getDailyMetric(metrics: DailyMetric[], date: string): DailyMetric | undefined {
   return metrics.find((metric) => metric.date === date);
 }

@@ -9,6 +9,7 @@ import {
   getTotals,
   getWeekDates,
   recommendedTargets,
+  removeNutritionEntry,
   toLocalIso,
   upsertDailyMetric,
 } from '../src/services/nutritionService';
@@ -64,3 +65,25 @@ test('previous weight uses the latest earlier logged date', () => {
   metrics = upsertDailyMetric(metrics, '2026-09-19', { weightKg: 65.5 });
   assert.equal(getPreviousWeight(metrics, '2026-09-19')?.weightKg, 65.8);
 });
+
+test('removing one food entry subtracts exactly that entry from day totals', () => {
+  const entries = [
+    {
+      id: 'egg', date: '2026-09-19', name: 'Trứng gà luộc', meal: 'breakfast' as const, createdAt: '1',
+      calories: 78, protein: 6.3, carbs: 0.6, fat: 5.3,
+    },
+    {
+      id: 'banana', date: '2026-09-19', name: 'Chuối', meal: 'breakfast' as const, createdAt: '2',
+      calories: 89, protein: 1.1, carbs: 22.8, fat: 0.3,
+    },
+  ];
+
+  const remaining = removeNutritionEntry(entries, 'egg');
+  assert.deepEqual(getTotals(remaining), {
+    calories: 89,
+    protein: 1.1,
+    carbs: 22.8,
+    fat: 0.3,
+  });
+});
+

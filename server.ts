@@ -3,12 +3,14 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createNotificationRouter, startNotificationScheduler } from "./notificationServer";
+import { activityChatHandler } from "./activityTutorServer";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 app.use('/api/notifications', createNotificationRouter());
+app.post('/api/activity/chat', activityChatHandler);
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

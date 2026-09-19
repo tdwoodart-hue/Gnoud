@@ -1,0 +1,12 @@
+{
+  "tasks": [
+    {
+      "title": "Đức A1 · Hội thoại 15 phút",
+      "plannedDate": "2026-09-19",
+      "estimatedMinutes": 15,
+      "priority": "medium",
+      "description": "Luyện giới thiệu bản thân và hỏi thông tin cơ bản.",
+      "notes": "@activity {\"type\":\"language_chat\",\"language\":\"de-DE\",\"languageName\":\"Tiếng Đức\",\"level\":\"A1\",\"durationMinutes\":15,\"autoSpeak\":true,\"topic\":\"Giới thiệu bản thân\",\"goal\":\"Nói được tên, tuổi, nơi sống và hỏi lại người đối diện\",\"correctionMode\":\"gentle\",\"personaName\":\"Mia\"}"
+    }
+  ]
+}

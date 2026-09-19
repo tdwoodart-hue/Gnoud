@@ -1,4 +1,4 @@
-/**
+/** 
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -17,6 +17,7 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { CommandMenuModal } from './components/common/CommandMenuModal';
 import { MorningPlanningModal } from './components/flows/MorningPlanningModal';
 import { EveningReviewModal } from './components/flows/EveningReviewModal';
+import { DailyActivityDock } from './components/activities/DailyActivityDock';
 import {
   ACCOUNT_DATA_REFRESH_EVENT,
   AccountDataSyncBridge,
@@ -40,7 +41,12 @@ const MainContent: React.FC = () => {
 
   return (
     <>
-      {activeTab === 'today' && <TodayView />}
+      {activeTab === 'today' && (
+        <>
+          <DailyActivityDock />
+          <TodayView />
+        </>
+      )}
       {activeTab === 'tasks' && <TasksView />}
       {activeTab === 'nutrition' && <NutritionView key={`nutrition-${dataRevision}`} />}
       {activeTab === 'personal' && <PersonalView />}

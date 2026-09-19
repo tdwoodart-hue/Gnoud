@@ -52,6 +52,16 @@ export type SwipeReleaseAction = TaskSwipeReleaseAction;
 export const resolveSwipeRelease = resolveTaskSwipeRelease;
 export const shouldStartSwipe = shouldStartTaskSwipe;
 
+export const getVisibleTaskNotes = (notes?: string): string =>
+  (notes || '')
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !trimmed.startsWith('@activity ') && !trimmed.startsWith('@activity_result ');
+    })
+    .join('\n')
+    .trim();
+
 const SwipeTodayTaskRow: React.FC<{
   task: Task;
   completedSubtasks: number;
@@ -459,6 +469,7 @@ export const TodayView: React.FC = () => {
     openTaskModal,
     addToast,
     deleteTask,
+    updateTask,
   } = useApp();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() =>
@@ -467,6 +478,7 @@ export const TodayView: React.FC = () => {
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceLibraryItem[]>(() => loadReferenceLibraryCache());
+  const [reflectionDrafts, setReflectionDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -537,6 +549,21 @@ export const TodayView: React.FC = () => {
             ? 'Nhẹ'
             : 'Thường';
     const referenceLines = parseManualReferenceList(selectedTask.description);
+    const visibleNotes = getVisibleTaskNotes(selectedTask.notes);
+    const reflectionDraft = reflectionDrafts[selectedTask.id] ?? selectedTask.reflection ?? '';
+    const reflectionChanged = reflectionDraft !== (selectedTask.reflection || '');
+    const isDailyDiscoveryPrompt = /hôm nay có gì mới/i.test(visibleNotes);
+
+    const saveReflection = () => {
+      const cleaned = reflectionDraft.trim();
+      updateTask(selectedTask.id, { reflection: cleaned || undefined });
+      setReflectionDrafts((current) => {
+        const next = { ...current };
+        delete next[selectedTask.id];
+        return next;
+      });
+      addToast(cleaned ? 'Đã lưu ghi chú hôm nay' : 'Đã xóa ghi chú hôm nay', 'success');
+    };
 
     const chooseReferenceImage = async (label: string, file?: File) => {
       if (!file) return;
@@ -789,12 +816,64 @@ export const TodayView: React.FC = () => {
             )}
           </section>
 
-          {selectedTask.notes ? (
-            <section className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-xs">
-              <h2 className="text-sm font-bold text-slate-900">Ghi chú</h2>
-              <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-600">{selectedTask.notes}</p>
-            </section>
-          ) : null}
+          <section className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-xs">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Ghi chú & kết quả</h2>
+                <p className="mt-1 text-xs text-slate-400">Ghi lại ngay trong task, dữ liệu sẽ đi cùng công việc.</p>
+              </div>
+              {selectedTask.reflection && !reflectionChanged ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                  Đã lưu
+                </span>
+              ) : null}
+            </div>
+
+            {visibleNotes ? (
+              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Gợi ý</p>
+                <p className="mt-1.5 whitespace-pre-line break-words text-sm leading-relaxed text-slate-600">
+                  {visibleNotes}
+                </p>
+              </div>
+            ) : null}
+
+            <label className="mt-4 block">
+              <span className="mb-2 block text-xs font-bold text-slate-700">
+                {isDailyDiscoveryPrompt ? 'Hôm nay có gì mới?' : 'Ghi lại điều muốn nhớ'}
+              </span>
+              <textarea
+                rows={4}
+                value={reflectionDraft}
+                onChange={(event) =>
+                  setReflectionDrafts((current) => ({
+                    ...current,
+                    [selectedTask.id]: event.target.value,
+                  }))
+                }
+                placeholder={
+                  isDailyDiscoveryPrompt
+                    ? 'Ví dụ: Mình phát hiện con đường này có một quán nhỏ khá hay...'
+                    : 'Viết nhanh vài dòng sau khi hoàn thành việc này...'
+                }
+                className="min-h-28 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-50"
+              />
+            </label>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span className="text-[10px] font-medium text-slate-400">
+                {reflectionDraft.trim().length} ký tự
+              </span>
+              <button
+                type="button"
+                onClick={saveReflection}
+                disabled={!reflectionChanged}
+                className="h-10 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              >
+                Lưu ghi chú
+              </button>
+            </div>
+          </section>
         </main>
       </div>
     );

@@ -37,6 +37,7 @@ export interface Task {
   actualMinutes: number;
   subtasks: Subtask[];
   notes?: string;
+  reflection?: string;
   tags: string[];
   reminder?: string;
   recurrence?: 'none' | 'daily' | 'weekly' | 'weekdays' | 'monthly';

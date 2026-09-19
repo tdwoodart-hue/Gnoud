@@ -17,17 +17,15 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { CommandMenuModal } from './components/common/CommandMenuModal';
 import { MorningPlanningModal } from './components/flows/MorningPlanningModal';
 import { EveningReviewModal } from './components/flows/EveningReviewModal';
-import { useNutritionCloudSync } from './services/nutritionCloudSync';
 
 const MainContent: React.FC = () => {
-  const { activeTab, user } = useApp();
-  const nutritionSyncVersion = useNutritionCloudSync(user?.uid ?? null);
+  const { activeTab } = useApp();
 
   return (
     <>
       {activeTab === 'today' && <TodayView />}
       {activeTab === 'tasks' && <TasksView />}
-      {activeTab === 'nutrition' && <NutritionView key={`nutrition-${nutritionSyncVersion}`} />}
+      {activeTab === 'nutrition' && <NutritionView />}
       {activeTab === 'personal' && <PersonalView />}
       {activeTab === 'reports' && <ReportsView />}
     </>

@@ -1,129 +1,56 @@
-export interface FoodItem {
+export interface FoodVariant {
   id: string;
-  name: string;
-  serving: string;
+  label: string;
+  amount: number;
+  unit: string;
+  grams?: number;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
-  category?: string;
-  source?: 'starter' | 'imported' | 'custom';
 }
 
-const STORAGE_KEY = 'lich_song_food_library_v1';
+export interface FoodPortion {
+  id: string;
+  label: string;
+  amount: number;
+  unit: string;
+  /** Multiplier against one base variant serving. Example: 1 medium banana = 1.18 x the 100 g base serving. */
+  multiplier: number;
+}
 
-export const STARTER_FOODS: FoodItem[] = [
-  {
-    id: 'starter-boiled-egg',
-    name: 'Trứng gà luộc',
-    serving: '1 quả (~50 g)',
-    calories: 78,
-    protein: 6.3,
-    carbs: 0.6,
-    fat: 5.3,
-    category: 'Trứng',
-    source: 'starter',
-  },
-  {
-    id: 'starter-fried-egg',
-    name: 'Trứng gà rán',
-    serving: '1 quả',
-    calories: 90,
-    protein: 6.3,
-    carbs: 0.4,
-    fat: 7,
-    category: 'Trứng',
-    source: 'starter',
-  },
-  {
-    id: 'starter-banana',
-    name: 'Chuối',
-    serving: '100 g',
-    calories: 89,
-    protein: 1.1,
-    carbs: 22.8,
-    fat: 0.3,
-    category: 'Trái cây',
-    source: 'starter',
-  },
-  {
-    id: 'starter-apple',
-    name: 'Táo',
-    serving: '100 g',
-    calories: 52,
-    protein: 0.3,
-    carbs: 13.8,
-    fat: 0.2,
-    category: 'Trái cây',
-    source: 'starter',
-  },
-  {
-    id: 'starter-rice',
-    name: 'Cơm trắng chín',
-    serving: '100 g',
-    calories: 130,
-    protein: 2.7,
-    carbs: 28.2,
-    fat: 0.3,
-    category: 'Tinh bột',
-    source: 'starter',
-  },
-  {
-    id: 'starter-chicken-breast',
-    name: 'Ức gà chín',
-    serving: '100 g',
-    calories: 165,
-    protein: 31,
-    carbs: 0,
-    fat: 3.6,
-    category: 'Đạm',
-    source: 'starter',
-  },
-  {
-    id: 'starter-sweet-potato',
-    name: 'Khoai lang chín',
-    serving: '100 g',
-    calories: 86,
-    protein: 1.6,
-    carbs: 20.1,
-    fat: 0.1,
-    category: 'Tinh bột',
-    source: 'starter',
-  },
-  {
-    id: 'starter-guava',
-    name: 'Ổi',
-    serving: '100 g',
-    calories: 68,
-    protein: 2.6,
-    carbs: 14.3,
-    fat: 1,
-    category: 'Trái cây',
-    source: 'starter',
-  },
-  {
-    id: 'starter-pepper-beef',
-    name: 'Bò sốt tiêu (ước tính)',
-    serving: '100 g',
-    calories: 250,
-    protein: 24,
-    carbs: 5,
-    fat: 14.5,
-    category: 'Đạm',
-    source: 'starter',
-  },
-  {
-    id: 'starter-probi-65',
-    name: 'Probi',
-    serving: '65 ml',
-    calories: 41,
-    protein: 0.7,
-    carbs: 9.6,
-    fat: 0,
-    category: 'Sữa chua uống',
-    source: 'starter',
-  },
-];
+export interface FoodItem {
+  id: string;
+  name: string;
+  category?: string;
+  variants: FoodVariant[];
+  portions?: FoodPortion[];
+  source?: 'file' | 'imported' | 'custom';
+}
+
+export interface ScaledFoodNutrition {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+const STORAGE_KEY = 'lich_song_food_library_v2';
+const LEGACY_STORAGE_KEY = 'lich_song_food_library_v1';
+export const DEFAULT_FOOD_FILE_URL = '/data/foods.json';
+
+const normalizeKey = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const slug = (value: string) =>
+  normalizeKey(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48) || 'item';
 
 const toNumber = (value: unknown): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
@@ -133,80 +60,214 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : NaN;
 };
 
-const normalizeKey = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
 const rowValue = (row: Record<string, unknown>, aliases: string[]) => {
-  const byNormalizedKey = new Map(
+  const normalized = new Map(
     Object.entries(row).map(([key, value]) => [normalizeKey(key).replace(/[ _-]/g, ''), value]),
   );
   for (const alias of aliases) {
-    const found = byNormalizedKey.get(normalizeKey(alias).replace(/[ _-]/g, ''));
+    const found = normalized.get(normalizeKey(alias).replace(/[ _-]/g, ''));
     if (found !== undefined) return found;
   }
   return undefined;
 };
 
-function makeFoodId(name: string, serving: string): string {
-  const base = normalizeKey(`${name}-${serving}`)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 46);
-  return `food-${base || 'item'}-${Math.random().toString(36).slice(2, 7)}`;
-}
 
-export function normalizeFoodRow(
-  row: Record<string, unknown>,
-  source: FoodItem['source'] = 'imported',
-): FoodItem | null {
-  const name = String(rowValue(row, ['name', 'ten', 'tên', 'food', 'mon', 'món']) ?? '').trim();
-  if (!name) return null;
+function parseLegacyServing(raw: unknown): { amount: number; unit: string; grams?: number } {
+  const text = String(raw ?? '').trim();
+  if (!text) return { amount: 1, unit: 'khẩu phần' };
 
-  const serving = String(
-    rowValue(row, ['serving', 'portion', 'khauphan', 'khẩu phần', 'donvi', 'đơn vị']) ?? '1 khẩu phần',
-  ).trim();
-  const calories = toNumber(rowValue(row, ['calories', 'calorie', 'kcal', 'nangluong', 'năng lượng']));
-  const protein = toNumber(rowValue(row, ['protein', 'dam', 'đạm']));
-  const carbs = toNumber(rowValue(row, ['carbs', 'carb', 'carbohydrate', 'tinhbot', 'tinh bột']));
-  const fat = toNumber(rowValue(row, ['fat', 'chatbeo', 'chất béo']));
-
-  if (![calories, protein, carbs, fat].every((value) => Number.isFinite(value) && value >= 0)) {
-    return null;
+  const direct = text.match(/^([0-9]+(?:[.,][0-9]+)?)\s*([^\d(]+?)(?:\s*\(.*?([0-9]+(?:[.,][0-9]+)?)\s*g.*?\))?$/i);
+  if (direct) {
+    const amount = toNumber(direct[1]);
+    const unit = direct[2].trim() || 'khẩu phần';
+    const grams = direct[3] ? toNumber(direct[3]) : undefined;
+    return {
+      amount: Number.isFinite(amount) && amount > 0 ? amount : 1,
+      unit,
+      ...(grams && Number.isFinite(grams) ? { grams } : {}),
+    };
   }
 
-  const categoryRaw = rowValue(row, ['category', 'group', 'nhom', 'nhóm']);
-  const category = categoryRaw === undefined ? undefined : String(categoryRaw).trim() || undefined;
-  const idRaw = rowValue(row, ['id']);
-  const id = idRaw ? String(idRaw).trim() : makeFoodId(name, serving);
+  const gramsOnly = text.match(/^([0-9]+(?:[.,][0-9]+)?)\s*g$/i);
+  if (gramsOnly) return { amount: toNumber(gramsOnly[1]), unit: 'g', grams: toNumber(gramsOnly[1]) };
+
+  return { amount: 1, unit: text };
+}
+
+function normalizeVariant(
+  raw: Record<string, unknown>,
+  fallbackId: string,
+  fallbackLabel = 'Mặc định',
+): FoodVariant | null {
+  const calories = toNumber(rowValue(raw, ['calories', 'calorie', 'kcal', 'nangluong', 'năng lượng']));
+  const protein = toNumber(rowValue(raw, ['protein', 'dam', 'đạm']));
+  const carbs = toNumber(rowValue(raw, ['carbs', 'carb', 'carbohydrate', 'tinhbot', 'tinh bột']));
+  const fat = toNumber(rowValue(raw, ['fat', 'chatbeo', 'chất béo']));
+  if (![calories, protein, carbs, fat].every((value) => Number.isFinite(value) && value >= 0)) return null;
+
+  const legacyServing = rowValue(raw, ['serving', 'portion', 'khauphan', 'khẩu phần', 'donvi', 'đơn vị']);
+  const legacy = parseLegacyServing(legacyServing);
+  const amountRaw = rowValue(raw, ['amount', 'baseamount', 'quantity', 'soluong', 'số lượng']);
+  const unitRaw = rowValue(raw, ['unit', 'donvitinh', 'đơn vị tính']);
+  const gramsRaw = rowValue(raw, ['grams', 'gram', 'weightgrams', 'khoiluongg', 'khối lượng g']);
+  const labelRaw = rowValue(raw, ['variant', 'method', 'preparation', 'cachchebien', 'cách chế biến', 'label']);
+  const idRaw = rowValue(raw, ['variantid', 'variant_id', 'id']);
+
+  const amount = toNumber(amountRaw);
+  const grams = toNumber(gramsRaw);
+  const label = String(labelRaw ?? fallbackLabel).trim() || fallbackLabel;
 
   return {
-    id,
-    name,
-    serving: serving || '1 khẩu phần',
+    id: String(idRaw ?? `${fallbackId}-${slug(label)}`).trim(),
+    label,
+    amount: Number.isFinite(amount) && amount > 0 ? amount : legacy.amount,
+    unit: String(unitRaw ?? legacy.unit).trim() || legacy.unit,
+    ...(Number.isFinite(grams) && grams > 0
+      ? { grams }
+      : legacy.grams && legacy.grams > 0
+        ? { grams: legacy.grams }
+        : {}),
     calories,
     protein,
     carbs,
     fat,
-    category,
-    source,
   };
+}
+
+function normalizePortions(raw: unknown, foodId: string): FoodPortion[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const portions = raw
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .map((item, index) => {
+      const amount = toNumber(rowValue(item, ['amount', 'quantity', 'soluong', 'số lượng']));
+      const multiplier = toNumber(rowValue(item, ['multiplier', 'factor', 'heso', 'hệ số']));
+      const unit = String(rowValue(item, ['unit', 'donvi', 'đơn vị']) ?? '').trim();
+      const label = String(rowValue(item, ['label', 'name', 'ten', 'tên']) ?? '').trim();
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(multiplier) || multiplier <= 0 || !unit) {
+        return null;
+      }
+      return {
+        id: String(rowValue(item, ['id']) ?? `${foodId}-portion-${index + 1}`).trim(),
+        label: label || `${amount} ${unit}`,
+        amount,
+        unit,
+        multiplier,
+      } satisfies FoodPortion;
+    })
+    .filter((item): item is FoodPortion => Boolean(item));
+  return portions.length ? portions : undefined;
+}
+
+function normalizeGroupedFood(raw: Record<string, unknown>, source: FoodItem['source']): FoodItem | null {
+  const name = String(rowValue(raw, ['name', 'ten', 'tên', 'food', 'mon', 'món']) ?? '').trim();
+  if (!name) return null;
+  const id = String(rowValue(raw, ['id']) ?? `food-${slug(name)}`).trim();
+  const categoryValue = rowValue(raw, ['category', 'group', 'nhom', 'nhóm']);
+  const category = categoryValue === undefined ? undefined : String(categoryValue).trim() || undefined;
+  const variantsRaw = raw.variants;
+
+  const portions = normalizePortions(raw.portions, id);
+
+  if (!Array.isArray(variantsRaw)) {
+    const legacyVariant = normalizeVariant(raw, id, 'Mặc định');
+    return legacyVariant ? { id, name, category, variants: [legacyVariant], portions, source } : null;
+  }
+
+  const variants = variantsRaw
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .map((item, index) => normalizeVariant(item, id, index === 0 ? 'Mặc định' : `Cách ${index + 1}`))
+    .filter((item): item is FoodVariant => Boolean(item));
+
+  if (!variants.length) return null;
+  return { id, name, category, variants, portions, source };
+}
+
+interface FlatFoodRow {
+  name: string;
+  category?: string;
+  variant: FoodVariant;
+}
+
+const PREPARATION_SUFFIXES = [
+  'áp chảo',
+  'ốp la',
+  'luộc',
+  'rán',
+  'chiên',
+  'nướng',
+  'hấp',
+  'xào',
+  'kho',
+  'tươi',
+  'chín',
+  'sống',
+];
+
+function splitLegacyPreparationName(name: string): { name: string; variant?: string } {
+  const normalizedName = normalizeKey(name);
+  for (const suffix of PREPARATION_SUFFIXES) {
+    if (!normalizedName.endsWith(` ${normalizeKey(suffix)}`)) continue;
+    const base = name.slice(0, name.length - suffix.length).trim();
+    if (!base) break;
+    return {
+      name: base,
+      variant: suffix.charAt(0).toUpperCase() + suffix.slice(1),
+    };
+  }
+  return { name };
+}
+
+function normalizeFlatRow(raw: Record<string, unknown>, source: FoodItem['source']): FlatFoodRow | null {
+  const rawName = String(rowValue(raw, ['name', 'ten', 'tên', 'food', 'mon', 'món']) ?? '').trim();
+  if (!rawName) return null;
+
+  const explicitVariant = rowValue(raw, ['variant', 'method', 'preparation', 'cachchebien', 'cách chế biến', 'label']);
+  const split = explicitVariant === undefined ? splitLegacyPreparationName(rawName) : { name: rawName };
+  const name = split.name;
+  const foodId = String(rowValue(raw, ['foodid', 'food_id']) ?? `food-${slug(name)}`).trim();
+  const categoryValue = rowValue(raw, ['category', 'group', 'nhom', 'nhóm']);
+  const variant = normalizeVariant(raw, foodId, split.variant || 'Mặc định');
+  if (!variant) return null;
+  return {
+    name,
+    category: categoryValue === undefined ? undefined : String(categoryValue).trim() || undefined,
+    variant,
+  };
+}
+
+function rowsToFoods(rows: FlatFoodRow[], source: FoodItem['source']): FoodItem[] {
+  const map = new Map<string, FoodItem>();
+
+  rows.forEach((row) => {
+    const key = normalizeKey(row.name);
+    const current = map.get(key) || {
+      id: `food-${slug(row.name)}`,
+      name: row.name,
+      category: row.category,
+      variants: [],
+      source,
+    };
+    const variantKey = normalizeKey(row.variant.label);
+    const existingIndex = current.variants.findIndex((variant) => normalizeKey(variant.label) === variantKey);
+    if (existingIndex >= 0) current.variants[existingIndex] = row.variant;
+    else current.variants.push(row.variant);
+    if (row.category) current.category = row.category;
+    map.set(key, current);
+  });
+
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
 function parseCsvLine(line: string, delimiter: string): string[] {
   const cells: string[] = [];
   let current = '';
   let quoted = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
     if (char === '"') {
-      if (quoted && line[i + 1] === '"') {
+      if (quoted && line[index + 1] === '"') {
         current += '"';
-        i += 1;
+        index += 1;
       } else {
         quoted = !quoted;
       }
@@ -231,17 +292,19 @@ export function parseFoodCsv(text: string): FoodItem[] {
 
   const delimiter = lines[0].includes(';') ? ';' : ',';
   const headers = parseCsvLine(lines[0], delimiter);
-  return lines
+  const rows = lines
     .slice(1)
     .map((line) => {
       const cells = parseCsvLine(line, delimiter);
-      const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? '']));
-      return normalizeFoodRow(row, 'imported');
+      return Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? '']));
     })
-    .filter((item): item is FoodItem => Boolean(item));
+    .map((row) => normalizeFlatRow(row, 'imported'))
+    .filter((item): item is FlatFoodRow => Boolean(item));
+
+  return rowsToFoods(rows, 'imported');
 }
 
-export function parseFoodJson(text: string): FoodItem[] {
+export function parseFoodJson(text: string, source: FoodItem['source'] = 'file'): FoodItem[] {
   const parsed = JSON.parse(text) as unknown;
   const rows = Array.isArray(parsed)
     ? parsed
@@ -249,70 +312,196 @@ export function parseFoodJson(text: string): FoodItem[] {
       ? (parsed as { foods: unknown[] }).foods
       : [];
 
-  return rows
-    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
-    .map((row) => normalizeFoodRow(row, 'imported'))
+  const objectRows = rows.filter(
+    (row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row),
+  );
+
+  const grouped = objectRows.filter((row) => Array.isArray(row.variants));
+  const flat = objectRows.filter((row) => !Array.isArray(row.variants));
+  const groupedFoods = grouped
+    .map((row) => normalizeGroupedFood(row, source))
     .filter((item): item is FoodItem => Boolean(item));
+  const flatFoods = rowsToFoods(
+    flat.map((row) => normalizeFlatRow(row, source)).filter((item): item is FlatFoodRow => Boolean(item)),
+    source,
+  );
+
+  return mergeFoods(groupedFoods, flatFoods);
 }
 
 export function parseFoodFile(text: string, fileName = ''): FoodItem[] {
   const lower = fileName.toLowerCase();
-  if (lower.endsWith('.json')) return parseFoodJson(text);
+  if (lower.endsWith('.json')) return parseFoodJson(text, 'imported');
   if (lower.endsWith('.csv')) return parseFoodCsv(text);
-
   const trimmed = text.trim();
-  if (trimmed.startsWith('[') || trimmed.startsWith('{')) return parseFoodJson(text);
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) return parseFoodJson(text, 'imported');
   return parseFoodCsv(text);
 }
 
 export function mergeFoods(existing: FoodItem[], incoming: FoodItem[]): FoodItem[] {
-  const keyOf = (food: FoodItem) => `${normalizeKey(food.name)}|${normalizeKey(food.serving)}`;
-  const map = new Map(existing.map((food) => [keyOf(food), food]));
-  incoming.forEach((food) => map.set(keyOf(food), food));
+  const map = new Map(existing.map((food) => [normalizeKey(food.name), { ...food, variants: [...food.variants] }]));
+  incoming.forEach((food) => {
+    const key = normalizeKey(food.name);
+    const current = map.get(key);
+    if (!current) {
+      map.set(key, { ...food, variants: [...food.variants] });
+      return;
+    }
+    const variants = new Map(current.variants.map((variant) => [normalizeKey(variant.label), variant]));
+    food.variants.forEach((variant) => variants.set(normalizeKey(variant.label), variant));
+    map.set(key, {
+      ...current,
+      ...food,
+      id: current.id || food.id,
+      category: food.category || current.category,
+      variants: [...variants.values()],
+    });
+  });
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
+function migrateLegacy(value: unknown): FoodItem[] {
+  if (!Array.isArray(value)) return [];
+  const rows = value
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+    .map((row) => normalizeFlatRow(row, 'imported'))
+    .filter((item): item is FlatFoodRow => Boolean(item));
+  return rowsToFoods(rows, 'imported');
+}
+
 export function loadFoodLibrary(): FoodItem[] {
-  if (typeof window === 'undefined') return STARTER_FOODS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return STARTER_FOODS;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return STARTER_FOODS;
-    const savedFoods = parsed
-      .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
-      .map((row) => normalizeFoodRow(row, (row.source as FoodItem['source']) || 'custom'))
-      .filter((item): item is FoodItem => Boolean(item));
-    return mergeFoods(STARTER_FOODS, savedFoods);
+    if (raw) return parseFoodJson(raw, 'imported');
+
+    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacyRaw) return [];
+    const migrated = migrateLegacy(JSON.parse(legacyRaw));
+    if (migrated.length) saveFoodLibrary(migrated);
+    return migrated;
   } catch (error) {
     console.warn('Could not load food library:', error);
-    return STARTER_FOODS;
+    return [];
+  }
+}
+
+export async function loadDefaultFoodLibrary(): Promise<FoodItem[]> {
+  if (typeof fetch === 'undefined') return [];
+  try {
+    const response = await fetch(DEFAULT_FOOD_FILE_URL, { cache: 'no-store' });
+    if (!response.ok) return [];
+    return parseFoodJson(await response.text(), 'file');
+  } catch (error) {
+    console.warn('Could not load default food data file:', error);
+    return [];
   }
 }
 
 export function saveFoodLibrary(foods: FoodItem[]): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(foods));
+    window.localStorage.setItem(STORAGE_KEY, foodLibraryToJson(foods));
   } catch (error) {
     console.warn('Could not save food library:', error);
   }
 }
 
-export function makeCustomFood(input: Omit<FoodItem, 'id' | 'source'>): FoodItem {
-  return {
-    ...input,
-    id: makeFoodId(input.name, input.serving),
-    source: 'custom',
-  };
+export function clearFoodLibraryOverride(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(STORAGE_KEY);
 }
 
 export function foodLibraryToJson(foods: FoodItem[]): string {
-  return JSON.stringify({ version: 1, foods }, null, 2);
+  return JSON.stringify(
+    {
+      version: 2,
+      updatedAt: new Date().toISOString(),
+      foods: foods.map(({ source: _source, ...food }) => food),
+    },
+    null,
+    2,
+  );
+}
+
+export function getFoodVariant(food: FoodItem, variantId?: string): FoodVariant {
+  return food.variants.find((variant) => variant.id === variantId) || food.variants[0];
+}
+
+export function getFoodPortions(food: FoodItem, variant: FoodVariant): FoodPortion[] {
+  if (food.portions?.length) return food.portions;
+
+  // Compatibility for libraries saved before portion options existed.
+  // Nutrition remains based on the food's 100 g data; these only add convenient real-life units.
+  const key = normalizeKey(food.name);
+  const isHundredGramBase = variant.unit.toLowerCase() === 'g' && Math.abs(variant.amount - 100) < 0.001;
+  if (isHundredGramBase && (key === 'chuoi' || key.startsWith('chuoi '))) {
+    return [
+      { id: `${food.id}-medium-piece`, label: '1 quả vừa', amount: 1, unit: 'quả', multiplier: 1.18 },
+      { id: `${variant.id}-base-portion`, label: 'Theo gram', amount: 100, unit: 'g', multiplier: 1 },
+    ];
+  }
+  if (isHundredGramBase && (key === 'tao' || key.startsWith('tao '))) {
+    return [
+      { id: `${food.id}-medium-piece`, label: '1 quả vừa', amount: 1, unit: 'quả', multiplier: 1.82 },
+      { id: `${variant.id}-base-portion`, label: 'Theo gram', amount: 100, unit: 'g', multiplier: 1 },
+    ];
+  }
+
+  return [{
+    id: `${variant.id}-base-portion`,
+    label: formatFoodServing(variant),
+    amount: variant.amount,
+    unit: variant.unit,
+    multiplier: 1,
+  }];
+}
+
+export function getFoodPortion(food: FoodItem, variant: FoodVariant, portionId?: string): FoodPortion {
+  const portions = getFoodPortions(food, variant);
+  return portions.find((portion) => portion.id === portionId) || portions[0];
+}
+
+export function scaleFoodPortion(
+  variant: FoodVariant,
+  portion: FoodPortion,
+  amount: number,
+): ScaledFoodNutrition {
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : portion.amount;
+  const factor = (safeAmount / portion.amount) * portion.multiplier;
+  return {
+    calories: variant.calories * factor,
+    protein: variant.protein * factor,
+    carbs: variant.carbs * factor,
+    fat: variant.fat * factor,
+  };
+}
+
+export function formatPortionAmount(amount: number, unit: string): string {
+  const formatted = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 10) / 10).replace('.', ',');
+  return `${formatted} ${unit}`;
+}
+
+export function scaleFoodVariant(variant: FoodVariant, amount: number): ScaledFoodNutrition {
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : variant.amount;
+  const factor = safeAmount / variant.amount;
+  return {
+    calories: variant.calories * factor,
+    protein: variant.protein * factor,
+    carbs: variant.carbs * factor,
+    fat: variant.fat * factor,
+  };
+}
+
+export function formatFoodServing(variant: FoodVariant): string {
+  const amount = Number.isInteger(variant.amount) ? String(variant.amount) : String(variant.amount).replace('.', ',');
+  const grams = variant.grams && variant.unit.toLowerCase() !== 'g' ? ` (~${variant.grams} g)` : '';
+  return `${amount} ${variant.unit}${grams}`;
 }
 
 export const FOOD_CSV_TEMPLATE = [
-  'name,serving,calories,protein,carbs,fat,category',
-  'Trứng gà luộc,1 quả (~50 g),78,6.3,0.6,5.3,Trứng',
-  'Chuối,100 g,89,1.1,22.8,0.3,Trái cây',
+  'name,variant,amount,unit,grams,calories,protein,carbs,fat,category',
+  'Trứng gà,Luộc,1,quả,50,78,6.3,0.6,5.3,Trứng',
+  'Trứng gà,Rán,1,quả,50,90,6.3,0.4,7,Trứng',
+  'Chuối,Tươi,100,g,100,89,1.1,22.8,0.3,Trái cây',
 ].join('\n');

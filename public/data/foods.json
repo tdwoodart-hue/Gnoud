@@ -1,0 +1,188 @@
+{
+  "version": 2,
+  "updatedAt": "2026-09-19",
+  "foods": [
+    {
+      "id": "food-trung-ga",
+      "name": "Trứng gà",
+      "category": "Trứng",
+      "portions": [
+        {
+          "id": "egg-piece",
+          "label": "Theo quả",
+          "amount": 1,
+          "unit": "quả",
+          "multiplier": 1
+        }
+      ],
+      "variants": [
+        {
+          "id": "egg-boiled",
+          "label": "Luộc",
+          "amount": 1,
+          "unit": "quả",
+          "grams": 50,
+          "calories": 78,
+          "protein": 6.3,
+          "carbs": 0.6,
+          "fat": 5.3
+        },
+        {
+          "id": "egg-fried",
+          "label": "Rán",
+          "amount": 1,
+          "unit": "quả",
+          "grams": 50,
+          "calories": 90,
+          "protein": 6.3,
+          "carbs": 0.4,
+          "fat": 7
+        },
+        {
+          "id": "egg-sunny-side",
+          "label": "Ốp la",
+          "amount": 1,
+          "unit": "quả",
+          "grams": 50,
+          "calories": 92,
+          "protein": 6.3,
+          "carbs": 0.4,
+          "fat": 7.2
+        }
+      ]
+    },
+    {
+      "id": "food-chuoi",
+      "name": "Chuối",
+      "category": "Trái cây",
+      "portions": [
+        {
+          "id": "banana-medium",
+          "label": "1 quả vừa",
+          "amount": 1,
+          "unit": "quả",
+          "multiplier": 1.18
+        },
+        {
+          "id": "banana-grams",
+          "label": "Theo gram",
+          "amount": 100,
+          "unit": "g",
+          "multiplier": 1
+        }
+      ],
+      "variants": [
+        {
+          "id": "banana-fresh",
+          "label": "Tươi",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 89,
+          "protein": 1.1,
+          "carbs": 22.8,
+          "fat": 0.3
+        }
+      ]
+    },
+    {
+      "id": "food-tao",
+      "name": "Táo",
+      "category": "Trái cây",
+      "portions": [
+        {
+          "id": "apple-medium",
+          "label": "1 quả vừa",
+          "amount": 1,
+          "unit": "quả",
+          "multiplier": 1.82
+        },
+        {
+          "id": "apple-grams",
+          "label": "Theo gram",
+          "amount": 100,
+          "unit": "g",
+          "multiplier": 1
+        }
+      ],
+      "variants": [
+        {
+          "id": "apple-fresh",
+          "label": "Tươi",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 52,
+          "protein": 0.3,
+          "carbs": 13.8,
+          "fat": 0.2
+        }
+      ]
+    },
+    {
+      "id": "food-com-trang",
+      "name": "Cơm trắng",
+      "category": "Tinh bột",
+      "variants": [
+        {
+          "id": "rice-cooked",
+          "label": "Cơm chín",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 130,
+          "protein": 2.7,
+          "carbs": 28.2,
+          "fat": 0.3
+        }
+      ]
+    },
+    {
+      "id": "food-uc-ga",
+      "name": "Ức gà",
+      "category": "Đạm",
+      "variants": [
+        {
+          "id": "chicken-boiled",
+          "label": "Luộc",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 165,
+          "protein": 31,
+          "carbs": 0,
+          "fat": 3.6
+        },
+        {
+          "id": "chicken-pan-seared",
+          "label": "Áp chảo",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 190,
+          "protein": 30,
+          "carbs": 0,
+          "fat": 7.2
+        }
+      ]
+    },
+    {
+      "id": "food-khoai-lang",
+      "name": "Khoai lang",
+      "category": "Tinh bột",
+      "variants": [
+        {
+          "id": "sweet-potato-boiled",
+          "label": "Luộc",
+          "amount": 100,
+          "unit": "g",
+          "grams": 100,
+          "calories": 86,
+          "protein": 1.6,
+          "carbs": 20.1,
+          "fat": 0.1
+        }
+      ]
+    }
+  ]
+}

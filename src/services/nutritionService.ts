@@ -26,10 +26,14 @@ export interface NutritionEntry {
   protein: number;
   carbs: number;
   fat: number;
+  createdAt: string;
+  /** Optional snapshot of the real amount the user logged, e.g. 1 quả or 210 g. */
   amount?: number;
   unit?: string;
-  serving?: string;
-  createdAt: string;
+  servingLabel?: string;
+  foodId?: string;
+  variantId?: string;
+  portionId?: string;
 }
 
 export interface DailyMetric {

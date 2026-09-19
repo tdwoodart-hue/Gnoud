@@ -9,6 +9,7 @@ import {
   Flame,
   Footprints,
   Plus,
+  Pencil,
   Scale,
   Search,
   Settings2,
@@ -30,6 +31,7 @@ import {
   MealType,
   NutritionActivityLevel,
   NutritionGoal,
+  NutritionEntry,
   NutritionProfile,
   recommendedTargets,
   removeNutritionEntry,
@@ -961,6 +963,119 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onClose, onSave 
   );
 };
 
+
+interface EditEntryModalProps {
+  entry: NutritionEntry;
+  onClose: () => void;
+  onSave: (updates: Pick<NutritionEntry, 'name' | 'meal' | 'calories' | 'protein' | 'carbs' | 'fat'>) => void;
+}
+
+const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, onClose, onSave }) => {
+  const [name, setName] = useState(entry.name);
+  const [meal, setMeal] = useState<MealType>(entry.meal);
+  const [calories, setCalories] = useState(String(Math.round(entry.calories * 10) / 10));
+  const [protein, setProtein] = useState(String(Math.round(entry.protein * 10) / 10));
+  const [carbs, setCarbs] = useState(String(Math.round(entry.carbs * 10) / 10));
+  const [fat, setFat] = useState(String(Math.round(entry.fat * 10) / 10));
+  const [error, setError] = useState('');
+
+  const calculateFromMacros = () => {
+    const p = Math.max(0, Number(protein) || 0);
+    const c = Math.max(0, Number(carbs) || 0);
+    const f = Math.max(0, Number(fat) || 0);
+    setCalories(String(Math.round((p * 4 + c * 4 + f * 9) * 10) / 10));
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const kcal = Number(calories);
+    if (!name.trim()) {
+      setError('Tên món không được để trống.');
+      return;
+    }
+    if (!Number.isFinite(kcal) || kcal < 0) {
+      setError('Calories không hợp lệ.');
+      return;
+    }
+
+    onSave({
+      name: name.trim(),
+      meal,
+      calories: Math.max(0, kcal),
+      protein: Math.max(0, Number(protein) || 0),
+      carbs: Math.max(0, Number(carbs) || 0),
+      fat: Math.max(0, Number(fat) || 0),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/35 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-t-[28px] border border-slate-200/80 bg-white p-4 shadow-2xl sm:rounded-[28px] sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Sửa món đã ghi</h2>
+            <p className="mt-0.5 text-[11px] text-slate-400">Sửa xong tổng kcal và macro trong ngày tự cập nhật.</p>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500" aria-label="Đóng">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100"
+            aria-label="Tên món"
+          />
+
+          <select
+            value={meal}
+            onChange={(event) => setMeal(event.target.value as MealType)}
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-hidden focus:border-indigo-300 focus:ring-3 focus:ring-indigo-100"
+            aria-label="Bữa ăn"
+          >
+            {Object.entries(mealLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="rounded-xl border border-slate-200 px-3 py-2">
+              <span className="block text-[10px] font-semibold text-slate-400">Calories</span>
+              <input type="number" min="0" step="0.1" value={calories} onChange={(event) => setCalories(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-bold tabular-nums text-slate-800 outline-none" />
+            </label>
+            <label className="rounded-xl border border-slate-200 px-3 py-2">
+              <span className="block text-[10px] font-semibold text-slate-400">Protein (g)</span>
+              <input type="number" min="0" step="0.1" value={protein} onChange={(event) => setProtein(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-bold tabular-nums text-slate-800 outline-none" />
+            </label>
+            <label className="rounded-xl border border-slate-200 px-3 py-2">
+              <span className="block text-[10px] font-semibold text-slate-400">Carb (g)</span>
+              <input type="number" min="0" step="0.1" value={carbs} onChange={(event) => setCarbs(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-bold tabular-nums text-slate-800 outline-none" />
+            </label>
+            <label className="rounded-xl border border-slate-200 px-3 py-2">
+              <span className="block text-[10px] font-semibold text-slate-400">Fat (g)</span>
+              <input type="number" min="0" step="0.1" value={fat} onChange={(event) => setFat(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-bold tabular-nums text-slate-800 outline-none" />
+            </label>
+          </div>
+
+          <button type="button" onClick={calculateFromMacros} className="h-9 w-full rounded-xl bg-slate-100 text-[11px] font-bold text-slate-600 transition hover:bg-slate-200">
+            Tính lại kcal từ P / C / F
+          </button>
+
+          {error ? <p className="text-[11px] font-semibold text-rose-600">{error}</p> : null}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
+          <button type="button" onClick={onClose} className="h-11 rounded-xl bg-slate-100 text-sm font-bold text-slate-600">Hủy</button>
+          <button type="submit" className="h-11 rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-xs transition hover:bg-indigo-700">Lưu thay đổi</button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 export const NutritionView: React.FC = () => {
   const [nutrition, setNutrition] = useState(() => loadNutritionState());
   const [foods, setFoods] = useState(() => loadFoodLibrary());
@@ -969,6 +1084,7 @@ export const NutritionView: React.FC = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [foodLibraryOpen, setFoodLibraryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<NutritionEntry | null>(null);
 
   useEffect(() => {
     saveNutritionState(nutrition);
@@ -1071,6 +1187,17 @@ export const NutritionView: React.FC = () => {
     setNutrition((current) => ({
       ...current,
       entries: removeNutritionEntry(current.entries, id),
+    }));
+  };
+
+
+  const updateEntry = (
+    id: string,
+    updates: Pick<NutritionEntry, 'name' | 'meal' | 'calories' | 'protein' | 'carbs' | 'fat'>,
+  ) => {
+    setNutrition((current) => ({
+      ...current,
+      entries: current.entries.map((entry) => (entry.id === id ? { ...entry, ...updates } : entry)),
     }));
   };
 
@@ -1287,15 +1414,26 @@ export const NutritionView: React.FC = () => {
                               {number.format(entry.calories)} kcal · P {decimal.format(entry.protein)}g · C {decimal.format(entry.carbs)}g · F {decimal.format(entry.fat)}g
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeEntry(entry.id)}
-                            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
-                            aria-label={`Xóa ${entry.name} khỏi ${mealLabels[group.meal]}`}
-                            title="Xóa món này"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingEntry(entry)}
+                              className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                              aria-label={`Sửa ${entry.name}`}
+                              title="Sửa món này"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeEntry(entry.id)}
+                              className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                              aria-label={`Xóa ${entry.name} khỏi ${mealLabels[group.meal]}`}
+                              title="Xóa món này"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1490,6 +1628,13 @@ export const NutritionView: React.FC = () => {
         </div>
       )}
 
+      {editingEntry && (
+        <EditEntryModal
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onSave={(updates) => updateEntry(editingEntry.id, updates)}
+        />
+      )}
       {addOpen && (
         <AddEntryModal
           date={selectedDate}

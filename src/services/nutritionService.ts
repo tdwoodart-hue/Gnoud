@@ -26,6 +26,9 @@ export interface NutritionEntry {
   protein: number;
   carbs: number;
   fat: number;
+  amount?: number;
+  unit?: string;
+  serving?: string;
   createdAt: string;
 }
 

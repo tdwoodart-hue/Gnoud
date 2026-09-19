@@ -90,6 +90,39 @@ export const STARTER_FOODS: FoodItem[] = [
     category: 'Tinh bột',
     source: 'starter',
   },
+  {
+    id: 'starter-guava',
+    name: 'Ổi',
+    serving: '100 g',
+    calories: 68,
+    protein: 2.6,
+    carbs: 14.3,
+    fat: 1,
+    category: 'Trái cây',
+    source: 'starter',
+  },
+  {
+    id: 'starter-pepper-beef',
+    name: 'Bò sốt tiêu (ước tính)',
+    serving: '100 g',
+    calories: 250,
+    protein: 24,
+    carbs: 5,
+    fat: 14.5,
+    category: 'Đạm',
+    source: 'starter',
+  },
+  {
+    id: 'starter-probi-65',
+    name: 'Probi',
+    serving: '65 ml',
+    calories: 41,
+    protein: 0.7,
+    carbs: 9.6,
+    fat: 0,
+    category: 'Sữa chua uống',
+    source: 'starter',
+  },
 ];
 
 const toNumber = (value: unknown): number => {
@@ -246,10 +279,11 @@ export function loadFoodLibrary(): FoodItem[] {
     if (raw === null) return STARTER_FOODS;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return STARTER_FOODS;
-    return parsed
+    const savedFoods = parsed
       .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
       .map((row) => normalizeFoodRow(row, (row.source as FoodItem['source']) || 'custom'))
       .filter((item): item is FoodItem => Boolean(item));
+    return mergeFoods(STARTER_FOODS, savedFoods);
   } catch (error) {
     console.warn('Could not load food library:', error);
     return STARTER_FOODS;

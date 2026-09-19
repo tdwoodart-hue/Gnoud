@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   BarChart3,
-  Calendar,
   Command,
   ListTodo,
   Settings,
   Sun,
   UserRound,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { NavTab } from '../../types';
@@ -16,7 +16,7 @@ import { SettingsModal } from '../settings/SettingsModal';
 const icons: Record<NavTab, React.FC<{ className?: string }>> = {
   today: Sun,
   tasks: ListTodo,
-  calendar: Calendar,
+  nutrition: UtensilsCrossed,
   personal: UserRound,
   reports: BarChart3,
 };

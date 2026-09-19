@@ -8,7 +8,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { AppShell } from './components/layout/AppShell';
 import { TodayView } from './components/today/TodayView';
 import { TasksView } from './components/tasks/TasksView';
-import { CalendarView } from './components/calendar/CalendarView';
+import { NutritionView } from './components/nutrition/NutritionView';
 import { PersonalView } from './components/personal/PersonalView';
 import { ReportsView } from './components/reports/ReportsView';
 import { TaskEditModal } from './components/common/TaskEditModal';
@@ -25,7 +25,7 @@ const MainContent: React.FC = () => {
     <>
       {activeTab === 'today' && <TodayView />}
       {activeTab === 'tasks' && <TasksView />}
-      {activeTab === 'calendar' && <CalendarView />}
+      {activeTab === 'nutrition' && <NutritionView />}
       {activeTab === 'personal' && <PersonalView />}
       {activeTab === 'reports' && <ReportsView />}
     </>

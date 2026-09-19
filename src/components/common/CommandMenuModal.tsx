@@ -3,7 +3,6 @@ import { useApp } from '../../context/AppContext';
 import {
   Search,
   CheckCircle2,
-  Calendar,
   UserRound,
   Play,
   Plus,
@@ -11,6 +10,7 @@ import {
   Sun,
   ListTodo,
   BarChart3,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { NavTab } from '../../types';
@@ -57,7 +57,7 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
   const navigationActions = [
     { label: 'Đi tới Hôm nay', tab: 'today' as NavTab, icon: Sun },
     { label: 'Đi tới Công việc', tab: 'tasks' as NavTab, icon: ListTodo },
-    { label: 'Đi tới Lịch', tab: 'calendar' as NavTab, icon: Calendar },
+    { label: 'Đi tới Dinh dưỡng', tab: 'nutrition' as NavTab, icon: UtensilsCrossed },
     { label: 'Đi tới Cá nhân', tab: 'personal' as NavTab, icon: UserRound },
     { label: 'Đi tới Báo cáo', tab: 'reports' as NavTab, icon: BarChart3 },
   ].filter((action) => action.label.toLowerCase().includes(normalizedQuery));

@@ -183,6 +183,146 @@
           "fat": 0.1
         }
       ]
+    },
+    {
+      "id": "food-suon-dua-chua",
+      "name": "Sườn dưa chua",
+      "category": "Món mặn",
+      "portions": [
+        {
+          "id": "portion-suon-dua-bat",
+          "label": "1 bát canh",
+          "amount": 1,
+          "unit": "bát",
+          "multiplier": 1
+        },
+        {
+          "id": "portion-suon-dua-dia",
+          "label": "1 đĩa xào",
+          "amount": 1,
+          "unit": "đĩa",
+          "multiplier": 1.25
+        },
+        {
+          "id": "portion-suon-dua-100g",
+          "label": "100g",
+          "amount": 100,
+          "unit": "g",
+          "multiplier": 0.38
+        }
+      ],
+      "variants": [
+        {
+          "id": "suon-dua-canh",
+          "label": "Canh sườn dưa",
+          "amount": 1,
+          "unit": "bát",
+          "grams": 280,
+          "calories": 280,
+          "protein": 20,
+          "carbs": 6,
+          "fat": 19
+        },
+        {
+          "id": "suon-dua-xao",
+          "label": "Sườn xào dưa",
+          "amount": 1,
+          "unit": "đĩa",
+          "grams": 250,
+          "calories": 350,
+          "protein": 23,
+          "carbs": 8,
+          "fat": 25
+        }
+      ]
+    },
+    {
+      "id": "food-thit-kho-tau",
+      "name": "Thịt kho tàu",
+      "category": "Món mặn",
+      "portions": [
+        {
+          "id": "portion-thit-kho-phan",
+          "label": "1 phần vừa",
+          "amount": 1,
+          "unit": "phần",
+          "multiplier": 1
+        },
+        {
+          "id": "portion-thit-kho-100g",
+          "label": "100g",
+          "amount": 100,
+          "unit": "g",
+          "multiplier": 0.67
+        }
+      ],
+      "variants": [
+        {
+          "id": "thit-kho-trung",
+          "label": "Thịt kho trứng",
+          "amount": 1,
+          "unit": "phần",
+          "grams": 150,
+          "calories": 380,
+          "protein": 24,
+          "carbs": 6,
+          "fat": 28
+        }
+      ]
+    },
+    {
+      "id": "food-bo-xao",
+      "name": "Thịt bò xào",
+      "category": "Đạm",
+      "portions": [
+        {
+          "id": "portion-bo-xao-dia",
+          "label": "1 đĩa vừa",
+          "amount": 1,
+          "unit": "đĩa",
+          "multiplier": 1
+        }
+      ],
+      "variants": [
+        {
+          "id": "bo-xao-can-toi",
+          "label": "Xào cần tỏi",
+          "amount": 1,
+          "unit": "đĩa",
+          "grams": 200,
+          "calories": 260,
+          "protein": 28,
+          "carbs": 5,
+          "fat": 14
+        }
+      ]
+    },
+    {
+      "id": "food-dau-phu-sot-ca",
+      "name": "Đậu phụ sốt cà chua",
+      "category": "Món mặn",
+      "portions": [
+        {
+          "id": "portion-dau-sot-dia",
+          "label": "1 đĩa vừa",
+          "amount": 1,
+          "unit": "đĩa",
+          "multiplier": 1
+        }
+      ],
+      "variants": [
+        {
+          "id": "dau-sot-ca",
+          "label": "Sốt cà chua",
+          "amount": 1,
+          "unit": "đĩa",
+          "grams": 200,
+          "calories": 195,
+          "protein": 14,
+          "carbs": 9,
+          "fat": 12
+        }
+      ]
     }
   ]
 }

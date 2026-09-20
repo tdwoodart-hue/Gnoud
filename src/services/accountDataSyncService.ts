@@ -46,9 +46,8 @@ function firestoreSafe<T>(value: T): T {
   return value;
 }
 
-function cleanFood(food: FoodItem): Omit<FoodItem, 'source'> {
-  const { source: _source, ...rest } = food;
-  return firestoreSafe(rest);
+function cleanFood(food: FoodItem): FoodItem {
+  return firestoreSafe(food);
 }
 
 function normalizeFoodFromCloud(data: Record<string, unknown>, fallbackId: string): FoodItem | null {
@@ -60,7 +59,7 @@ function normalizeFoodFromCloud(data: Record<string, unknown>, fallbackId: strin
     ...(data as unknown as FoodItem),
     id,
     name,
-    source: 'imported',
+    source: (data.source as FoodItem['source']) || 'custom',
   };
 }
 

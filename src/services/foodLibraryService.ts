@@ -39,14 +39,14 @@ const STORAGE_KEY = 'lich_song_food_library_v2';
 const LEGACY_STORAGE_KEY = 'lich_song_food_library_v1';
 export const DEFAULT_FOOD_FILE_URL = '/data/foods.json';
 
-const normalizeKey = (value: string) =>
+export const normalizeKey = (value: string) =>
   value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 
-const slug = (value: string) =>
+export const slug = (value: string) =>
   normalizeKey(value)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
@@ -72,7 +72,7 @@ const rowValue = (row: Record<string, unknown>, aliases: string[]) => {
 };
 
 
-function parseLegacyServing(raw: unknown): { amount: number; unit: string; grams?: number } {
+export function parseLegacyServing(raw: unknown): { amount: number; unit: string; grams?: number } {
   const text = String(raw ?? '').trim();
   if (!text) return { amount: 1, unit: 'khẩu phần' };
 
@@ -505,3 +505,98 @@ export const FOOD_CSV_TEMPLATE = [
   'Trứng gà,Rán,1,quả,50,90,6.3,0.4,7,Trứng',
   'Chuối,Tươi,100,g,100,89,1.1,22.8,0.3,Trái cây',
 ].join('\n');
+
+export interface CreateCustomFoodParams {
+  name: string;
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  servingLabel?: string;
+  category?: string;
+}
+
+export function createCustomFoodItem(params: CreateCustomFoodParams): FoodItem {
+  const cleanName = params.name.trim();
+  const serving = parseLegacyServing(params.servingLabel || '1 phần');
+  const foodId = `custom-${Date.now()}-${slug(cleanName)}`;
+  const variantId = `${foodId}-var-1`;
+  const portionId = `${foodId}-por-1`;
+
+  const calories = Math.max(0, Math.round(Number(params.calories) || 0));
+  const protein = Math.max(0, Math.round((Number(params.protein) || 0) * 10) / 10);
+  const carbs = Math.max(0, Math.round((Number(params.carbs) || 0) * 10) / 10);
+  const fat = Math.max(0, Math.round((Number(params.fat) || 0) * 10) / 10);
+
+  return {
+    id: foodId,
+    name: cleanName,
+    category: params.category?.trim() || 'Món của bạn',
+    source: 'custom',
+    portions: [
+      {
+        id: portionId,
+        label: params.servingLabel?.trim() || `${serving.amount} ${serving.unit}`,
+        amount: serving.amount,
+        unit: serving.unit,
+        multiplier: 1,
+      },
+    ],
+    variants: [
+      {
+        id: variantId,
+        label: 'Mặc định',
+        amount: serving.amount,
+        unit: serving.unit,
+        grams: serving.grams,
+        calories,
+        protein,
+        carbs,
+        fat,
+      },
+    ],
+  };
+}
+
+export function extractCustomFoodsFromEntries(
+  entries: Array<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    servingLabel?: string;
+    amount?: number;
+    unit?: string;
+  }>,
+  existingFoods: FoodItem[],
+): FoodItem[] {
+  const existingNames = new Set(existingFoods.map((food) => normalizeKey(food.name)));
+  const extracted: FoodItem[] = [];
+  const seenInRun = new Set<string>();
+
+  for (const entry of entries) {
+    if (!entry.name || typeof entry.name !== 'string') continue;
+    const baseName = entry.name.split(' · ')[0].trim();
+    if (!baseName) continue;
+    const key = normalizeKey(baseName);
+    if (existingNames.has(key) || seenInRun.has(key)) continue;
+    if (entry.calories <= 0) continue;
+
+    seenInRun.add(key);
+    extracted.push(
+      createCustomFoodItem({
+        name: baseName,
+        calories: entry.calories,
+        protein: entry.protein,
+        carbs: entry.carbs,
+        fat: entry.fat,
+        servingLabel: entry.servingLabel || (entry.amount && entry.unit ? `${entry.amount} ${entry.unit}` : undefined),
+        category: 'Món của bạn',
+      }),
+    );
+  }
+
+  return extracted;
+}
+

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
   AlertTriangle,
   CheckCircle2,
   Clock3,
@@ -14,7 +13,6 @@ import {
 import { useApp } from '../../context/AppContext';
 import { loadNutritionState, type NutritionState } from '../../services/nutritionService';
 import {
-  buildDailyTaskActivity,
   buildHabitReport,
   buildNutritionReport,
   buildProjectReport,
@@ -32,16 +30,6 @@ const rangeLabels: Record<ReportRange, string> = {
   '7d': '7 ngày',
   '30d': '30 ngày',
   all: 'Toàn bộ',
-};
-
-const weekday = (iso: string) => {
-  const [year, month, day] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(new Date(year, month - 1, day));
-};
-
-const shortDate = (iso: string) => {
-  const [year, month, day] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(year, month - 1, day));
 };
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
@@ -134,11 +122,9 @@ export const ReportsView: React.FC = () => {
 
   const summary = useMemo(() => buildReportSummary(tasks, range, today), [tasks, range, today]);
   const projectRows = useMemo(() => buildProjectReport(projects, tasks, range, today), [projects, tasks, range, today]);
-  const recentActivity = useMemo(() => buildDailyTaskActivity(tasks, today, 7), [tasks, today]);
   const habitRows = useMemo(() => buildHabitReport(habits, today, 7), [habits, today]);
   const nutritionReport = useMemo(() => buildNutritionReport(nutrition, range, today), [nutrition, range, today]);
 
-  const maxTaskCount = Math.max(1, ...recentActivity.map((item) => Math.max(item.planned, item.completed)));
   const calorieProgress = nutritionReport.averageCalories === null
     ? 0
     : (nutritionReport.averageCalories / nutrition.profile.calorieTarget) * 100;
@@ -200,48 +186,6 @@ export const ReportsView: React.FC = () => {
           tone="border-amber-200/70 bg-amber-50 text-amber-700"
         />
       </div>
-
-      <ReportSection
-        title="Nhịp làm việc"
-        icon={Activity}
-        trailing={(
-          <div className="hidden items-center gap-3 text-[9px] font-medium text-slate-400 sm:flex">
-            <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-slate-200" />Lịch</span>
-            <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-emerald-500" />Xong</span>
-            <span className="text-indigo-500">phút tập trung</span>
-          </div>
-        )}
-      >
-        <div className="rounded-2xl border border-slate-200/70 bg-white px-3 py-3.5 shadow-xs sm:px-4">
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5">
-            {recentActivity.map((item) => {
-              const plannedHeight = item.planned ? Math.max(16, (item.planned / maxTaskCount) * 100) : 5;
-              const completedHeight = item.completed ? Math.max(12, (item.completed / maxTaskCount) * 100) : 0;
-              return (
-                <div key={item.date} className="min-w-0 text-center">
-                  <div className="flex h-20 items-end justify-center gap-1 rounded-xl bg-slate-50 px-1 py-1.5">
-                    <div
-                      className="w-2 rounded-full bg-slate-200 transition-all sm:w-2.5"
-                      style={{ height: `${plannedHeight}%` }}
-                      title={`${item.planned} việc lên lịch`}
-                    />
-                    <div
-                      className="w-2 rounded-full bg-emerald-500 transition-all sm:w-2.5"
-                      style={{ height: `${completedHeight}%` }}
-                      title={`${item.completed} việc hoàn thành`}
-                    />
-                  </div>
-                  <p className="mt-1.5 truncate text-[9px] font-bold text-slate-500">{weekday(item.date)}</p>
-                  <p className="text-[8px] text-slate-400">{shortDate(item.date)}</p>
-                  <p className="mt-0.5 text-[8px] font-semibold tabular-nums text-indigo-500">
-                    {item.focusMinutes > 0 ? `${item.focusMinutes}p` : '—'}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </ReportSection>
 
       <ReportSection title="Dinh dưỡng & cơ thể" icon={UtensilsCrossed}>
         <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs lg:grid-cols-4">

@@ -309,7 +309,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
   const [manualCarbs, setManualCarbs] = useState('');
   const [manualFat, setManualFat] = useState('');
   const [manualServing, setManualServing] = useState('1 phần');
-  const [manualCategory, setManualCategory] = useState('Món của bạn');
+  const [manualCategory, setManualCategory] = useState('');
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [error, setError] = useState('');
 
@@ -444,7 +444,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
         carbs,
         fat,
         servingLabel: serving,
-        category: manualCategory.trim() || 'Món của bạn',
+        category: manualCategory.trim() || undefined,
       });
       onSaveCustomFood?.(customFood);
       createdFoodId = customFood.id;
@@ -568,14 +568,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
                           className="flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white"
                         >
                           <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="truncate text-[11px] font-bold text-slate-700">{food.name}</span>
-                              {isCustom && (
-                                <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600">
-                                  Món của bạn
-                                </span>
-                              )}
-                            </span>
+                            <span className="block truncate text-[11px] font-bold text-slate-700">{food.name}</span>
                             <span className="block truncate text-[9px] font-medium text-slate-400">
                               {portion.label}
                               {food.variants.length > 1 ? ` · ${food.variants.length} cách chế biến` : ''}
@@ -793,7 +786,7 @@ const FoodLibraryModal: React.FC<FoodLibraryModalProps> = ({ foods, onClose, onC
   const [newCarbs, setNewCarbs] = useState('');
   const [newFat, setNewFat] = useState('');
   const [newServing, setNewServing] = useState('1 phần');
-  const [newCategory, setNewCategory] = useState('Món của bạn');
+  const [newCategory, setNewCategory] = useState('');
   const [formError, setFormError] = useState('');
 
   const customFoodsCount = useMemo(() => foods.filter((f) => f.source === 'custom').length, [foods]);
@@ -837,7 +830,7 @@ const FoodLibraryModal: React.FC<FoodLibraryModalProps> = ({ foods, onClose, onC
       carbs: Math.max(0, Math.round((Number(newCarbs) || 0) * 10) / 10),
       fat: Math.max(0, Math.round((Number(newFat) || 0) * 10) / 10),
       servingLabel: newServing.trim() || '1 phần',
-      category: newCategory.trim() || 'Món của bạn',
+      category: newCategory.trim() || undefined,
     });
 
     const next = [item, ...foods];
@@ -1045,7 +1038,7 @@ const FoodLibraryModal: React.FC<FoodLibraryModalProps> = ({ foods, onClose, onC
                 onClick={() => setFilterTab('custom')}
                 className={`h-7.5 rounded-lg px-2.5 text-[10px] font-bold transition ${filterTab === 'custom' ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
               >
-                Món của bạn ({customFoodsCount})
+                Món tự thêm ({customFoodsCount})
               </button>
             </div>
             <div className="relative w-48 max-w-[55%]">
@@ -1061,20 +1054,14 @@ const FoodLibraryModal: React.FC<FoodLibraryModalProps> = ({ foods, onClose, onC
 
           <div className="mt-3 space-y-2">
             {visibleFoods.map((food) => {
-              const isCustom = food.source === 'custom';
               return (
                 <div key={food.id} className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-[11px] font-bold text-slate-700">{food.name}</p>
-                        {isCustom && (
-                          <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600">
-                            Món của bạn
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-[9px] text-slate-400">{food.category || 'Chưa phân nhóm'}</p>
+                      <p className="truncate text-[11px] font-bold text-slate-700">{food.name}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">
+                        {food.category && food.category !== 'Món của bạn' ? food.category : 'Chưa phân nhóm'}
+                      </p>
                     </div>
                     <button
                       type="button"

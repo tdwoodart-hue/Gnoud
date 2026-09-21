@@ -373,13 +373,20 @@ export function loadFoodLibrary(): FoodItem[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) return parseFoodJson(raw, 'imported');
+    if (raw) {
+      const items = parseFoodJson(raw, 'imported');
+      return items.map((item) =>
+        item.category === 'Món của bạn' ? { ...item, category: undefined } : item,
+      );
+    }
 
     const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!legacyRaw) return [];
     const migrated = migrateLegacy(JSON.parse(legacyRaw));
     if (migrated.length) saveFoodLibrary(migrated);
-    return migrated;
+    return migrated.map((item) =>
+      item.category === 'Món của bạn' ? { ...item, category: undefined } : item,
+    );
   } catch (error) {
     console.warn('Could not load food library:', error);
     return [];
@@ -531,7 +538,7 @@ export function createCustomFoodItem(params: CreateCustomFoodParams): FoodItem {
   return {
     id: foodId,
     name: cleanName,
-    category: params.category?.trim() || 'Món của bạn',
+    category: params.category?.trim() || '',
     source: 'custom',
     portions: [
       {
@@ -592,7 +599,7 @@ export function extractCustomFoodsFromEntries(
         carbs: entry.carbs,
         fat: entry.fat,
         servingLabel: entry.servingLabel || (entry.amount && entry.unit ? `${entry.amount} ${entry.unit}` : undefined),
-        category: 'Món của bạn',
+        category: '',
       }),
     );
   }

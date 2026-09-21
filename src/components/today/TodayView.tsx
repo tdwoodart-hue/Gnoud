@@ -62,6 +62,47 @@ export const getVisibleTaskNotes = (notes?: string): string =>
     .join('\n')
     .trim();
 
+type ExerciseLogEntry = {
+  date: string;
+  weight: string;
+  reps: string;
+};
+
+type ExerciseProgress = {
+  latest?: ExerciseLogEntry;
+  previous?: ExerciseLogEntry;
+};
+
+type ExerciseProgressStore = Record<string, ExerciseProgress>;
+
+const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
+
+const getExerciseProgressKey = (label: string): string =>
+  label
+    .trim()
+    .toLocaleLowerCase('vi-VN')
+    .replace(/\s+\d+\s*[x×]\s*\d+(?:\s*[-–]\s*\d+)?\s*$/, '')
+    .trim();
+
+const loadExerciseProgress = (): ExerciseProgressStore => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ExerciseProgressStore) : {};
+  } catch {
+    return {};
+  }
+};
+
+const persistExerciseProgress = (progress: ExerciseProgressStore) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(EXERCISE_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+  } catch {
+    // Không chặn thao tác nếu trình duyệt từ chối lưu localStorage.
+  }
+};
+
 const SwipeTodayTaskRow: React.FC<{
   task: Task;
   completedSubtasks: number;
@@ -479,6 +520,7 @@ export const TodayView: React.FC = () => {
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceLibraryItem[]>(() => loadReferenceLibraryCache());
   const [reflectionDrafts, setReflectionDrafts] = useState<Record<string, string>>({});
+  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress());
 
   useEffect(() => {
     let cancelled = false;
@@ -515,6 +557,34 @@ export const TodayView: React.FC = () => {
   }, [user?.uid, addToast]);
 
   const today = getFormattedToday(0);
+
+  const updateExerciseLog = (label: string, field: 'weight' | 'reps', value: string) => {
+    const key = getExerciseProgressKey(label);
+
+    setExerciseProgress((current) => {
+      const existing = current[key] || {};
+      const latest = existing.latest;
+      const editingToday = latest?.date === today;
+      const nextLatest: ExerciseLogEntry = {
+        date: today,
+        weight: editingToday ? latest?.weight || '' : '',
+        reps: editingToday ? latest?.reps || '' : '',
+      };
+      nextLatest[field] = value;
+
+      const next: ExerciseProgressStore = {
+        ...current,
+        [key]: {
+          latest: nextLatest,
+          previous: editingToday ? existing.previous : latest || existing.previous,
+        },
+      };
+
+      persistExerciseProgress(next);
+      return next;
+    });
+  };
+
   const allTodayTasks = useMemo(
     () =>
       tasks
@@ -679,6 +749,11 @@ export const TodayView: React.FC = () => {
                   <div className="space-y-2.5">
                     {referenceLines.map((reference, index) => {
                       const image = getReferenceLibraryItem(referenceLibrary, reference.label);
+                      const progress = exerciseProgress[getExerciseProgressKey(reference.label)];
+                      const currentEntry = progress?.latest?.date === today ? progress.latest : undefined;
+                      const previousEntry = progress?.latest?.date === today ? progress.previous : progress?.latest;
+                      const hasPrevious = Boolean(previousEntry?.weight || previousEntry?.reps);
+
                       return (
                         <div
                           key={reference.id}
@@ -696,6 +771,45 @@ export const TodayView: React.FC = () => {
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="break-words text-sm font-semibold leading-5 text-slate-800">{reference.label}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <label className="relative">
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min="0"
+                                  step="0.5"
+                                  value={currentEntry?.weight ?? ''}
+                                  onChange={(event) => updateExerciseLog(reference.label, 'weight', event.target.value)}
+                                  placeholder="0"
+                                  aria-label={`Cân tạ cho ${reference.label}`}
+                                  className="h-8 w-[76px] rounded-lg border border-slate-200 bg-white px-2 pr-7 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                                />
+                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                                  kg
+                                </span>
+                              </label>
+                              <label className="relative">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min="0"
+                                  step="1"
+                                  value={currentEntry?.reps ?? ''}
+                                  onChange={(event) => updateExerciseLog(reference.label, 'reps', event.target.value)}
+                                  placeholder="0"
+                                  aria-label={`Số reps cho ${reference.label}`}
+                                  className="h-8 w-[82px] rounded-lg border border-slate-200 bg-white px-2 pr-9 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                                />
+                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                                  reps
+                                </span>
+                              </label>
+                              {hasPrevious ? (
+                                <span className="text-[10px] font-medium text-slate-400">
+                                  Trước: {previousEntry?.weight || '—'}kg × {previousEntry?.reps || '—'}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
 
                         </div>

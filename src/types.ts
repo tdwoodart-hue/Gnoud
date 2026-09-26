@@ -132,3 +132,14 @@ export interface LifeMetric {
   status: 'good' | 'average' | 'attention';
   note: string;
 }
+
+export interface DailyHourlyNote {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  content: string;
+  category?: 'work' | 'personal' | 'health' | 'thought' | 'general';
+  createdAt: string;
+  updatedAt?: string;
+  userId?: string;
+}

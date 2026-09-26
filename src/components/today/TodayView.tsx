@@ -19,6 +19,7 @@ import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getFormattedToday } from '../../data/mockData';
 import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
+import { DailyHourlyNotesSection } from './DailyHourlyNotesSection';
 import { fileToCompactDataUrl } from '../../services/imageAttachmentService';
 import { parseManualReferenceList } from '../../services/manualReferenceService';
 import {
@@ -1091,6 +1092,8 @@ export const TodayView: React.FC = () => {
           </button>
         }
       />
+
+      <DailyHourlyNotesSection />
 
       <main data-testid="today-task-list" className="space-y-3">
         {todayTasks.length > 0 ? (

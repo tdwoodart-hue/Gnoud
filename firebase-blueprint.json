@@ -100,6 +100,22 @@
         "userId": { "type": "string" }
       },
       "required": ["name", "userId"]
+    },
+    "DailyNote": {
+      "title": "DailyNote",
+      "description": "User daily and hourly timeline notes or quick thoughts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "date", "time", "content"]
     }
   },
   "firestore": {
@@ -126,6 +142,10 @@
     "/users/{userId}/habits/{habitId}": {
       "schema": "Habit",
       "description": "User daily habits"
+    },
+    "/users/{userId}/dailyNotes/{noteId}": {
+      "schema": "DailyNote",
+      "description": "User hourly and daily timeline notes"
     }
   }
 }

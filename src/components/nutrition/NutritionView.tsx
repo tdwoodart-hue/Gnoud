@@ -230,7 +230,7 @@ const DailyMetricsCard: React.FC<DailyMetricsCardProps> = ({
               value={weightKg ?? ''}
               onChange={(event) => updateNumber('weightKg', event.target.value)}
               placeholder="65.5"
-              className="min-w-0 flex-1 bg-transparent text-2xl font-extrabold tracking-tight tabular-nums text-slate-900 outline-hidden placeholder:text-slate-300"
+              className="min-w-0 flex-1 bg-transparent text-2xl font-extrabold tracking-tight tabular-nums text-slate-900 outline-hidden placeholder:text-slate-300 privacy-blur"
             />
             <span className="pb-1 text-xs font-semibold text-slate-400">kg</span>
           </div>
@@ -1760,7 +1760,7 @@ export const NutritionView: React.FC = () => {
               >
                 <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
                   <div>
-                    <p className="text-2xl font-extrabold tracking-tight tabular-nums text-slate-900">{number.format(dayTotals.calories)}</p>
+                    <p className="text-2xl font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(dayTotals.calories)}</p>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">đã ăn</p>
                   </div>
                 </div>
@@ -1769,7 +1769,7 @@ export const NutritionView: React.FC = () => {
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-slate-400">Mục tiêu hôm nay</p>
                 <div className="mt-1 flex items-end gap-1.5">
-                  <span className="text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">{number.format(profile.calorieTarget)}</span>
+                  <span className="text-3xl font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(profile.calorieTarget)}</span>
                   <span className="pb-1 text-xs font-semibold text-slate-400">kcal</span>
                 </div>
                 <p className={`mt-2 text-xs font-semibold ${caloriesLeft >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>

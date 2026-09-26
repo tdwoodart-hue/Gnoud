@@ -22,6 +22,8 @@ import {
   ACCOUNT_DATA_REFRESH_EVENT,
   AccountDataSyncBridge,
 } from './components/common/AccountDataSyncBridge';
+import { SecurityProvider } from './context/SecurityContext';
+import { PinLockScreen } from './components/security/PinLockScreen';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useApp();
@@ -89,11 +91,14 @@ const GlobalModals: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <AccountDataSyncBridge />
-      <AppShell>
-        <MainContent />
-      </AppShell>
-      <GlobalModals />
+      <SecurityProvider>
+        <AccountDataSyncBridge />
+        <AppShell>
+          <MainContent />
+        </AppShell>
+        <GlobalModals />
+        <PinLockScreen />
+      </SecurityProvider>
     </AppProvider>
   );
 }

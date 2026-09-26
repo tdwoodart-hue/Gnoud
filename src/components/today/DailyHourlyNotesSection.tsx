@@ -221,7 +221,7 @@ export const DailyHourlyNotesSection: React.FC = () => {
                   <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-slate-400">
                     {note.time}
                   </span>
-                  <span className="break-words text-slate-700">{note.content}</span>
+                  <span className="break-words text-slate-700 privacy-blur">{note.content}</span>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition">

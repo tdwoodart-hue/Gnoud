@@ -28,5 +28,18 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Chế độ riêng tư: Làm mờ các số liệu nhạy cảm nơi công cộng */
+  .privacy-mode-active .privacy-blur {
+    filter: blur(5px);
+    user-select: none;
+    transition: filter 0.2s ease-in-out;
+  }
+
+  .privacy-mode-active .privacy-blur:hover,
+  .privacy-mode-active .privacy-blur:active,
+  .privacy-mode-active .privacy-blur:focus-within {
+    filter: blur(0px);
+  }
 }
 

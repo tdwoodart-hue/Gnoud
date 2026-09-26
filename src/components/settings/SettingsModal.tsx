@@ -28,6 +28,7 @@ import { getNotificationPreferences, saveNotificationPreferences } from '../../s
 import { formatDisplayDate } from '../../data/mockData';
 import { buildChatGPTSnapshot, downloadChatGPTSnapshot } from '../../services/dataSnapshot';
 import { getTelemetrySnapshot, recordUsageEvent } from '../../services/usageTelemetry';
+import { SecuritySettingsSection } from '../security/SecuritySettingsSection';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const {
@@ -199,6 +200,8 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
               </div>
             </div>
           </section>
+
+          <SecuritySettingsSection />
 
           <section>
             <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Thông báo</p>

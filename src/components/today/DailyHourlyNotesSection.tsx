@@ -60,11 +60,21 @@ export const DailyHourlyNotesSection: React.FC = () => {
     };
   }, [user?.uid]);
 
-  // Filter notes for today, sorted by time descending (newest first)
+  // Filter notes for today, sorted by newest first (descending by precise creation timestamp)
   const todayNotes = useMemo(() => {
     return notes
       .filter((n) => n.date === todayStr)
-      .sort((a, b) => b.time.localeCompare(a.time));
+      .sort((a, b) => {
+        // Compare createdAt ISO timestamp (most precise)
+        const timeB = b.createdAt || (b.date && b.time ? `${b.date}T${b.time}:00` : b.id);
+        const timeA = a.createdAt || (a.date && a.time ? `${a.date}T${a.time}:00` : a.id);
+        const cmp = timeB.localeCompare(timeA);
+        if (cmp !== 0) return cmp;
+        // Fallback to HH:mm
+        const hourCmp = (b.time || '').localeCompare(a.time || '');
+        if (hourCmp !== 0) return hourCmp;
+        return (b.id || '').localeCompare(a.id || '');
+      });
   }, [notes, todayStr]);
 
   const handleAddNote = async (e?: React.FormEvent) => {
@@ -73,8 +83,7 @@ export const DailyHourlyNotesSection: React.FC = () => {
     if (!trimmed) return;
 
     const newNote = makeDailyNote(trimmed, todayStr, getCurrentTimeHHmm());
-    const nextList = [newNote, ...notes];
-    setNotes(nextList);
+    setNotes((prev) => [newNote, ...prev.filter((n) => n.id !== newNote.id)]);
     setContent('');
 
     try {
@@ -128,7 +137,16 @@ export const DailyHourlyNotesSection: React.FC = () => {
   };
 
   return (
-    <section className="mb-4 rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-xs transition sm:p-3">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-xs transition">
+      <div className="mb-2 flex items-center justify-between px-1">
+        <span className="text-xs font-semibold text-slate-600">Ghi chú trong ngày</span>
+        {todayNotes.length > 0 && (
+          <span className="text-[11px] font-medium text-slate-400">
+            {todayNotes.length} ghi chú
+          </span>
+        )}
+      </div>
+
       {/* Input bar - ultra clean and compact, no clock button */}
       <form onSubmit={handleAddNote} className="flex items-center gap-1.5 sm:gap-2">
         <input
@@ -151,9 +169,9 @@ export const DailyHourlyNotesSection: React.FC = () => {
         </button>
       </form>
 
-      {/* Note list for today - very compact, subtle */}
+      {/* Note list for today - newest on top, very compact, subtle */}
       {todayNotes.length > 0 && (
-        <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-2">
+        <div className="mt-2.5 max-h-72 space-y-0.5 overflow-y-auto border-t border-slate-100 pt-2">
           {todayNotes.map((note) => {
             const isEditing = editingId === note.id;
 

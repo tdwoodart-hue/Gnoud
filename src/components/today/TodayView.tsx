@@ -1093,8 +1093,6 @@ export const TodayView: React.FC = () => {
         }
       />
 
-      <DailyHourlyNotesSection />
-
       <main data-testid="today-task-list" className="space-y-3">
         {todayTasks.length > 0 ? (
           todayTasks.map((task, taskIndex) => {
@@ -1154,6 +1152,10 @@ export const TodayView: React.FC = () => {
       >
         <Plus className="h-4 w-4" /> Thêm việc hôm nay
       </button>
+
+      <div className="mt-8">
+        <DailyHourlyNotesSection />
+      </div>
 
       {pendingDeleteTask ? (
         <div

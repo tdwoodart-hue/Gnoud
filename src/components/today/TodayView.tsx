@@ -622,6 +622,7 @@ export const TodayView: React.FC = () => {
     const visibleNotes = getVisibleTaskNotes(selectedTask.notes);
     const reflectionDraft = reflectionDrafts[selectedTask.id] ?? selectedTask.reflection ?? '';
     const reflectionChanged = reflectionDraft !== (selectedTask.reflection || '');
+    const reflectionImages = selectedTask.reflectionImages || [];
     const isDailyDiscoveryPrompt = /hôm nay có gì mới/i.test(visibleNotes);
 
     const saveReflection = () => {
@@ -633,6 +634,40 @@ export const TodayView: React.FC = () => {
         return next;
       });
       addToast(cleaned ? 'Đã lưu ghi chú hôm nay' : 'Đã xóa ghi chú hôm nay', 'success');
+    };
+
+    const addReflectionImages = async (files?: FileList | null) => {
+      if (!files?.length) return;
+
+      const availableSlots = Math.max(0, 4 - reflectionImages.length);
+      if (availableSlots === 0) {
+        addToast('Mỗi ghi chú tối đa 4 ảnh.', 'warning');
+        return;
+      }
+
+      const pickedFiles = Array.from(files).slice(0, availableSlots);
+      try {
+        const newImages = await Promise.all(
+          pickedFiles.map(async (file, index) => ({
+            id: `reflection-${Date.now()}-${index}`,
+            dataUrl: await fileToCompactDataUrl(file),
+            fileName: file.name,
+          })),
+        );
+
+        updateTask(selectedTask.id, {
+          reflectionImages: [...reflectionImages, ...newImages],
+        });
+        addToast(`Đã thêm ${newImages.length} ảnh vào ghi chú`, 'success');
+      } catch (error) {
+        addToast(error instanceof Error ? error.message : 'Không thể thêm ảnh.', 'error');
+      }
+    };
+
+    const removeReflectionImage = (imageId: string) => {
+      updateTask(selectedTask.id, {
+        reflectionImages: reflectionImages.filter((image) => image.id !== imageId),
+      });
     };
 
     const chooseReferenceImage = async (label: string, file?: File) => {
@@ -973,6 +1008,51 @@ export const TodayView: React.FC = () => {
                 className="min-h-28 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-50"
               />
             </label>
+
+            <div className="mt-3">
+              <div className="flex flex-wrap gap-2.5">
+                {reflectionImages.map((image) => (
+                  <div
+                    key={image.id}
+                    className="group relative h-20 w-20 overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+                  >
+                    <img
+                      src={image.dataUrl}
+                      alt={image.fileName || 'Ảnh ghi chú'}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeReflectionImage(image.id)}
+                      className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-slate-900/75 text-white opacity-90 transition hover:bg-rose-600"
+                      aria-label="Xóa ảnh khỏi ghi chú"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {reflectionImages.length < 4 ? (
+                  <label className="grid h-20 w-20 cursor-pointer place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 text-slate-400 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600">
+                    <span className="flex flex-col items-center gap-1 text-[10px] font-semibold">
+                      <ImagePlus className="h-5 w-5" />
+                      Thêm ảnh
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        void addReflectionImages(event.target.files);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">Tối đa 4 ảnh · ảnh được nén để đồng bộ cùng task</p>
+            </div>
 
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="text-[10px] font-medium text-slate-400">

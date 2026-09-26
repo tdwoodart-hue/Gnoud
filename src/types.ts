@@ -38,6 +38,7 @@ export interface Task {
   subtasks: Subtask[];
   notes?: string;
   reflection?: string;
+  reflectionImages?: TaskReferenceImage[];
   tags: string[];
   reminder?: string;
   recurrence?: 'none' | 'daily' | 'weekly' | 'weekdays' | 'monthly';

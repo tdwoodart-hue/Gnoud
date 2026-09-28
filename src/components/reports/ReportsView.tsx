@@ -1,20 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
   CheckCircle2,
   Clock3,
   Flame,
   Footprints,
   Layers,
+  Minus,
   Scale,
   Target,
+  TrendingUp,
   UtensilsCrossed,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { loadNutritionState, type NutritionState } from '../../services/nutritionService';
 import {
+  buildDailyTaskActivity,
   buildHabitReport,
   buildNutritionReport,
+  buildPeriodComparison,
   buildProjectReport,
   buildReportSummary,
   formatLocalDate,
@@ -40,13 +46,30 @@ const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, c
   </div>
 );
 
+const DeltaBadge: React.FC<{ value: number; suffix?: string }> = ({ value, suffix = '' }) => {
+  const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus;
+  return (
+    <span title="So với kỳ trước" className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
+      value > 0
+        ? 'bg-emerald-50 text-emerald-700'
+        : value < 0
+          ? 'bg-rose-50 text-rose-600'
+          : 'bg-slate-100 text-slate-500'
+    }`}>
+      <Icon className="h-3 w-3" />
+      {value > 0 ? '+' : ''}{whole.format(value)}{suffix}
+    </span>
+  );
+};
+
 const StatCard: React.FC<{
   label: string;
   value: string;
   meta: string;
   icon: React.FC<{ className?: string }>;
   tone: string;
-}> = ({ label, value, meta, icon: Icon, tone }) => (
+  delta?: React.ReactNode;
+}> = ({ label, value, meta, icon: Icon, tone, delta }) => (
   <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
     <div className="flex items-center justify-between gap-3">
       <span className="text-[11px] font-semibold text-slate-400">{label}</span>
@@ -55,7 +78,10 @@ const StatCard: React.FC<{
       </span>
     </div>
     <p className="mt-2 text-[22px] font-bold tracking-tight tabular-nums text-slate-900">{value}</p>
-    <p className="mt-0.5 text-[10px] font-medium text-slate-400">{meta}</p>
+    <div className="mt-0.5 flex min-h-5 items-center justify-between gap-2">
+      <p className="truncate text-[10px] font-medium text-slate-400">{meta}</p>
+      {delta}
+    </div>
   </div>
 );
 
@@ -99,6 +125,11 @@ const NutritionCell: React.FC<{
   </div>
 );
 
+function shortDay(date: string): string {
+  const value = new Date(`${date}T12:00:00`);
+  return new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(value).replace('Th ', 'T');
+}
+
 export const ReportsView: React.FC = () => {
   const { tasks, projects, habits, goals } = useApp();
   const [range, setRange] = useState<ReportRange>('7d');
@@ -121,6 +152,8 @@ export const ReportsView: React.FC = () => {
   }, []);
 
   const summary = useMemo(() => buildReportSummary(tasks, range, today), [tasks, range, today]);
+  const comparison = useMemo(() => buildPeriodComparison(tasks, range, today), [tasks, range, today]);
+  const activity = useMemo(() => buildDailyTaskActivity(tasks, today, 7), [tasks, today]);
   const projectRows = useMemo(() => buildProjectReport(projects, tasks, range, today), [projects, tasks, range, today]);
   const habitRows = useMemo(() => buildHabitReport(habits, today, 7), [habits, today]);
   const nutritionReport = useMemo(() => buildNutritionReport(nutrition, range, today), [nutrition, range, today]);
@@ -134,6 +167,15 @@ export const ReportsView: React.FC = () => {
   const stepProgress = nutritionReport.averageSteps === null
     ? 0
     : (nutritionReport.averageSteps / nutrition.profile.stepTarget) * 100;
+
+  const activityMax = Math.max(1, ...activity.flatMap((row) => [row.planned, row.completed]));
+  const focusMax = Math.max(0, ...activity.map((row) => row.focusMinutes));
+  const hasActivity = activity.some((row) => row.completed > 0 || row.focusMinutes > 0);
+  const bestDay = hasActivity
+    ? [...activity].sort((a, b) => b.completed - a.completed || b.focusMinutes - a.focusMinutes)[0]
+    : null;
+  const weekFocus = activity.reduce((sum, row) => sum + row.focusMinutes, 0);
+  const weekCompleted = activity.reduce((sum, row) => sum + row.completed, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
@@ -163,6 +205,7 @@ export const ReportsView: React.FC = () => {
           meta={`${summary.doneTasks}/${summary.totalTasks} việc`}
           icon={CheckCircle2}
           tone="border-emerald-200/70 bg-emerald-50 text-emerald-700"
+          delta={comparison ? <DeltaBadge value={comparison.completionRateDelta} suffix="đ" /> : undefined}
         />
         <StatCard
           label="Tập trung"
@@ -170,6 +213,7 @@ export const ReportsView: React.FC = () => {
           meta={`${whole.format(summary.focusMinutes)} phút`}
           icon={Clock3}
           tone="border-indigo-200/70 bg-indigo-50 text-indigo-700"
+          delta={comparison ? <DeltaBadge value={comparison.focusMinutesDelta} suffix="p" /> : undefined}
         />
         <StatCard
           label="Đúng hạn"
@@ -186,6 +230,55 @@ export const ReportsView: React.FC = () => {
           tone="border-amber-200/70 bg-amber-50 text-amber-700"
         />
       </div>
+
+      <ReportSection
+        title="Nhịp 7 ngày"
+        icon={TrendingUp}
+        trailing={<span className="text-[10px] font-semibold text-slate-400">{weekCompleted} việc · {whole.format(weekFocus)}p</span>}
+      >
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs sm:p-4">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+            {activity.map((row) => (
+              <div key={row.date} className="min-w-0 text-center">
+                <div className="mx-auto flex h-24 max-w-10 items-end justify-center gap-1 rounded-xl bg-slate-50 px-1.5 pb-2 pt-2">
+                  <span
+                    className="w-2 rounded-full bg-slate-300"
+                    style={{ height: `${Math.max(5, (row.planned / activityMax) * 72)}%` }}
+                    title={`${row.planned} việc đã lên lịch`}
+                  />
+                  <span
+                    className="w-2 rounded-full bg-indigo-500"
+                    style={{ height: `${Math.max(5, (row.completed / activityMax) * 72)}%` }}
+                    title={`${row.completed} việc hoàn thành`}
+                  />
+                </div>
+                <p className="mt-1.5 truncate text-[9px] font-bold text-slate-500">{shortDay(row.date)}</p>
+                <p className="mt-0.5 truncate text-[8px] font-medium text-slate-400">{row.focusMinutes}p</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-[9px] font-semibold text-slate-400">Ngày hoàn thành nhiều nhất</p>
+              <p className="mt-0.5 text-xs font-bold text-slate-800">{bestDay ? `${shortDay(bestDay.date)} · ${bestDay.completed} việc` : '—'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-[9px] font-semibold text-slate-400">Tập trung TB / ngày</p>
+              <p className="mt-0.5 text-xs font-bold text-slate-800">{whole.format(weekFocus / 7)} phút</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-[9px] font-semibold text-slate-400">Mức tập trung cao nhất</p>
+              <p className="mt-0.5 text-xs font-bold text-slate-800">{whole.format(focusMax)} phút</p>
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center gap-3 text-[8px] font-semibold text-slate-400">
+            <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-slate-300" /> Đã lên lịch</span>
+            <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-indigo-500" /> Hoàn thành</span>
+          </div>
+        </div>
+      </ReportSection>
 
       <ReportSection title="Dinh dưỡng & cơ thể" icon={UtensilsCrossed}>
         <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs lg:grid-cols-4">

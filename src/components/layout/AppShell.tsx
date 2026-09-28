@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BarChart3,
+  BookOpen,
   Command,
   Eye,
   EyeOff,
@@ -22,6 +23,7 @@ const icons: Record<NavTab, React.FC<{ className?: string }>> = {
   tasks: ListTodo,
   nutrition: UtensilsCrossed,
   personal: UserRound,
+  reader: BookOpen,
   reports: BarChart3,
 };
 
@@ -130,7 +132,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
         {PRIMARY_NAV_ITEMS.map((item) => {
           const Icon = icons[item.id];
           const active = activeTab === item.id;
@@ -139,14 +141,14 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               key={item.id}
               type="button"
               onClick={() => setActiveTab(item.id)}
-              className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-semibold transition-all duration-150 ${
+              className={`flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-[9px] font-semibold transition-all duration-150 ${
                 active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              <span className={`grid h-8 w-12 place-items-center rounded-xl transition-colors ${active ? 'border border-indigo-100 bg-indigo-50/80' : ''}`}>
-                <Icon className="h-[18px] w-[18px]" />
+              <span className={`grid h-8 w-10 place-items-center rounded-xl transition-colors ${active ? 'border border-indigo-100 bg-indigo-50/80' : ''}`}>
+                <Icon className="h-[17px] w-[17px]" />
               </span>
-              <span className="leading-none">{item.label}</span>
+              <span className="max-w-full truncate leading-none">{item.label}</span>
             </button>
           );
         })}

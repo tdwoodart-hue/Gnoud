@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createReaderBook, paginateBookContent } from '../src/services/readerService';
+
+test('reader pagination keeps paragraph content in order', () => {
+  const content = 'Đoạn một ngắn.\n\nĐoạn hai dài hơn một chút.\n\nĐoạn ba.';
+  const pages = paginateBookContent(content, 35);
+  assert.ok(pages.length >= 2);
+  assert.equal(pages.join('\n\n').replace(/\n\n+/g, '\n\n'), content);
+});
+
+test('new reader book starts at first page with compact defaults', () => {
+  const book = createReaderBook({ title: '  Sách thử  ', author: ' Tác giả ', content: ' Nội dung ' });
+  assert.equal(book.title, 'Sách thử');
+  assert.equal(book.author, 'Tác giả');
+  assert.equal(book.content, 'Nội dung');
+  assert.equal(book.currentPage, 0);
+  assert.equal(book.fontSize, 18);
+  assert.equal(book.theme, 'paper');
+});

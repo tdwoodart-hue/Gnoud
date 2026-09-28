@@ -4,6 +4,7 @@ import {
   buildDailyTaskActivity,
   buildHabitReport,
   buildNutritionReport,
+  buildPeriodComparison,
   buildProjectReport,
   buildReportSummary,
   getReportStart,
@@ -48,6 +49,28 @@ test('summary separates completion, on-time, overdue and focus', () => {
   assert.equal(result.onTimeRate, 50);
   assert.equal(result.overdueOpen, 1);
   assert.equal(result.importantOpen, 1);
+});
+
+test('period comparison compares current range with the previous equal range', () => {
+  const tasks = [
+    task({ id: 'current-a', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19', actualMinutes: 60 }),
+    task({ id: 'current-b', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18', actualMinutes: 30 }),
+    task({ id: 'current-open', plannedDate: '2026-09-17', status: 'todo' }),
+    task({ id: 'previous-a', plannedDate: '2026-09-12', status: 'done', completedAt: '2026-09-12', actualMinutes: 20 }),
+    task({ id: 'previous-open', plannedDate: '2026-09-11', status: 'todo' }),
+  ];
+  const result = buildPeriodComparison(tasks, '7d', '2026-09-19');
+  assert.ok(result);
+  assert.equal(result?.currentCompleted, 2);
+  assert.equal(result?.previousCompleted, 1);
+  assert.equal(result?.completedDelta, 1);
+  assert.equal(result?.currentFocusMinutes, 90);
+  assert.equal(result?.previousFocusMinutes, 20);
+  assert.equal(result?.focusMinutesDelta, 70);
+  assert.equal(result?.currentCompletionRate, 67);
+  assert.equal(result?.previousCompletionRate, 50);
+  assert.equal(result?.completionRateDelta, 17);
+  assert.equal(buildPeriodComparison(tasks, 'all', '2026-09-19'), null);
 });
 
 test('daily activity counts planned, completed and focus minutes', () => {

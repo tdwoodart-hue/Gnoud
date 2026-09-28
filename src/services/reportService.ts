@@ -22,6 +22,18 @@ export interface DailyTaskActivity {
   focusMinutes: number;
 }
 
+export interface ReportComparison {
+  currentCompleted: number;
+  previousCompleted: number;
+  completedDelta: number;
+  currentFocusMinutes: number;
+  previousFocusMinutes: number;
+  focusMinutesDelta: number;
+  currentCompletionRate: number;
+  previousCompletionRate: number;
+  completionRateDelta: number;
+}
+
 export interface ProjectReportRow {
   project: Project;
   total: number;
@@ -87,6 +99,17 @@ function taskBelongsToRange(task: Task, start: string | undefined, end: string):
   return inDateRange(representativeDate, start, end);
 }
 
+function summarizeWindow(tasks: Task[], start: string, end: string) {
+  const rangeTasks = tasks.filter((task) => taskBelongsToRange(task, start, end));
+  const done = rangeTasks.filter((task) => task.status === 'done');
+  return {
+    total: rangeTasks.length,
+    done: done.length,
+    completionRate: rangeTasks.length ? Math.round((done.length / rangeTasks.length) * 100) : 0,
+    focusMinutes: Math.round(rangeTasks.reduce((sum, task) => sum + (task.actualMinutes || 0), 0)),
+  };
+}
+
 export function buildReportSummary(
   tasks: Task[],
   range: ReportRange,
@@ -116,6 +139,32 @@ export function buildReportSummary(
     onTimeRate: deadlineDoneTasks.length
       ? Math.round((onTimeDone / deadlineDoneTasks.length) * 100)
       : null,
+  };
+}
+
+export function buildPeriodComparison(
+  tasks: Task[],
+  range: ReportRange,
+  today: string,
+): ReportComparison | null {
+  if (range === 'all') return null;
+  const days = range === '7d' ? 7 : 30;
+  const currentStart = shiftIsoDate(today, -(days - 1));
+  const previousEnd = shiftIsoDate(currentStart, -1);
+  const previousStart = shiftIsoDate(previousEnd, -(days - 1));
+  const current = summarizeWindow(tasks, currentStart, today);
+  const previous = summarizeWindow(tasks, previousStart, previousEnd);
+
+  return {
+    currentCompleted: current.done,
+    previousCompleted: previous.done,
+    completedDelta: current.done - previous.done,
+    currentFocusMinutes: current.focusMinutes,
+    previousFocusMinutes: previous.focusMinutes,
+    focusMinutesDelta: current.focusMinutes - previous.focusMinutes,
+    currentCompletionRate: current.completionRate,
+    previousCompletionRate: previous.completionRate,
+    completionRateDelta: current.completionRate - previous.completionRate,
   };
 }
 

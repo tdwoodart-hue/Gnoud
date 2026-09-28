@@ -1,19 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  AlignJustify,
+  AlignLeft,
   BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   FilePlus2,
+  Headphones,
   Library,
   List,
   LoaderCircle,
   Maximize2,
   Minimize2,
   Moon,
+  Pause,
+  Play,
   Settings2,
+  Square,
   SunMedium,
   Trash2,
   Type,
@@ -21,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
+  calculateReaderProgress,
   createReaderBook,
   deleteReaderBinary,
   detectReaderFormat,
@@ -98,6 +105,40 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function readingLabel(book: ReaderBook): string {
+  if (book.format === 'pdf') return 'PDF';
+  const value = Math.round(clamp(book.overallProgress || 0, 0, 1) * 100);
+  if (value <= 0) return 'Chưa đọc';
+  if (value >= 100) return 'Đã đọc xong';
+  return `${value}% đã đọc`;
+}
+
+function splitSpeechText(text: string, maxChars = 240): string[] {
+  const sentences = (text.replace(/\s+/g, ' ').trim().match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [])
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+  let current = '';
+  for (const sentence of sentences) {
+    if (sentence.length > maxChars) {
+      if (current) { chunks.push(current); current = ''; }
+      for (let start = 0; start < sentence.length; start += maxChars) {
+        chunks.push(sentence.slice(start, start + maxChars).trim());
+      }
+      continue;
+    }
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (current && next.length > maxChars) {
+      chunks.push(current);
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 export const ReaderView: React.FC = () => {
   const { user, addToast } = useApp();
   const [books, setBooks] = useState<ReaderBook[]>([]);
@@ -118,11 +159,18 @@ export const ReaderView: React.FC = () => {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [liveScrollProgress, setLiveScrollProgress] = useState(0);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
+  const [ttsOpen, setTtsOpen] = useState(false);
+  const [ttsStatus, setTtsStatus] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const epubCacheRef = useRef(new Map<string, EpubChapter[]>());
   const readingScrollRef = useRef<HTMLDivElement>(null);
   const scrollSaveTimerRef = useRef<number | null>(null);
+  const speechChunksRef = useRef<string[]>([]);
+  const speechIndexRef = useRef(0);
+  const speechStoppedRef = useRef(false);
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -139,6 +187,40 @@ export const ReaderView: React.FC = () => {
     if (loadedFor !== storageIdentity) return;
     saveReaderLibrary(user?.uid, books);
   }, [books, loadedFor, storageIdentity, user?.uid]);
+
+  useEffect(() => {
+    let disposed = false;
+    const createdUrls: string[] = [];
+    const loadCovers = async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(books.map(async (book) => {
+        if (!book.coverKey) return;
+        try {
+          const blob = await loadReaderBinary(book.coverKey);
+          if (!blob || disposed) return;
+          const url = URL.createObjectURL(blob);
+          createdUrls.push(url);
+          next[book.id] = url;
+        } catch {
+          // Bìa là dữ liệu phụ; không chặn thư viện nếu đọc bìa lỗi.
+        }
+      }));
+      if (!disposed) setCoverUrls(next);
+    };
+    void loadCovers();
+    return () => {
+      disposed = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [books.map((book) => `${book.id}:${book.coverKey || ''}`).join('|')]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
+    const refresh = () => setTtsVoices(window.speechSynthesis.getVoices());
+    refresh();
+    window.speechSynthesis.addEventListener?.('voiceschanged', refresh);
+    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', refresh);
+  }, []);
 
   const activeBook = books.find((book) => book.id === activeBookId) || null;
 
@@ -178,13 +260,26 @@ export const ReaderView: React.FC = () => {
         } else {
           const parsed = await parseEpubBook(blob);
           epubCacheRef.current.set(activeBook.id, parsed.chapters);
+          let discoveredCoverKey = activeBook.coverKey;
+          if (parsed.cover && !discoveredCoverKey) {
+            discoveredCoverKey = `reader-cover:${activeBook.id}`;
+            await saveReaderBinary(discoveredCoverKey, parsed.cover);
+          }
           if (!disposed) {
             setEpubChapters(parsed.chapters);
-            if ((!activeBook.author && parsed.author) || (activeBook.title === formatFileTitle(activeBook.fileName || '') && parsed.title)) {
+            const shouldRefreshMetadata =
+              (!activeBook.author && parsed.author) ||
+              (activeBook.title === formatFileTitle(activeBook.fileName || '') && parsed.title) ||
+              !activeBook.chapterCount ||
+              Boolean(discoveredCoverKey && discoveredCoverKey !== activeBook.coverKey);
+            if (shouldRefreshMetadata) {
               setBooks((previous) => previous.map((book) => book.id === activeBook.id ? {
                 ...book,
                 title: parsed.title || book.title,
                 author: parsed.author || book.author,
+                coverKey: discoveredCoverKey || book.coverKey,
+                chapterCount: parsed.chapters.length,
+                overallProgress: calculateReaderProgress('epub', book.currentChapter, parsed.chapters.length, book.scrollProgress),
                 updatedAt: new Date().toISOString(),
               } : book));
             }
@@ -209,14 +304,21 @@ export const ReaderView: React.FC = () => {
     : 0;
   const activeChapter = epubChapters[chapterIndex];
   const readerText = activeBook?.format === 'epub' ? (activeChapter?.content || '') : (activeBook?.content || '');
+  const readerParagraphs = useMemo(
+    () => readerText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean),
+    [readerText],
+  );
 
-  const progress = useMemo(() => {
-    if (!activeBook || activeBook.format === 'pdf') return 0;
-    if (activeBook.format === 'epub' && epubChapters.length) {
-      return Math.round(((chapterIndex + liveScrollProgress) / epubChapters.length) * 100);
-    }
-    return Math.round(liveScrollProgress * 100);
+  const progressRatio = useMemo(() => {
+    if (!activeBook) return 0;
+    return calculateReaderProgress(
+      activeBook.format,
+      chapterIndex,
+      epubChapters.length || activeBook.chapterCount,
+      liveScrollProgress,
+    );
   }, [activeBook, chapterIndex, epubChapters.length, liveScrollProgress]);
+  const progress = Math.round(progressRatio * 100);
 
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
@@ -256,6 +358,10 @@ export const ReaderView: React.FC = () => {
     if (!readingOpen) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        speechStoppedRef.current = true;
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+        setTtsStatus('idle');
+        setTtsOpen(false);
         setSettingsOpen(false);
         setTocOpen(false);
         setReadingOpen(false);
@@ -274,26 +380,105 @@ export const ReaderView: React.FC = () => {
   }, [readingOpen, activeBook?.format]);
 
   useEffect(() => {
-    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || activeBook?.format === 'pdf') return undefined;
+    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || ttsOpen || activeBook?.format === 'pdf') return undefined;
     const timer = window.setTimeout(() => setControlsVisible(false), 4200);
     return () => window.clearTimeout(timer);
-  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, activeBook?.format]);
+  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen, activeBook?.format]);
+
+  const supportsTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+
+  const selectedVoice = activeBook
+    ? ttsVoices.find((voice) => voice.voiceURI === activeBook.ttsVoiceUri)
+      || ttsVoices.find((voice) => voice.lang.toLowerCase().startsWith('vi'))
+      || ttsVoices[0]
+    : undefined;
+
+  const stopSpeech = () => {
+    speechStoppedRef.current = true;
+    if (supportsTts) window.speechSynthesis.cancel();
+    setTtsStatus('idle');
+  };
+
+  const speakSpeechChunk = (index: number) => {
+    if (!supportsTts || speechStoppedRef.current || !activeBook) return;
+    const chunks = speechChunksRef.current;
+    if (index >= chunks.length) {
+      setTtsStatus('idle');
+      return;
+    }
+    speechIndexRef.current = index;
+    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+    } else {
+      utterance.lang = 'vi-VN';
+    }
+    utterance.rate = activeBook.ttsRate || 1;
+    utterance.onend = () => {
+      if (!speechStoppedRef.current) speakSpeechChunk(index + 1);
+    };
+    utterance.onerror = (event) => {
+      if (event.error !== 'interrupted' && event.error !== 'canceled') setTtsStatus('idle');
+    };
+    window.speechSynthesis.speak(utterance);
+    setTtsStatus('playing');
+  };
+
+  const startSpeech = () => {
+    if (!activeBook || activeBook.format === 'pdf') return;
+    if (!supportsTts) {
+      addToast('Trình duyệt này chưa hỗ trợ đọc sách bằng giọng nói.', 'warning');
+      return;
+    }
+    const chunks = splitSpeechText(readerText);
+    if (!chunks.length) {
+      addToast('Chương này không có nội dung để đọc.', 'warning');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    speechStoppedRef.current = false;
+    speechChunksRef.current = chunks;
+    const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
+    speakSpeechChunk(startIndex);
+  };
+
+  const toggleSpeech = () => {
+    if (!supportsTts) {
+      startSpeech();
+      return;
+    }
+    if (ttsStatus === 'playing') {
+      window.speechSynthesis.pause();
+      setTtsStatus('paused');
+    } else if (ttsStatus === 'paused') {
+      window.speechSynthesis.resume();
+      setTtsStatus('playing');
+    } else {
+      startSpeech();
+    }
+  };
+
+  useEffect(() => () => {
+    speechStoppedRef.current = true;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  }, []);
 
   const openBook = (id: string) => {
+    stopSpeech();
     setActiveBookId(id);
     setReadingOpen(true);
     setControlsVisible(true);
     setSettingsOpen(false);
     setTocOpen(false);
+    setTtsOpen(false);
     updateBook(id, { lastOpenedAt: new Date().toISOString() });
   };
 
   const addBook = (book: ReaderBook) => {
     setBooks((previous) => [book, ...previous]);
-    setActiveBookId(book.id);
-    setReadingOpen(true);
-    setControlsVisible(true);
-    addToast(`Đã thêm “${book.title}”`, 'success');
+    if (!activeBookId) setActiveBookId(book.id);
+    addToast(`Đã thêm “${book.title}” vào thư viện`, 'success');
   };
 
   const handleFile = async (file?: File) => {
@@ -330,12 +515,11 @@ export const ReaderView: React.FC = () => {
 
       let parsedTitle = formatFileTitle(file.name);
       let parsedAuthor: string | undefined;
-      let parsedChapters: EpubChapter[] | undefined;
+      let parsedEpub: Awaited<ReturnType<typeof parseEpubBook>> | undefined;
       if (format === 'epub') {
-        const parsed = await parseEpubBook(file);
-        parsedTitle = parsed.title || parsedTitle;
-        parsedAuthor = parsed.author;
-        parsedChapters = parsed.chapters;
+        parsedEpub = await parseEpubBook(file);
+        parsedTitle = parsedEpub.title || parsedTitle;
+        parsedAuthor = parsedEpub.author;
       }
 
       const book = createReaderBook({
@@ -347,7 +531,14 @@ export const ReaderView: React.FC = () => {
       });
       book.binaryKey = `reader-file:${book.id}`;
       await saveReaderBinary(book.binaryKey, file);
-      if (parsedChapters) epubCacheRef.current.set(book.id, parsedChapters);
+      if (parsedEpub) {
+        if (parsedEpub.cover) {
+          book.coverKey = `reader-cover:${book.id}`;
+          await saveReaderBinary(book.coverKey, parsedEpub.cover);
+        }
+        book.chapterCount = parsedEpub.chapters.length;
+        epubCacheRef.current.set(book.id, parsedEpub.chapters);
+      }
       addBook(book);
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'Không thể thêm file sách.', 'error');
@@ -382,11 +573,14 @@ export const ReaderView: React.FC = () => {
     const nextBooks = books.filter((item) => item.id !== book.id);
     setBooks(nextBooks);
     if (activeBookId === book.id) {
+      stopSpeech();
       setActiveBookId(nextBooks[0]?.id || null);
       setReadingOpen(false);
+      setTtsOpen(false);
     }
     epubCacheRef.current.delete(book.id);
     if (book.binaryKey) void deleteReaderBinary(book.binaryKey).catch(() => undefined);
+    if (book.coverKey) void deleteReaderBinary(book.coverKey).catch(() => undefined);
     addToast(`Đã xóa “${book.title}” khỏi thư viện`, 'info');
   };
 
@@ -398,16 +592,31 @@ export const ReaderView: React.FC = () => {
     setLiveScrollProgress(ratio);
     if (scrollSaveTimerRef.current) window.clearTimeout(scrollSaveTimerRef.current);
     scrollSaveTimerRef.current = window.setTimeout(() => {
-      updateBook(activeBook.id, { scrollProgress: ratio, lastOpenedAt: new Date().toISOString() });
+      const overallProgress = calculateReaderProgress(
+        activeBook.format,
+        chapterIndex,
+        epubChapters.length || activeBook.chapterCount,
+        ratio,
+      );
+      updateBook(activeBook.id, { scrollProgress: ratio, overallProgress, lastOpenedAt: new Date().toISOString() });
     }, 260);
   };
 
   const changeChapter = (nextIndex: number) => {
     if (!activeBook || activeBook.format !== 'epub' || epubChapters.length === 0) return;
     const target = clamp(nextIndex, 0, epubChapters.length - 1);
+    stopSpeech();
     setLiveScrollProgress(0);
-    updateBook(activeBook.id, { currentChapter: target, currentPage: 0, scrollProgress: 0, lastOpenedAt: new Date().toISOString() });
+    updateBook(activeBook.id, {
+      currentChapter: target,
+      currentPage: 0,
+      scrollProgress: 0,
+      overallProgress: calculateReaderProgress('epub', target, epubChapters.length, 0),
+      chapterCount: epubChapters.length,
+      lastOpenedAt: new Date().toISOString(),
+    });
     setTocOpen(false);
+    setTtsOpen(false);
     setControlsVisible(true);
   };
 
@@ -462,9 +671,11 @@ export const ReaderView: React.FC = () => {
   };
 
   const closeReader = () => {
+    stopSpeech();
     setReadingOpen(false);
     setSettingsOpen(false);
     setTocOpen(false);
+    setTtsOpen(false);
     setControlsVisible(true);
   };
 
@@ -513,7 +724,22 @@ export const ReaderView: React.FC = () => {
               {activeBook.format === 'epub' && activeChapter?.title ? (
                 <h1 className="mb-8 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
               ) : null}
-              <div className="whitespace-pre-wrap text-left [text-wrap:pretty]">{readerText}</div>
+              <div lang="vi" className="[text-wrap:pretty]">
+                {readerParagraphs.map((paragraph, index) => (
+                  <p
+                    key={`${index}-${paragraph.slice(0, 18)}`}
+                    className="mb-[0.95em] last:mb-0"
+                    style={{
+                      textAlign: activeBook.textAlign,
+                      textJustify: 'inter-word',
+                      hyphens: 'auto',
+                      wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
+                    }}
+                  >
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             </article>
           </div>
         )}
@@ -539,7 +765,7 @@ export const ReaderView: React.FC = () => {
               {activeBook.format === 'epub' && (
                 <button
                   type="button"
-                  onClick={() => { setTocOpen(true); setSettingsOpen(false); }}
+                  onClick={() => { setTocOpen(true); setSettingsOpen(false); setTtsOpen(false); }}
                   className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/5"
                   title="Mục lục"
                   aria-label="Mục lục"
@@ -550,7 +776,18 @@ export const ReaderView: React.FC = () => {
               {activeBook.format !== 'pdf' && (
                 <button
                   type="button"
-                  onClick={() => { setSettingsOpen(true); setTocOpen(false); }}
+                  onClick={() => { setTtsOpen(true); setSettingsOpen(false); setTocOpen(false); }}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/5 ${ttsStatus !== 'idle' ? 'text-indigo-500' : ''}`}
+                  title="Nghe sách"
+                  aria-label="Nghe sách"
+                >
+                  <Headphones className="h-[18px] w-[18px]" />
+                </button>
+              )}
+              {activeBook.format !== 'pdf' && (
+                <button
+                  type="button"
+                  onClick={() => { setSettingsOpen(true); setTocOpen(false); setTtsOpen(false); }}
                   className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/5"
                   title="Kiểu đọc"
                   aria-label="Kiểu đọc"
@@ -672,6 +909,26 @@ export const ReaderView: React.FC = () => {
                   </div>
 
                   <div>
+                    <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Căn chữ</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateBook(activeBook.id, { textAlign: 'justify' })}
+                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'justify' ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                      >
+                        <AlignJustify className="h-4 w-4" /> Căn đều
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateBook(activeBook.id, { textAlign: 'left' })}
+                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'left' ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                      >
+                        <AlignLeft className="h-4 w-4" /> Căn trái
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
                     <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Bề rộng trang</p>
                     <div className="grid grid-cols-3 gap-2">
                       {([
@@ -698,6 +955,84 @@ export const ReaderView: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {ttsOpen && activeBook.format !== 'pdf' && (
+          <div className="absolute inset-0 z-30 flex items-end bg-black/20" onClick={() => setTtsOpen(false)}>
+            <section
+              className={`w-full rounded-t-[28px] border-t p-5 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl ${themeStyles[activeBook.theme].panel}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto max-w-xl">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold">Nghe sách</h2>
+                    <p className={`mt-0.5 text-[10px] font-semibold ${themeStyles[activeBook.theme].muted}`}>Đọc từ vị trí hiện tại trong chương này</p>
+                  </div>
+                  <button type="button" onClick={() => setTtsOpen(false)} className="grid h-9 w-9 place-items-center rounded-full hover:bg-black/5"><X className="h-4 w-4" /></button>
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={toggleSpeech}
+                    className="grid h-14 w-14 place-items-center rounded-full bg-indigo-500 text-white shadow-sm transition hover:bg-indigo-600"
+                    aria-label={ttsStatus === 'playing' ? 'Tạm dừng' : 'Phát'}
+                  >
+                    {ttsStatus === 'playing' ? <Pause className="h-6 w-6" /> : <Play className="ml-0.5 h-6 w-6" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopSpeech}
+                    disabled={ttsStatus === 'idle'}
+                    className="grid h-11 w-11 place-items-center rounded-full border border-current/15 disabled:opacity-35"
+                    aria-label="Dừng đọc"
+                  >
+                    <Square className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <label>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Giọng đọc</span>
+                    <select
+                      value={selectedVoice?.voiceURI || ''}
+                      onChange={(event) => {
+                        stopSpeech();
+                        updateBook(activeBook.id, { ttsVoiceUri: event.target.value || undefined });
+                      }}
+                      className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
+                    >
+                      {ttsVoices.length ? ttsVoices.map((voice) => (
+                        <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>
+                      )) : <option value="">Giọng mặc định của thiết bị</option>}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Tốc độ</span><span>{activeBook.ttsRate.toFixed(1)}×</span></span>
+                    <input
+                      type="range"
+                      min="0.7"
+                      max="1.6"
+                      step="0.1"
+                      value={activeBook.ttsRate}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        stopSpeech();
+                        updateBook(activeBook.id, { ttsRate: value });
+                      }}
+                      className="mt-4 w-full accent-indigo-500"
+                    />
+                  </label>
+                </div>
+
+                <p className={`mt-4 text-center text-[10px] font-medium leading-5 ${themeStyles[activeBook.theme].muted}`}>
+                  Dùng giọng đọc có sẵn trên máy. EPUB/TXT hỗ trợ nghe; PDF hiện dùng trình xem PDF của thiết bị.
+                </p>
               </div>
             </section>
           </div>
@@ -747,15 +1082,18 @@ export const ReaderView: React.FC = () => {
           className="group w-full overflow-hidden rounded-[24px] border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 text-left shadow-xs transition hover:border-indigo-200 hover:shadow-sm"
         >
           <div className="flex items-center gap-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white shadow-sm">
-              <BookOpen className="h-6 w-6" />
+            <span className="grid h-[76px] w-[54px] shrink-0 place-items-center overflow-hidden rounded-xl bg-indigo-600 text-white shadow-sm">
+              {coverUrls[activeBook.id] ? (
+                <img src={coverUrls[activeBook.id]} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <BookOpen className="h-6 w-6" />
+              )}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-500">Đọc tiếp</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-500">{activeBook.overallProgress > 0 ? 'Đọc tiếp' : 'Bắt đầu đọc'}</p>
               <h2 className="mt-1 truncate text-base font-bold text-slate-900">{activeBook.title}</h2>
               <p className="mt-1 truncate text-[11px] font-medium text-slate-400">
-                {activeBook.author || formatLabels[activeBook.format]}
-                {activeBook.format !== 'pdf' ? ` · ${Math.round((activeBook.scrollProgress || 0) * 100)}% chương hiện tại` : ''}
+                {activeBook.author ? `${activeBook.author} · ` : ''}{readingLabel(activeBook)}
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-indigo-400 transition group-hover:translate-x-0.5" />
@@ -792,12 +1130,19 @@ export const ReaderView: React.FC = () => {
             {books.map((book, index) => (
               <div key={book.id} className={`flex items-center gap-3 px-3 py-3 ${index > 0 ? 'border-t border-slate-100' : ''}`}>
                 <button type="button" onClick={() => openBook(book.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${book.format === 'epub' ? 'bg-indigo-50 text-indigo-600' : book.format === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
-                    <BookOpen className="h-5 w-5" />
+                  <span className={`grid h-14 w-10 shrink-0 place-items-center overflow-hidden rounded-lg ${book.format === 'epub' ? 'bg-indigo-50 text-indigo-600' : book.format === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                    {coverUrls[book.id] ? (
+                      <img src={coverUrls[book.id]} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <BookOpen className="h-5 w-5" />
+                    )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-slate-900">{book.title}</span>
-                    <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">{book.author || formatLabels[book.format]}{book.fileSize ? ` · ${formatFileSize(book.fileSize)}` : ''}</span>
+                    <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">
+                      {book.author || formatLabels[book.format]}{book.fileSize ? ` · ${formatFileSize(book.fileSize)}` : ''}
+                    </span>
+                    {book.format !== 'pdf' ? <span className="mt-1 block text-[9px] font-bold text-indigo-500">{readingLabel(book)}</span> : null}
                   </span>
                 </button>
                 <button type="button" onClick={() => removeBook(book)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-300 transition hover:bg-rose-50 hover:text-rose-500" title="Xóa sách" aria-label="Xóa sách"><Trash2 className="h-4 w-4" /></button>

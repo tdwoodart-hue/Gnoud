@@ -2,6 +2,7 @@ export type ReaderTheme = 'paper' | 'warm' | 'night';
 export type ReaderFormat = 'text' | 'pdf' | 'epub';
 export type ReaderFont = 'book' | 'serif' | 'sans';
 export type ReaderWidth = 'narrow' | 'medium' | 'wide';
+export type ReaderTextAlign = 'left' | 'justify';
 
 export interface ReaderBook {
   id: string;
@@ -10,15 +11,21 @@ export interface ReaderBook {
   format: ReaderFormat;
   content: string;
   binaryKey?: string;
+  coverKey?: string;
   fileName?: string;
   fileSize?: number;
   currentChapter: number;
   currentPage: number;
   scrollProgress: number;
+  overallProgress: number;
+  chapterCount?: number;
   fontSize: number;
   lineHeight: number;
   fontFamily: ReaderFont;
   contentWidth: ReaderWidth;
+  textAlign: ReaderTextAlign;
+  ttsRate: number;
+  ttsVoiceUri?: string;
   theme: ReaderTheme;
   addedAt: string;
   updatedAt: string;
@@ -35,6 +42,7 @@ export interface ParsedEpubBook {
   title?: string;
   author?: string;
   chapters: EpubChapter[];
+  cover?: Blob;
 }
 
 export const READER_MAX_BOOK_CHARS = 1_200_000;
@@ -54,6 +62,19 @@ export function detectReaderFormat(fileName: string): ReaderFormat | null {
   if (lower.endsWith('.epub')) return 'epub';
   if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.markdown')) return 'text';
   return null;
+}
+
+export function calculateReaderProgress(
+  format: ReaderFormat,
+  currentChapter: number,
+  chapterCount: number | undefined,
+  scrollProgress: number,
+): number {
+  const withinPage = Math.min(1, Math.max(0, scrollProgress || 0));
+  if (format === 'text') return withinPage;
+  if (format !== 'epub' || !chapterCount || chapterCount <= 0) return 0;
+  const chapter = Math.min(chapterCount - 1, Math.max(0, currentChapter || 0));
+  return Math.min(1, Math.max(0, (chapter + withinPage) / chapterCount));
 }
 
 function splitLongBlock(block: string, maxChars: number): string[] {
@@ -106,6 +127,7 @@ export function createReaderBook(input: {
   content?: string;
   format?: ReaderFormat;
   binaryKey?: string;
+  coverKey?: string;
   fileName?: string;
   fileSize?: number;
 }): ReaderBook {
@@ -117,15 +139,21 @@ export function createReaderBook(input: {
     format: input.format || 'text',
     content: (input.content || '').trim(),
     binaryKey: input.binaryKey,
+    coverKey: input.coverKey,
     fileName: input.fileName,
     fileSize: input.fileSize,
     currentChapter: 0,
     currentPage: 0,
     scrollProgress: 0,
+    overallProgress: 0,
+    chapterCount: undefined,
     fontSize: 19,
     lineHeight: 1.8,
     fontFamily: 'book',
     contentWidth: 'medium',
+    textAlign: 'justify',
+    ttsRate: 1,
+    ttsVoiceUri: undefined,
     theme: 'paper',
     addedAt: now,
     updatedAt: now,
@@ -146,6 +174,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
         const theme: ReaderTheme = book.theme === 'warm' || book.theme === 'night' ? book.theme : 'paper';
         const fontFamily: ReaderFont = book.fontFamily === 'serif' || book.fontFamily === 'sans' ? book.fontFamily : 'book';
         const contentWidth: ReaderWidth = book.contentWidth === 'narrow' || book.contentWidth === 'wide' ? book.contentWidth : 'medium';
+        const textAlign: ReaderTextAlign = book.textAlign === 'left' ? 'left' : 'justify';
         return {
           id: book.id as string,
           title: typeof book.title === 'string' ? book.title : 'Sách chưa đặt tên',
@@ -153,15 +182,21 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           format,
           content: typeof book.content === 'string' ? book.content : '',
           binaryKey: typeof book.binaryKey === 'string' ? book.binaryKey : undefined,
+          coverKey: typeof book.coverKey === 'string' ? book.coverKey : undefined,
           fileName: typeof book.fileName === 'string' ? book.fileName : undefined,
           fileSize: typeof book.fileSize === 'number' ? book.fileSize : undefined,
           currentChapter: Math.max(0, Number(book.currentChapter) || 0),
           currentPage: Math.max(0, Number(book.currentPage) || 0),
           scrollProgress: Math.min(1, Math.max(0, Number(book.scrollProgress) || 0)),
+          overallProgress: Math.min(1, Math.max(0, Number(book.overallProgress) || 0)),
+          chapterCount: typeof book.chapterCount === 'number' && book.chapterCount > 0 ? Math.round(book.chapterCount) : undefined,
           fontSize: Math.min(30, Math.max(15, Number(book.fontSize) || 19)),
           lineHeight: Math.min(2.3, Math.max(1.4, Number(book.lineHeight) || 1.8)),
           fontFamily,
           contentWidth,
+          textAlign,
+          ttsRate: Math.min(2, Math.max(0.6, Number(book.ttsRate) || 1)),
+          ttsVoiceUri: typeof book.ttsVoiceUri === 'string' ? book.ttsVoiceUri : undefined,
           theme,
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),
           updatedAt: typeof book.updatedAt === 'string' ? book.updatedAt : new Date().toISOString(),
@@ -268,6 +303,15 @@ function resolveZipPath(baseFile: string, href: string): string {
   return normalizeZipPath(`${baseDir}${decoded}`);
 }
 
+function imageMimeFromPath(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  return 'image/jpeg';
+}
+
 function findEocd(view: DataView): number {
   const min = Math.max(0, view.byteLength - 65_557);
   for (let offset = view.byteLength - 22; offset >= min; offset -= 1) {
@@ -359,7 +403,7 @@ export async function parseEpubBook(blob: Blob): Promise<ParsedEpubBook> {
 
   const title = findXmlElement(opfDoc, 'title')?.textContent?.trim() || undefined;
   const author = findXmlElement(opfDoc, 'creator')?.textContent?.trim() || undefined;
-  const manifest = new Map<string, { path: string; mediaType: string }>();
+  const manifest = new Map<string, { id: string; path: string; mediaType: string; properties: string }>();
   Array.from(opfDoc.getElementsByTagName('*'))
     .filter((node) => node.localName === 'item')
     .forEach((item) => {
@@ -367,16 +411,66 @@ export async function parseEpubBook(blob: Blob): Promise<ParsedEpubBook> {
       const href = item.getAttribute('href');
       if (!id || !href) return;
       manifest.set(id, {
+        id,
         path: resolveZipPath(opfPath, href),
         mediaType: item.getAttribute('media-type') || '',
+        properties: item.getAttribute('properties') || '',
       });
     });
+
+  const metadataCoverId = Array.from(opfDoc.getElementsByTagName('*'))
+    .find((node) => node.localName === 'meta' && (node.getAttribute('name') || '').toLowerCase() === 'cover')
+    ?.getAttribute('content') || '';
+  let coverItem =
+    (metadataCoverId ? manifest.get(metadataCoverId) : undefined) ||
+    [...manifest.values()].find((item) => /(?:^|\s)cover-image(?:\s|$)/i.test(item.properties)) ||
+    [...manifest.values()].find((item) => /image\//i.test(item.mediaType) && /cover/i.test(`${item.id} ${item.path}`));
+
+  const guideCoverHref = Array.from(opfDoc.getElementsByTagName('*'))
+    .find((node) => node.localName === 'reference' && (node.getAttribute('type') || '').toLowerCase() === 'cover')
+    ?.getAttribute('href') || '';
+  const possibleCoverPage = coverItem && !/image\//i.test(coverItem.mediaType)
+    ? coverItem.path
+    : (guideCoverHref ? resolveZipPath(opfPath, guideCoverHref) : '');
+
+  if (possibleCoverPage) {
+    try {
+      const coverHtml = await readZipText(buffer, entries, possibleCoverPage);
+      const coverDoc = new DOMParser().parseFromString(coverHtml, 'text/html');
+      const imageNode = coverDoc.querySelector('img, image');
+      const imageHref = imageNode?.getAttribute('src') || imageNode?.getAttribute('href') || imageNode?.getAttribute('xlink:href') || '';
+      if (imageHref) {
+        const imagePath = resolveZipPath(possibleCoverPage, imageHref);
+        coverItem = [...manifest.values()].find((item) => item.path === imagePath) || {
+          id: 'cover-fallback',
+          path: imagePath,
+          mediaType: imageMimeFromPath(imagePath),
+          properties: 'cover-image',
+        };
+      }
+    } catch {
+      // Tiếp tục fallback sang cover image trực tiếp nếu cover page lỗi.
+    }
+  }
+
+  let cover: Blob | undefined;
+  if (coverItem && /image\//i.test(coverItem.mediaType || imageMimeFromPath(coverItem.path))) {
+    const entry = entries.get(normalizeZipPath(coverItem.path));
+    if (entry) {
+      try {
+        const bytes = await readZipEntry(buffer, entry);
+        cover = new Blob([bytes], { type: coverItem.mediaType || imageMimeFromPath(coverItem.path) });
+      } catch {
+        cover = undefined;
+      }
+    }
+  }
 
   const spineIds = Array.from(opfDoc.getElementsByTagName('*'))
     .filter((node) => node.localName === 'itemref')
     .map((item) => item.getAttribute('idref'))
     .filter((id): id is string => Boolean(id));
-  const ordered = spineIds.map((id) => manifest.get(id)).filter((item): item is { path: string; mediaType: string } => Boolean(item));
+  const ordered = spineIds.map((id) => manifest.get(id)).filter((item): item is { id: string; path: string; mediaType: string; properties: string } => Boolean(item));
   const fallbackItems = [...manifest.values()].filter((item) => /xhtml|html/i.test(item.mediaType) || /\.(xhtml?|html?)$/i.test(item.path));
   const chapterItems = ordered.length ? ordered : fallbackItems;
 
@@ -397,5 +491,5 @@ export async function parseEpubBook(blob: Blob): Promise<ParsedEpubBook> {
     }
   }
   if (!chapters.length) throw new Error('EPUB không có chương văn bản có thể đọc.');
-  return { title, author, chapters };
+  return { title, author, chapters, cover };
 }

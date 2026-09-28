@@ -21,17 +21,20 @@ Gnoud đang đi theo hướng **personal operating system gọn, mobile-first**:
 
 Tính năng reader hiện có:
 
-- Màn thư viện gọn: **Đọc tiếp** + danh sách sách + nút thêm sách, không nhét toolbar đọc vào màn quản lý.
+- Màn thư viện gọn: **Đọc tiếp / Bắt đầu đọc** + danh sách sách + nút thêm sách; **thêm sách xong vẫn ở trang Thư viện**, không tự động nhảy vào reader.
 - **Chế độ đọc immersive/full-screen trong app** che toàn bộ bottom navigation.
 - Nút **fullscreen hệ thống** (Fullscreen API) khi browser hỗ trợ.
 - Toolbar tự ẩn khi đọc; chạm giữa màn để ẩn/hiện.
 - Chạm mép trái/phải hoặc dùng nút mũi tên để lùi/tiến gần một màn hình; desktop hỗ trợ PageUp/PageDown và phím mũi tên.
 - **Đổi font**: Book / Serif / Sans.
+- **Căn đều hai bên (justify)** kiểu reader/Kindle hoặc chuyển về căn trái.
 - Chỉnh **cỡ chữ**, **giãn dòng**, **bề rộng trang**.
 - 3 nền đọc: sáng, ấm, tối.
 - Mục lục EPUB dạng bottom sheet thay vì select lớn giữa nội dung.
-- Thanh tiến độ đọc luôn có nhưng giảm tối đa chrome khi toolbar ẩn.
+- Thanh tiến độ đọc theo **toàn cuốn** cho EPUB/TXT; thư viện hiển thị Chưa đọc / % đã đọc / Đã đọc xong thay vì trạng thái mơ hồ.
 - Nhớ chương + vị trí cuộn + thiết lập kiểu đọc theo từng cuốn.
+- EPUB tự lấy **tên sách, tác giả và ảnh bìa** từ metadata/manifest khi file có dữ liệu này.
+- **Nghe sách bằng TTS** cho EPUB/TXT: play/pause/stop, chọn giọng hệ thống và tốc độ đọc; bắt đầu gần vị trí đang đọc.
 - PDF/EPUB lưu bằng **IndexedDB** trên thiết bị.
 - Metadata thư viện tách theo `user.uid`, tránh lẫn dữ liệu giữa các tài khoản.
 - Giới hạn file hiện tại: **50 MB/file**, tối đa **24 sách**.
@@ -81,7 +84,8 @@ Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất qu�
 - Lịch sử / thời gian đọc gần đây nếu sau này muốn đo thật.
 - Đồng bộ metadata/progress lên Firestore; file gốc nếu cần cloud thì dùng Firebase Storage.
 - PDF: nếu cần nhớ chính xác trang đọc và đồng bộ giữa thiết bị, cân nhắc PDF renderer riêng ở bước sau.
-- EPUB: nếu cần giữ nguyên hình ảnh, bảng và typography gốc, chuyển parser text hiện tại sang renderer EPUB đầy đủ.
+- EPUB: nếu cần giữ nguyên toàn bộ hình ảnh, bảng và typography gốc trong nội dung chương, chuyển parser text hiện tại sang renderer EPUB đầy đủ.
+- TTS P1: highlight câu đang đọc và tùy chọn tự chuyển sang chương tiếp theo.
 
 ### Báo cáo P1
 

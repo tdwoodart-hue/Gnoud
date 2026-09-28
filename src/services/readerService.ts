@@ -3,6 +3,8 @@ export type ReaderFormat = 'text' | 'pdf' | 'epub';
 export type ReaderFont = 'book' | 'serif' | 'sans';
 export type ReaderWidth = 'narrow' | 'medium' | 'wide';
 export type ReaderTextAlign = 'left' | 'justify';
+export type ReaderTtsMode = 'online' | 'device';
+export type ReaderTtsProvider = 'edge' | 'google';
 
 export interface ReaderBook {
   id: string;
@@ -28,6 +30,11 @@ export interface ReaderBook {
   ttsPitch: number;
   ttsCleanText: boolean;
   ttsVoiceUri?: string;
+  ttsMode: ReaderTtsMode;
+  ttsOnlineVoiceId?: string;
+  ttsOnlineProvider?: ReaderTtsProvider;
+  listeningProgress: number;
+  lastPositionAt?: string;
   theme: ReaderTheme;
   addedAt: string;
   updatedAt: string;
@@ -192,6 +199,11 @@ export function createReaderBook(input: {
     ttsPitch: 1,
     ttsCleanText: true,
     ttsVoiceUri: undefined,
+    ttsMode: 'online',
+    ttsOnlineVoiceId: 'vi-VN-HoaiMyNeural',
+    ttsOnlineProvider: 'edge',
+    listeningProgress: 0,
+    lastPositionAt: undefined,
     theme: 'paper',
     addedAt: now,
     updatedAt: now,
@@ -237,6 +249,11 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           ttsPitch: Math.min(1.4, Math.max(0.7, Number(book.ttsPitch) || 1)),
           ttsCleanText: book.ttsCleanText !== false,
           ttsVoiceUri: typeof book.ttsVoiceUri === 'string' ? book.ttsVoiceUri : undefined,
+          ttsMode: book.ttsMode === 'device' ? 'device' : 'online',
+          ttsOnlineVoiceId: typeof book.ttsOnlineVoiceId === 'string' ? book.ttsOnlineVoiceId : 'vi-VN-HoaiMyNeural',
+          ttsOnlineProvider: book.ttsOnlineProvider === 'google' ? 'google' : 'edge',
+          listeningProgress: Math.min(1, Math.max(0, Number(book.listeningProgress) || 0)),
+          lastPositionAt: typeof book.lastPositionAt === 'string' ? book.lastPositionAt : undefined,
           theme,
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),
           updatedAt: typeof book.updatedAt === 'string' ? book.updatedAt : new Date().toISOString(),

@@ -32,9 +32,14 @@ Tính năng reader hiện có:
 - 3 nền đọc: sáng, ấm, tối.
 - Mục lục EPUB dạng bottom sheet thay vì select lớn giữa nội dung.
 - Thanh tiến độ đọc theo **toàn cuốn** cho EPUB/TXT; thư viện hiển thị Chưa đọc / % đã đọc / Đã đọc xong thay vì trạng thái mơ hồ.
+- Reader luôn hiển thị **Trang X/Y** ở footer hoặc pill khi toolbar ẩn. Trang được tính theo chiều cao viewport hiện tại và tự tính lại khi đổi font/cỡ chữ/giãn dòng.
+- **Auto-ghim vị trí đọc**: cuộn/chuyển trang sẽ tự lưu chương, vị trí, trang hiện tại, % toàn sách và thời điểm ghim; đóng reader cũng flush vị trí ngay.
+- **Auto-ghim vị trí nghe**: TTS cập nhật vị trí theo tiến độ phát và tự kéo nội dung theo; mở lại sách sẽ quay gần đúng chỗ vừa đọc/nghe.
 - Nhớ chương + vị trí cuộn + thiết lập kiểu đọc theo từng cuốn.
 - EPUB tự lấy **tên sách, tác giả và ảnh bìa** từ metadata/manifest khi file có dữ liệu này.
-- **Nghe sách bằng TTS** cho EPUB/TXT: play/pause/stop, ưu tiên và liệt kê các **giọng tiếng Việt** mà thiết bị cung cấp, có nghe thử giọng, chỉnh tốc độ + cao độ; bắt đầu gần vị trí đang đọc.
+- **Nghe sách bằng TTS** cho EPUB/TXT: play/pause/stop, có nghe thử giọng, chỉnh tốc độ + cao độ; bắt đầu gần vị trí đang đọc. Mặc định dùng **online neural** thay vì phụ thuộc số giọng ít ỏi của iOS/Safari.
+- Có sẵn **Microsoft online không cần API key**: Hoài My, Nam Minh và một nhóm giọng Multilingual để người dùng nghe thử thêm màu giọng; vẫn giữ chế độ **Trên máy** làm fallback.
+- Có catalog **Google Cloud vi-VN** (Neural2 / WaveNet / Standard / Chirp 3 HD); các giọng này tự bật khi server có `GOOGLE_TTS_API_KEY`.
 - Bộ lọc TTS mặc định loại bỏ URL, `www`, email, domain, ISBN/DOI, số chú thích và ký hiệu rác trước khi phát để tránh đọc chuỗi web khó chịu; có thể tắt lọc nếu muốn nghe nguyên văn.
 - Metadata tác giả được làm sạch: giá trị kiểu `Unknown/Unknow/N/A` không còn hiện trong thư viện; nếu EPUB không có tác giả hợp lệ thì giao diện chỉ hiện định dạng sách.
 - PDF/EPUB lưu bằng **IndexedDB** trên thiết bị.
@@ -87,7 +92,8 @@ Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất qu�
 - Đồng bộ metadata/progress lên Firestore; file gốc nếu cần cloud thì dùng Firebase Storage.
 - PDF: nếu cần nhớ chính xác trang đọc và đồng bộ giữa thiết bị, cân nhắc PDF renderer riêng ở bước sau.
 - EPUB: nếu cần giữ nguyên toàn bộ hình ảnh, bảng và typography gốc trong nội dung chương, chuyển parser text hiện tại sang renderer EPUB đầy đủ.
-- TTS P1: highlight câu đang đọc và tùy chọn tự chuyển sang chương tiếp theo.
+- TTS P1: highlight câu/từ đang đọc dựa trên word-boundary và tùy chọn tự chuyển sang chương tiếp theo.
+- Nếu cần nhiều giọng Việt chất lượng cao mặc định cho mọi deployment, chọn một provider chính thức (Google Cloud/Azure/FPT/Viettel) và quản lý key/quota ở server.
 
 ### Báo cáo P1
 
@@ -100,6 +106,11 @@ Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất qu�
 
 - `src/components/reader/ReaderView.tsx`
 - `src/services/readerService.ts`
+- `readerTtsServer.ts`
+- `api/reader/tts.ts`
+- `server.ts`
+- `.env.example`
+- `package.json`
 - `src/components/reports/ReportsView.tsx`
 - `src/services/reportService.ts`
 - `src/components/common/PageHeader.tsx`

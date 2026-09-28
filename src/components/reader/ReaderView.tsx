@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom';
 import {
   AlignJustify,
   AlignLeft,
+  BookmarkCheck,
   BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Cloud,
   ExternalLink,
   FilePlus2,
   Headphones,
@@ -20,6 +22,7 @@ import {
   Play,
   Settings2,
   Square,
+  Smartphone,
   SunMedium,
   Trash2,
   Type,
@@ -46,9 +49,23 @@ import {
   type ReaderFormat,
   type ReaderTheme,
   type ReaderWidth,
+  type ReaderTtsProvider,
 } from '../../services/readerService';
 import { EmptyState } from '../common/EmptyState';
 import { PageHeader } from '../common/PageHeader';
+
+
+
+type OnlineTtsVoice = {
+  id: string;
+  provider: ReaderTtsProvider;
+  name: string;
+  gender: 'female' | 'male' | 'neutral';
+  locale: 'vi-VN';
+  quality: 'standard' | 'neural' | 'hd';
+  available: boolean;
+  note?: string;
+};
 
 const formatLabels: Record<ReaderFormat, string> = {
   text: 'TEXT',
@@ -100,6 +117,14 @@ function formatFileSize(bytes?: number): string {
   if (!bytes) return '';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+
+function formatSavedAt(value?: string | null): string {
+  if (!value) return 'Chưa ghim';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Đã ghim';
+  return `Đã ghim ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -181,6 +206,11 @@ export const ReaderView: React.FC = () => {
   const [ttsOpen, setTtsOpen] = useState(false);
   const [ttsStatus, setTtsStatus] = useState<'idle' | 'playing' | 'paused'>('idle');
   const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [onlineVoices, setOnlineVoices] = useState<OnlineTtsVoice[]>([]);
+  const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
+  const [visualPage, setVisualPage] = useState(1);
+  const [visualPageCount, setVisualPageCount] = useState(1);
+  const [lastPinnedAt, setLastPinnedAt] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const epubCacheRef = useRef(new Map<string, EpubChapter[]>());
@@ -189,6 +219,10 @@ export const ReaderView: React.FC = () => {
   const speechChunksRef = useRef<string[]>([]);
   const speechIndexRef = useRef(0);
   const speechStoppedRef = useRef(false);
+  const onlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const onlineAudioUrlRef = useRef<string | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+  const lastTtsPinWriteRef = useRef(0);
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -238,6 +272,27 @@ export const ReaderView: React.FC = () => {
     refresh();
     window.speechSynthesis.addEventListener?.('voiceschanged', refresh);
     return () => window.speechSynthesis.removeEventListener?.('voiceschanged', refresh);
+  }, []);
+
+
+  useEffect(() => {
+    let disposed = false;
+    setOnlineVoicesLoading(true);
+    void fetch('/api/reader/tts')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Không tải được danh sách giọng online.');
+        return response.json() as Promise<{ voices?: OnlineTtsVoice[] }>;
+      })
+      .then((payload) => {
+        if (!disposed) setOnlineVoices(Array.isArray(payload.voices) ? payload.voices : []);
+      })
+      .catch(() => {
+        if (!disposed) setOnlineVoices([]);
+      })
+      .finally(() => {
+        if (!disposed) setOnlineVoicesLoading(false);
+      });
+    return () => { disposed = true; };
   }, []);
 
   const activeBook = books.find((book) => book.id === activeBookId) || null;
@@ -338,6 +393,17 @@ export const ReaderView: React.FC = () => {
   }, [activeBook, chapterIndex, epubChapters.length, liveScrollProgress]);
   const progress = Math.round(progressRatio * 100);
 
+  const refreshPageMetrics = () => {
+    const element = readingScrollRef.current;
+    if (!element || !activeBook || activeBook.format === 'pdf') return;
+    const pageStep = Math.max(1, element.clientHeight * 0.82);
+    const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
+    const count = Math.max(1, Math.ceil(maxScroll / pageStep) + 1);
+    const page = Math.min(count, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
+    setVisualPageCount(count);
+    setVisualPage(page);
+  };
+
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
     setLiveScrollProgress(clamp(activeBook.scrollProgress || 0, 0, 1));
@@ -346,9 +412,24 @@ export const ReaderView: React.FC = () => {
       if (!element) return;
       const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
       element.scrollTop = maxScroll * clamp(activeBook.scrollProgress || 0, 0, 1);
+      refreshPageMetrics();
+      setLastPinnedAt(activeBook.lastPositionAt || null);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerText]);
+
+  useEffect(() => {
+    if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
+    const element = readingScrollRef.current;
+    if (!element) return undefined;
+    const frame = window.requestAnimationFrame(refreshPageMetrics);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => refreshPageMetrics()) : null;
+    observer?.observe(element);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [readingOpen, readerText, activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, activeBook?.fontFamily]);
 
   useEffect(() => {
     if (!readingOpen) return undefined;
@@ -403,7 +484,7 @@ export const ReaderView: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen, activeBook?.format]);
 
-  const supportsTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  const supportsDeviceTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
   const vietnameseVoices = useMemo(() => {
     const seen = new Set<string>();
@@ -424,20 +505,79 @@ export const ReaderView: React.FC = () => {
     ? ttsVoices.find((voice) => voice.voiceURI === activeBook.ttsVoiceUri) || automaticVoice
     : undefined;
 
+  const availableOnlineVoices = onlineVoices.filter((voice) => voice.available);
+  const selectedOnlineVoice = activeBook
+    ? availableOnlineVoices.find((voice) => voice.id === activeBook.ttsOnlineVoiceId)
+      || availableOnlineVoices.find((voice) => voice.provider === 'edge')
+      || availableOnlineVoices[0]
+    : undefined;
+
+  const cleanupOnlineAudio = () => {
+    ttsAbortRef.current?.abort();
+    ttsAbortRef.current = null;
+    const audio = onlineAudioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.ontimeupdate = null;
+      audio.pause();
+      audio.src = '';
+    }
+    onlineAudioRef.current = null;
+    if (onlineAudioUrlRef.current) URL.revokeObjectURL(onlineAudioUrlRef.current);
+    onlineAudioUrlRef.current = null;
+  };
+
+  const pinListeningPosition = (chunkIndex: number, chunkCount: number) => {
+    if (!activeBook || activeBook.format === 'pdf' || chunkCount <= 0) return;
+    const ratio = clamp(chunkIndex / chunkCount, 0, 1);
+    const element = readingScrollRef.current;
+    if (element) {
+      const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
+      element.scrollTop = maxScroll * ratio;
+    }
+    setLiveScrollProgress(ratio);
+    const overallProgress = calculateReaderProgress(
+      activeBook.format,
+      chapterIndex,
+      epubChapters.length || activeBook.chapterCount,
+      ratio,
+    );
+    const nowMs = Date.now();
+    const isFinal = chunkIndex >= chunkCount;
+    const page = Math.max(1, Math.min(visualPageCount, Math.floor(ratio * Math.max(1, visualPageCount - 1)) + 1));
+    setVisualPage(page);
+    if (!isFinal && nowMs - lastTtsPinWriteRef.current < 700) return;
+    lastTtsPinWriteRef.current = nowMs;
+    const now = new Date(nowMs).toISOString();
+    setLastPinnedAt(now);
+    updateBook(activeBook.id, {
+      scrollProgress: ratio,
+      overallProgress,
+      listeningProgress: overallProgress,
+      currentPage: page - 1,
+      lastPositionAt: now,
+      lastOpenedAt: now,
+    });
+  };
+
   const stopSpeech = () => {
     speechStoppedRef.current = true;
-    if (supportsTts) window.speechSynthesis.cancel();
+    cleanupOnlineAudio();
+    if (supportsDeviceTts) window.speechSynthesis.cancel();
     setTtsStatus('idle');
   };
 
-  const speakSpeechChunk = (index: number) => {
-    if (!supportsTts || speechStoppedRef.current || !activeBook) return;
+  const speakDeviceChunk = (index: number) => {
+    if (!supportsDeviceTts || speechStoppedRef.current || !activeBook) return;
     const chunks = speechChunksRef.current;
     if (index >= chunks.length) {
+      pinListeningPosition(chunks.length, chunks.length);
       setTtsStatus('idle');
       return;
     }
     speechIndexRef.current = index;
+    pinListeningPosition(index, chunks.length);
     const utterance = new SpeechSynthesisUtterance(chunks[index]);
     if (selectedVoice) {
       utterance.voice = selectedVoice;
@@ -447,8 +587,12 @@ export const ReaderView: React.FC = () => {
     }
     utterance.rate = activeBook.ttsRate || 0.95;
     utterance.pitch = activeBook.ttsPitch || 1;
+    utterance.onboundary = (event) => {
+      const local = chunks[index]?.length ? clamp(event.charIndex / chunks[index].length, 0, 1) : 0;
+      pinListeningPosition(index + local, chunks.length);
+    };
     utterance.onend = () => {
-      if (!speechStoppedRef.current) speakSpeechChunk(index + 1);
+      if (!speechStoppedRef.current) speakDeviceChunk(index + 1);
     };
     utterance.onerror = (event) => {
       if (event.error !== 'interrupted' && event.error !== 'canceled') setTtsStatus('idle');
@@ -457,33 +601,123 @@ export const ReaderView: React.FC = () => {
     setTtsStatus('playing');
   };
 
-  const startSpeech = () => {
-    if (!activeBook || activeBook.format === 'pdf') return;
-    if (!supportsTts) {
-      addToast('Trình duyệt này chưa hỗ trợ đọc sách bằng giọng nói.', 'warning');
+  const requestOnlineAudio = async (text: string): Promise<Blob> => {
+    if (!activeBook || !selectedOnlineVoice) throw new Error('Chưa có giọng online khả dụng.');
+    ttsAbortRef.current?.abort();
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
+    const response = await fetch('/api/reader/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        text,
+        provider: selectedOnlineVoice.provider,
+        voice: selectedOnlineVoice.id,
+        rate: activeBook.ttsRate,
+        pitch: activeBook.ttsPitch,
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(payload.error || 'Không tạo được giọng đọc online.');
+    }
+    return response.blob();
+  };
+
+  const speakOnlineChunk = async (index: number) => {
+    if (speechStoppedRef.current || !activeBook) return;
+    const chunks = speechChunksRef.current;
+    if (index >= chunks.length) {
+      pinListeningPosition(chunks.length, chunks.length);
+      setTtsStatus('idle');
       return;
     }
+    speechIndexRef.current = index;
+    pinListeningPosition(index, chunks.length);
+    try {
+      cleanupOnlineAudio();
+      const blob = await requestOnlineAudio(chunks[index]);
+      if (speechStoppedRef.current) return;
+      const url = URL.createObjectURL(blob);
+      onlineAudioUrlRef.current = url;
+      const audio = new Audio(url);
+      onlineAudioRef.current = audio;
+      audio.ontimeupdate = () => {
+        if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+        const local = clamp(audio.currentTime / audio.duration, 0, 1);
+        pinListeningPosition(index + local, chunks.length);
+      };
+      audio.onended = () => {
+        cleanupOnlineAudio();
+        if (!speechStoppedRef.current) void speakOnlineChunk(index + 1);
+      };
+      audio.onerror = () => {
+        cleanupOnlineAudio();
+        setTtsStatus('idle');
+        addToast('Giọng online bị lỗi khi phát. Thử đổi giọng hoặc chuyển sang giọng trên máy.', 'warning');
+      };
+      await audio.play();
+      setTtsStatus('playing');
+    } catch (error) {
+      if ((error as Error)?.name === 'AbortError' || speechStoppedRef.current) return;
+      cleanupOnlineAudio();
+      setTtsStatus('idle');
+      addToast(error instanceof Error ? error.message : 'Không tạo được giọng đọc online.', 'warning');
+    }
+  };
+
+  const startSpeech = () => {
+    if (!activeBook || activeBook.format === 'pdf') return;
     const speechSource = activeBook.ttsCleanText ? sanitizeSpeechText(readerText) : readerText;
     const chunks = splitSpeechText(speechSource);
     if (!chunks.length) {
       addToast('Chương này không có nội dung để đọc.', 'warning');
       return;
     }
-    window.speechSynthesis.cancel();
+    stopSpeech();
     speechStoppedRef.current = false;
     speechChunksRef.current = chunks;
     const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
-    speakSpeechChunk(startIndex);
-  };
-
-  const previewVoice = () => {
-    if (!supportsTts || !activeBook) {
-      addToast('Trình duyệt này chưa hỗ trợ nghe thử giọng.', 'warning');
+    if (activeBook.ttsMode === 'online' && selectedOnlineVoice) {
+      void speakOnlineChunk(startIndex);
       return;
     }
-    window.speechSynthesis.cancel();
-    speechStoppedRef.current = true;
-    const utterance = new SpeechSynthesisUtterance('Đây là giọng đọc thử tiếng Việt. Bạn có thể đổi giọng, tốc độ và cao độ để nghe tự nhiên hơn.');
+    if (!supportsDeviceTts) {
+      addToast('Không có giọng online và trình duyệt cũng không hỗ trợ giọng trên máy.', 'warning');
+      return;
+    }
+    speakDeviceChunk(startIndex);
+  };
+
+  const previewVoice = async () => {
+    if (!activeBook) return;
+    const sample = 'Đây là giọng đọc thử tiếng Việt. Hãy chọn giọng bạn thấy dễ nghe nhất để nghe sách.';
+    stopSpeech();
+    speechStoppedRef.current = false;
+    if (activeBook.ttsMode === 'online' && selectedOnlineVoice) {
+      try {
+        const blob = await requestOnlineAudio(sample);
+        if (speechStoppedRef.current) return;
+        const url = URL.createObjectURL(blob);
+        onlineAudioUrlRef.current = url;
+        const audio = new Audio(url);
+        onlineAudioRef.current = audio;
+        audio.onended = () => { cleanupOnlineAudio(); setTtsStatus('idle'); };
+        await audio.play();
+        setTtsStatus('playing');
+      } catch (error) {
+        cleanupOnlineAudio();
+        setTtsStatus('idle');
+        addToast(error instanceof Error ? error.message : 'Không nghe thử được giọng online.', 'warning');
+      }
+      return;
+    }
+    if (!supportsDeviceTts) {
+      addToast('Trình duyệt này chưa có giọng đọc trên máy.', 'warning');
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(sample);
     if (selectedVoice) {
       utterance.voice = selectedVoice;
       utterance.lang = selectedVoice.lang;
@@ -492,28 +726,43 @@ export const ReaderView: React.FC = () => {
     }
     utterance.rate = activeBook.ttsRate || 0.95;
     utterance.pitch = activeBook.ttsPitch || 1;
+    utterance.onend = () => setTtsStatus('idle');
     window.speechSynthesis.speak(utterance);
-    setTtsStatus('idle');
+    setTtsStatus('playing');
   };
 
   const toggleSpeech = () => {
-    if (!supportsTts) {
-      startSpeech();
+    if (!activeBook) return;
+    if (activeBook.ttsMode === 'online' && onlineAudioRef.current) {
+      if (ttsStatus === 'playing') {
+        onlineAudioRef.current.pause();
+        setTtsStatus('paused');
+      } else if (ttsStatus === 'paused') {
+        void onlineAudioRef.current.play();
+        setTtsStatus('playing');
+      } else {
+        startSpeech();
+      }
       return;
     }
-    if (ttsStatus === 'playing') {
-      window.speechSynthesis.pause();
-      setTtsStatus('paused');
-    } else if (ttsStatus === 'paused') {
-      window.speechSynthesis.resume();
-      setTtsStatus('playing');
-    } else {
-      startSpeech();
+    if (activeBook.ttsMode === 'device' && supportsDeviceTts) {
+      if (ttsStatus === 'playing') {
+        window.speechSynthesis.pause();
+        setTtsStatus('paused');
+      } else if (ttsStatus === 'paused') {
+        window.speechSynthesis.resume();
+        setTtsStatus('playing');
+      } else {
+        startSpeech();
+      }
+      return;
     }
+    startSpeech();
   };
 
   useEffect(() => () => {
     speechStoppedRef.current = true;
+    cleanupOnlineAudio();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
 
@@ -637,36 +886,79 @@ export const ReaderView: React.FC = () => {
     addToast(`Đã xóa “${book.title}” khỏi thư viện`, 'info');
   };
 
+  const persistCurrentReadingPosition = () => {
+    const element = readingScrollRef.current;
+    if (!element || !activeBook || activeBook.format === 'pdf') return;
+    const maxScroll = Math.max(1, element.scrollHeight - element.clientHeight);
+    const ratio = clamp(element.scrollTop / maxScroll, 0, 1);
+    const pageStep = Math.max(1, element.clientHeight * 0.82);
+    const pageCount = Math.max(1, Math.ceil(Math.max(0, element.scrollHeight - element.clientHeight) / pageStep) + 1);
+    const page = Math.min(pageCount, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
+    const overallProgress = calculateReaderProgress(
+      activeBook.format,
+      chapterIndex,
+      epubChapters.length || activeBook.chapterCount,
+      ratio,
+    );
+    const now = new Date().toISOString();
+    setLiveScrollProgress(ratio);
+    setVisualPageCount(pageCount);
+    setVisualPage(page);
+    setLastPinnedAt(now);
+    updateBook(activeBook.id, {
+      currentPage: page - 1,
+      scrollProgress: ratio,
+      overallProgress,
+      lastPositionAt: now,
+      lastOpenedAt: now,
+    });
+  };
+
   const handleReaderScroll = () => {
     const element = readingScrollRef.current;
     if (!element || !activeBook || activeBook.format === 'pdf') return;
     const maxScroll = Math.max(1, element.scrollHeight - element.clientHeight);
     const ratio = clamp(element.scrollTop / maxScroll, 0, 1);
+    const pageStep = Math.max(1, element.clientHeight * 0.82);
+    const pageCount = Math.max(1, Math.ceil(Math.max(0, element.scrollHeight - element.clientHeight) / pageStep) + 1);
+    const page = Math.min(pageCount, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
     setLiveScrollProgress(ratio);
+    setVisualPageCount(pageCount);
+    setVisualPage(page);
     if (scrollSaveTimerRef.current) window.clearTimeout(scrollSaveTimerRef.current);
-    scrollSaveTimerRef.current = window.setTimeout(() => {
-      const overallProgress = calculateReaderProgress(
-        activeBook.format,
-        chapterIndex,
-        epubChapters.length || activeBook.chapterCount,
-        ratio,
-      );
-      updateBook(activeBook.id, { scrollProgress: ratio, overallProgress, lastOpenedAt: new Date().toISOString() });
-    }, 260);
+    scrollSaveTimerRef.current = window.setTimeout(persistCurrentReadingPosition, 220);
   };
+
+  useEffect(() => {
+    if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
+    const flush = () => persistCurrentReadingPosition();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [readingOpen, activeBook?.id, activeBook?.format, chapterIndex, readerText]);
 
   const changeChapter = (nextIndex: number) => {
     if (!activeBook || activeBook.format !== 'epub' || epubChapters.length === 0) return;
     const target = clamp(nextIndex, 0, epubChapters.length - 1);
     stopSpeech();
     setLiveScrollProgress(0);
+    setVisualPage(1);
+    const now = new Date().toISOString();
+    setLastPinnedAt(now);
     updateBook(activeBook.id, {
       currentChapter: target,
       currentPage: 0,
       scrollProgress: 0,
       overallProgress: calculateReaderProgress('epub', target, epubChapters.length, 0),
       chapterCount: epubChapters.length,
-      lastOpenedAt: new Date().toISOString(),
+      lastPositionAt: now,
+      lastOpenedAt: now,
     });
     setTocOpen(false);
     setTtsOpen(false);
@@ -724,6 +1016,11 @@ export const ReaderView: React.FC = () => {
   };
 
   const closeReader = () => {
+    if (scrollSaveTimerRef.current) {
+      window.clearTimeout(scrollSaveTimerRef.current);
+      scrollSaveTimerRef.current = null;
+    }
+    persistCurrentReadingPosition();
     stopSpeech();
     setReadingOpen(false);
     setSettingsOpen(false);
@@ -879,9 +1176,15 @@ export const ReaderView: React.FC = () => {
                       onClick={() => setControlsVisible(false)}
                       className={`min-w-0 flex-1 text-center text-[10px] font-semibold ${themeStyles[activeBook.theme].muted}`}
                     >
-                      {activeBook.format === 'epub'
-                        ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)} · chạm giữa màn hình để ẩn/hiện thanh công cụ`
-                        : 'Chạm hai mép để lật nhanh · chạm giữa để ẩn/hiện thanh công cụ'}
+                      <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-current">
+                        <BookmarkCheck className="h-3.5 w-3.5 text-indigo-500" />
+                        {formatSavedAt(lastPinnedAt || activeBook.lastPositionAt)} · Trang {visualPage}/{visualPageCount}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] font-medium">
+                        {activeBook.format === 'epub'
+                          ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)} · ${progress}% toàn sách`
+                          : `${progress}% toàn sách · chạm hai mép để chuyển trang`}
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -908,15 +1211,20 @@ export const ReaderView: React.FC = () => {
         )}
 
         {!controlsVisible && activeBook.format !== 'pdf' && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1 bg-black/5 dark:bg-white/5">
-            <div className="h-full bg-indigo-500/80" style={{ width: `${progress}%` }} />
-          </div>
+          <>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1 bg-black/5 dark:bg-white/5">
+              <div className="h-full bg-indigo-500/80" style={{ width: `${progress}%` }} />
+            </div>
+            <div className={`pointer-events-none absolute bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 rounded-full border px-3 py-1.5 text-[10px] font-bold shadow-sm backdrop-blur-md ${themeStyles[activeBook.theme].panel}`}>
+              Trang {visualPage}/{visualPageCount} · {progress}%
+            </div>
+          </>
         )}
 
         {settingsOpen && activeBook.format !== 'pdf' && (
           <div className="absolute inset-0 z-30 flex items-end bg-black/20" onClick={() => setSettingsOpen(false)}>
             <section
-              className={`w-full rounded-t-[28px] border-t p-5 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl ${themeStyles[activeBook.theme].panel}`}
+              className={`max-h-[88dvh] w-full overflow-y-auto rounded-t-[28px] border-t p-5 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl ${themeStyles[activeBook.theme].panel}`}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mx-auto max-w-xl">
@@ -1016,7 +1324,7 @@ export const ReaderView: React.FC = () => {
         {ttsOpen && activeBook.format !== 'pdf' && (
           <div className="absolute inset-0 z-30 flex items-end bg-black/20" onClick={() => setTtsOpen(false)}>
             <section
-              className={`w-full rounded-t-[28px] border-t p-5 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl ${themeStyles[activeBook.theme].panel}`}
+              className={`max-h-[88dvh] w-full overflow-y-auto rounded-t-[28px] border-t p-5 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl ${themeStyles[activeBook.theme].panel}`}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mx-auto max-w-xl">
@@ -1048,29 +1356,102 @@ export const ReaderView: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-current/10 p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopSpeech();
+                      updateBook(activeBook.id, { ttsMode: 'online' });
+                    }}
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${activeBook.ttsMode === 'online' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                  >
+                    <Cloud className="h-4 w-4" /> Online neural
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopSpeech();
+                      updateBook(activeBook.id, { ttsMode: 'device' });
+                    }}
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${activeBook.ttsMode === 'device' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                  >
+                    <Smartphone className="h-4 w-4" /> Trên máy
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Giọng đọc</span>
-                    <select
-                      value={activeBook.ttsVoiceUri || ''}
-                      onChange={(event) => {
-                        stopSpeech();
-                        updateBook(activeBook.id, { ttsVoiceUri: event.target.value || undefined });
-                      }}
-                      className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
-                    >
-                      <option value="">Tự động · ưu tiên giọng Việt</option>
-                      {fallbackVoices.length ? fallbackVoices.map((voice) => (
-                        <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>{formatVoiceName(voice)}</option>
-                      )) : <option value="">Chưa tìm thấy giọng trên thiết bị</option>}
-                    </select>
+                    <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>
+                      <span>Giọng đọc</span>
+                      <span className="normal-case tracking-normal">
+                        {activeBook.ttsMode === 'online'
+                          ? `${availableOnlineVoices.length} dùng được`
+                          : `${vietnameseVoices.length || fallbackVoices.length} trên máy`}
+                      </span>
+                    </span>
+                    {activeBook.ttsMode === 'online' ? (
+                      <select
+                        value={selectedOnlineVoice ? `${selectedOnlineVoice.provider}|${selectedOnlineVoice.id}` : ''}
+                        onChange={(event) => {
+                          stopSpeech();
+                          const [provider, ...voiceParts] = event.target.value.split('|');
+                          const voiceId = voiceParts.join('|');
+                          if (!voiceId) return;
+                          updateBook(activeBook.id, {
+                            ttsOnlineProvider: provider === 'google' ? 'google' : 'edge',
+                            ttsOnlineVoiceId: voiceId,
+                          });
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
+                      >
+                        {onlineVoicesLoading && <option value="">Đang tải giọng online…</option>}
+                        {!onlineVoicesLoading && onlineVoices.length === 0 && <option value="">Không kết nối được giọng online</option>}
+                        {onlineVoices.some((voice) => voice.provider === 'edge') && (
+                          <optgroup label="Microsoft · dùng ngay">
+                            {onlineVoices.filter((voice) => voice.provider === 'edge').map((voice) => (
+                              <option key={`${voice.provider}-${voice.id}`} value={`${voice.provider}|${voice.id}`} disabled={!voice.available}>
+                                {voice.name} · {voice.quality === 'hd' ? 'HD' : 'Neural'}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {onlineVoices.some((voice) => voice.provider === 'google') && (
+                          <optgroup label="Google Cloud · nhiều giọng">
+                            {onlineVoices.filter((voice) => voice.provider === 'google').map((voice) => (
+                              <option key={`${voice.provider}-${voice.id}`} value={`${voice.provider}|${voice.id}`} disabled={!voice.available}>
+                                {voice.name}{voice.available ? '' : ' · chưa bật API key'}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    ) : (
+                      <select
+                        value={activeBook.ttsVoiceUri || ''}
+                        onChange={(event) => {
+                          stopSpeech();
+                          updateBook(activeBook.id, { ttsVoiceUri: event.target.value || undefined });
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
+                      >
+                        <option value="">Tự động · ưu tiên tiếng Việt</option>
+                        {fallbackVoices.length ? fallbackVoices.map((voice) => (
+                          <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>{formatVoiceName(voice)}</option>
+                        )) : <option value="">Chưa tìm thấy giọng trên thiết bị</option>}
+                      </select>
+                    )}
                     <button
                       type="button"
-                      onClick={previewVoice}
+                      onClick={() => void previewVoice()}
                       className="mt-2 h-9 w-full rounded-xl border border-current/15 text-[11px] font-bold transition hover:bg-black/5"
                     >
                       Nghe thử giọng này
                     </button>
+                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>
+                      {activeBook.ttsMode === 'online'
+                        ? 'Microsoft có Hoài My/Nam Minh (giọng Việt gốc) + các giọng Multilingual để nghe thử ngay. Gói Google nhiều giọng hơn sẽ tự mở khi server có GOOGLE_TTS_API_KEY.'
+                        : 'iPhone/Safari thường chỉ trả về rất ít giọng hệ thống; dùng Online neural để có thêm lựa chọn.'}
+                    </p>
                   </label>
 
                   <div className="space-y-4">
@@ -1125,9 +1506,10 @@ export const ReaderView: React.FC = () => {
                   </span>
                 </label>
 
-                <p className={`mt-4 text-center text-[10px] font-medium leading-5 ${themeStyles[activeBook.theme].muted}`}>
-                  Chỉ hiển thị các giọng tiếng Việt mà trình duyệt/thiết bị cung cấp. Nếu máy có nhiều giọng Việt, chúng sẽ xuất hiện đầy đủ ở danh sách trên.
-                </p>
+                <div className={`mt-4 flex items-center justify-center gap-1.5 text-center text-[10px] font-medium leading-5 ${themeStyles[activeBook.theme].muted}`}>
+                  <BookmarkCheck className="h-3.5 w-3.5 text-indigo-500" />
+                  Khi đọc hoặc nghe, vị trí được ghim tự động. Mở lại sách sẽ quay đúng chỗ gần nhất.
+                </div>
               </div>
             </section>
           </div>

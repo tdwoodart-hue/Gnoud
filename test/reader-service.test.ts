@@ -35,6 +35,10 @@ test('new reader book starts at first chapter and page with compact defaults', (
   assert.equal(book.ttsRate, 0.95);
   assert.equal(book.ttsPitch, 1);
   assert.equal(book.ttsCleanText, true);
+  assert.equal(book.ttsMode, 'online');
+  assert.equal(book.ttsOnlineProvider, 'edge');
+  assert.equal(book.ttsOnlineVoiceId, 'vi-VN-HoaiMyNeural');
+  assert.equal(book.listeningProgress, 0);
   assert.equal(book.theme, 'paper');
 });
 

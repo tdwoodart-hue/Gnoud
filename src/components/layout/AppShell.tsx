@@ -3,8 +3,6 @@ import {
   BarChart3,
   BookOpen,
   Command,
-  Eye,
-  EyeOff,
   ListTodo,
   Lock,
   Settings,
@@ -29,7 +27,7 @@ const icons: Record<NavTab, React.FC<{ className?: string }>> = {
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeTab, setActiveTab, setIsCommandMenuOpen } = useApp();
-  const { privacyMode, togglePrivacyMode, pinEnabled, lockApp } = useSecurity();
+  const { pinEnabled, lockApp } = useSecurity();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -86,20 +84,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               >
                 <Command className="h-3.5 w-3.5 text-slate-400" />
                 <span>Tìm kiếm</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={togglePrivacyMode}
-                className={`grid h-8 w-8 place-items-center rounded-xl border transition ${
-                  privacyMode
-                    ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                    : 'border-slate-200/60 bg-slate-50/70 text-slate-500 hover:bg-slate-100'
-                }`}
-                title={privacyMode ? 'Tắt chế độ riêng tư' : 'Bật chế độ riêng tư (che dữ liệu nhạy cảm)'}
-                aria-label="Chế độ riêng tư"
-              >
-                {privacyMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               </button>
 
               {pinEnabled && (

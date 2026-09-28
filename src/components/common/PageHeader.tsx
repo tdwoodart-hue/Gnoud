@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
 
 export const PageHeader: React.FC<{
@@ -7,7 +7,7 @@ export const PageHeader: React.FC<{
   meta?: string;
   action?: React.ReactNode;
 }> = ({ title, meta, action }) => {
-  const { privacyMode, togglePrivacyMode, pinEnabled, lockApp } = useSecurity();
+  const { pinEnabled, lockApp } = useSecurity();
 
   return (
     <header className="mb-6 flex min-h-14 items-center justify-between gap-3 border-b border-slate-100/90 pb-4">
@@ -33,19 +33,6 @@ export const PageHeader: React.FC<{
             <Lock className="h-4 w-4" />
           </button>
         )}
-        <button
-          type="button"
-          onClick={togglePrivacyMode}
-          className={`grid h-10 w-10 place-items-center rounded-2xl border transition shadow-xs ${
-            privacyMode
-              ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-              : 'border-slate-200/70 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-          title={privacyMode ? 'Tắt chế độ riêng tư' : 'Bật chế độ riêng tư (che dữ liệu nhạy cảm)'}
-          aria-label="Chế độ riêng tư"
-        >
-          {privacyMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
         {action}
       </div>
     </header>

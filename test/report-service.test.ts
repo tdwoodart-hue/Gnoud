@@ -2,14 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildDailyTaskActivity,
-  buildHabitReport,
   buildNutritionReport,
   buildPeriodComparison,
   buildProjectReport,
   buildReportSummary,
   getReportStart,
 } from '../src/services/reportService';
-import type { Habit, Project, Task } from '../src/types';
+import type { Project, Task } from '../src/types';
 import type { NutritionState } from '../src/services/nutritionService';
 
 const task = (partial: Partial<Task>): Task => ({
@@ -32,18 +31,17 @@ test('report range uses inclusive 7 and 30 day windows', () => {
   assert.equal(getReportStart('all', '2026-09-19'), undefined);
 });
 
-test('summary separates completion, on-time, overdue and focus', () => {
+test('summary keeps only measured task metrics', () => {
   const tasks = [
-    task({ id: 'a', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18', deadline: '2026-09-18', actualMinutes: 45 }),
-    task({ id: 'b', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19', deadline: '2026-09-18', actualMinutes: 30 }),
+    task({ id: 'a', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18', deadline: '2026-09-18' }),
+    task({ id: 'b', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19', deadline: '2026-09-18' }),
     task({ id: 'c', plannedDate: '2026-09-19', status: 'todo', deadline: '2026-09-18', priority: 'high' }),
-    task({ id: 'old', plannedDate: '2026-08-01', status: 'done', completedAt: '2026-08-01', actualMinutes: 300 }),
+    task({ id: 'old', plannedDate: '2026-08-01', status: 'done', completedAt: '2026-08-01' }),
   ];
   const result = buildReportSummary(tasks, '7d', '2026-09-19');
   assert.equal(result.totalTasks, 3);
   assert.equal(result.doneTasks, 2);
   assert.equal(result.completionRate, 67);
-  assert.equal(result.focusMinutes, 75);
   assert.equal(result.deadlineDone, 2);
   assert.equal(result.onTimeDone, 1);
   assert.equal(result.onTimeRate, 50);
@@ -51,12 +49,12 @@ test('summary separates completion, on-time, overdue and focus', () => {
   assert.equal(result.importantOpen, 1);
 });
 
-test('period comparison compares current range with the previous equal range', () => {
+test('period comparison compares completion with the previous equal range', () => {
   const tasks = [
-    task({ id: 'current-a', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19', actualMinutes: 60 }),
-    task({ id: 'current-b', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18', actualMinutes: 30 }),
+    task({ id: 'current-a', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19' }),
+    task({ id: 'current-b', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18' }),
     task({ id: 'current-open', plannedDate: '2026-09-17', status: 'todo' }),
-    task({ id: 'previous-a', plannedDate: '2026-09-12', status: 'done', completedAt: '2026-09-12', actualMinutes: 20 }),
+    task({ id: 'previous-a', plannedDate: '2026-09-12', status: 'done', completedAt: '2026-09-12' }),
     task({ id: 'previous-open', plannedDate: '2026-09-11', status: 'todo' }),
   ];
   const result = buildPeriodComparison(tasks, '7d', '2026-09-19');
@@ -64,26 +62,22 @@ test('period comparison compares current range with the previous equal range', (
   assert.equal(result?.currentCompleted, 2);
   assert.equal(result?.previousCompleted, 1);
   assert.equal(result?.completedDelta, 1);
-  assert.equal(result?.currentFocusMinutes, 90);
-  assert.equal(result?.previousFocusMinutes, 20);
-  assert.equal(result?.focusMinutesDelta, 70);
   assert.equal(result?.currentCompletionRate, 67);
   assert.equal(result?.previousCompletionRate, 50);
   assert.equal(result?.completionRateDelta, 17);
   assert.equal(buildPeriodComparison(tasks, 'all', '2026-09-19'), null);
 });
 
-test('daily activity counts planned, completed and focus minutes', () => {
+test('daily activity counts only planned and completed work', () => {
   const tasks = [
-    task({ id: 'a', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19', actualMinutes: 25 }),
-    task({ id: 'b', plannedDate: '2026-09-19', actualMinutes: 10 }),
-    task({ id: 'c', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-19', actualMinutes: 15 }),
+    task({ id: 'a', plannedDate: '2026-09-19', status: 'done', completedAt: '2026-09-19' }),
+    task({ id: 'b', plannedDate: '2026-09-19' }),
+    task({ id: 'c', plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-19' }),
   ];
   const rows = buildDailyTaskActivity(tasks, '2026-09-19', 2);
   assert.deepEqual(rows.map((row) => row.date), ['2026-09-18', '2026-09-19']);
   assert.equal(rows[1].planned, 2);
   assert.equal(rows[1].completed, 2);
-  assert.equal(rows[1].focusMinutes, 40);
 });
 
 test('project report only includes tasks inside selected range', () => {
@@ -100,17 +94,6 @@ test('project report only includes tasks inside selected range', () => {
   assert.equal(rows[0].total, 2);
   assert.equal(rows[0].done, 1);
   assert.equal(rows[0].rate, 50);
-});
-
-test('habit report respects weekly target', () => {
-  const habits: Habit[] = [{
-    id: 'h1', name: 'Đọc sách', durationMinutes: 15, streak: 3, targetDaysPerWeek: 5,
-    completedDates: ['2026-09-13', '2026-09-14', '2026-09-15', '2026-09-18'],
-  }];
-  const rows = buildHabitReport(habits, '2026-09-19', 7);
-  assert.equal(rows[0].completed, 4);
-  assert.equal(rows[0].target, 5);
-  assert.equal(rows[0].rate, 80);
 });
 
 test('nutrition report averages only logged days and tracks target adherence', () => {

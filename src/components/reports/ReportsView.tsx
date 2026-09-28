@@ -1,14 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowDownRight,
-  ArrowUpRight,
   CheckCircle2,
-  Clock3,
-  Flame,
   Footprints,
   Layers,
-  Minus,
   Scale,
   Target,
   TrendingUp,
@@ -18,7 +13,6 @@ import { useApp } from '../../context/AppContext';
 import { loadNutritionState, type NutritionState } from '../../services/nutritionService';
 import {
   buildDailyTaskActivity,
-  buildHabitReport,
   buildNutritionReport,
   buildPeriodComparison,
   buildProjectReport,
@@ -39,6 +33,7 @@ const rangeLabels: Record<ReportRange, string> = {
 };
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
+const shortDay = (date: string) => new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(new Date(`${date}T12:00:00`));
 
 const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, className = 'bg-indigo-500' }) => (
   <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -47,17 +42,10 @@ const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, c
 );
 
 const DeltaBadge: React.FC<{ value: number; suffix?: string }> = ({ value, suffix = '' }) => {
-  const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus;
+  if (value === 0) return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-400">= kỳ trước</span>;
   return (
-    <span title="So với kỳ trước" className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
-      value > 0
-        ? 'bg-emerald-50 text-emerald-700'
-        : value < 0
-          ? 'bg-rose-50 text-rose-600'
-          : 'bg-slate-100 text-slate-500'
-    }`}>
-      <Icon className="h-3 w-3" />
-      {value > 0 ? '+' : ''}{whole.format(value)}{suffix}
+    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${value > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+      {value > 0 ? '+' : ''}{value}{suffix}
     </span>
   );
 };
@@ -69,19 +57,20 @@ const StatCard: React.FC<{
   icon: React.FC<{ className?: string }>;
   tone: string;
   delta?: React.ReactNode;
-}> = ({ label, value, meta, icon: Icon, tone, delta }) => (
-  <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
+  className?: string;
+}> = ({ label, value, meta, icon: Icon, tone, delta, className = '' }) => (
+  <div className={`rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs ${className}`}>
     <div className="flex items-center justify-between gap-3">
       <span className="text-[11px] font-semibold text-slate-400">{label}</span>
       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl border ${tone}`}>
         <Icon className="h-3.5 w-3.5" />
       </span>
     </div>
-    <p className="mt-2 text-[22px] font-bold tracking-tight tabular-nums text-slate-900">{value}</p>
-    <div className="mt-0.5 flex min-h-5 items-center justify-between gap-2">
-      <p className="truncate text-[10px] font-medium text-slate-400">{meta}</p>
+    <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+      <p className="text-[22px] font-bold tracking-tight tabular-nums text-slate-900">{value}</p>
       {delta}
     </div>
+    <p className="mt-0.5 text-[10px] font-medium text-slate-400">{meta}</p>
   </div>
 );
 
@@ -125,13 +114,8 @@ const NutritionCell: React.FC<{
   </div>
 );
 
-function shortDay(date: string): string {
-  const value = new Date(`${date}T12:00:00`);
-  return new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(value).replace('Th ', 'T');
-}
-
 export const ReportsView: React.FC = () => {
-  const { tasks, projects, habits, goals } = useApp();
+  const { tasks, projects } = useApp();
   const [range, setRange] = useState<ReportRange>('7d');
   const [nutrition, setNutrition] = useState<NutritionState>(() => loadNutritionState());
   const today = formatLocalDate(new Date());
@@ -155,31 +139,22 @@ export const ReportsView: React.FC = () => {
   const comparison = useMemo(() => buildPeriodComparison(tasks, range, today), [tasks, range, today]);
   const activity = useMemo(() => buildDailyTaskActivity(tasks, today, 7), [tasks, today]);
   const projectRows = useMemo(() => buildProjectReport(projects, tasks, range, today), [projects, tasks, range, today]);
-  const habitRows = useMemo(() => buildHabitReport(habits, today, 7), [habits, today]);
   const nutritionReport = useMemo(() => buildNutritionReport(nutrition, range, today), [nutrition, range, today]);
 
-  const calorieProgress = nutritionReport.averageCalories === null
-    ? 0
-    : (nutritionReport.averageCalories / nutrition.profile.calorieTarget) * 100;
-  const proteinProgress = nutritionReport.averageProtein === null
-    ? 0
-    : (nutritionReport.averageProtein / nutrition.profile.proteinTarget) * 100;
-  const stepProgress = nutritionReport.averageSteps === null
-    ? 0
-    : (nutritionReport.averageSteps / nutrition.profile.stepTarget) * 100;
+  const calorieProgress = nutritionReport.averageCalories === null ? 0 : (nutritionReport.averageCalories / nutrition.profile.calorieTarget) * 100;
+  const proteinProgress = nutritionReport.averageProtein === null ? 0 : (nutritionReport.averageProtein / nutrition.profile.proteinTarget) * 100;
+  const stepProgress = nutritionReport.averageSteps === null ? 0 : (nutritionReport.averageSteps / nutrition.profile.stepTarget) * 100;
 
   const activityMax = Math.max(1, ...activity.flatMap((row) => [row.planned, row.completed]));
-  const focusMax = Math.max(0, ...activity.map((row) => row.focusMinutes));
-  const hasActivity = activity.some((row) => row.completed > 0 || row.focusMinutes > 0);
-  const bestDay = hasActivity
-    ? [...activity].sort((a, b) => b.completed - a.completed || b.focusMinutes - a.focusMinutes)[0]
-    : null;
-  const weekFocus = activity.reduce((sum, row) => sum + row.focusMinutes, 0);
   const weekCompleted = activity.reduce((sum, row) => sum + row.completed, 0);
+  const weekPlanned = activity.reduce((sum, row) => sum + row.planned, 0);
+  const bestDay = activity.some((row) => row.completed > 0)
+    ? [...activity].sort((a, b) => b.completed - a.completed || b.planned - a.planned)[0]
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
-      <PageHeader title="Báo cáo & Hiệu suất" />
+      <PageHeader title="Báo cáo" />
 
       <div className="flex rounded-xl border border-slate-200/70 bg-white p-1 shadow-xs">
         {(Object.keys(rangeLabels) as ReportRange[]).map((value) => (
@@ -188,9 +163,7 @@ export const ReportsView: React.FC = () => {
             type="button"
             onClick={() => setRange(value)}
             className={`h-8 flex-1 rounded-lg px-3 text-[11px] font-bold transition ${
-              range === value
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
+              range === value ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
             }`}
           >
             {rangeLabels[value]}
@@ -198,7 +171,7 @@ export const ReportsView: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
         <StatCard
           label="Tỷ lệ hoàn thành"
           value={`${summary.completionRate}%`}
@@ -208,68 +181,49 @@ export const ReportsView: React.FC = () => {
           delta={comparison ? <DeltaBadge value={comparison.completionRateDelta} suffix="đ" /> : undefined}
         />
         <StatCard
-          label="Tập trung"
-          value={`${decimal.format(summary.focusMinutes / 60)}h`}
-          meta={`${whole.format(summary.focusMinutes)} phút`}
-          icon={Clock3}
-          tone="border-indigo-200/70 bg-indigo-50 text-indigo-700"
-          delta={comparison ? <DeltaBadge value={comparison.focusMinutesDelta} suffix="p" /> : undefined}
-        />
-        <StatCard
           label="Đúng hạn"
           value={summary.onTimeRate === null ? '—' : `${summary.onTimeRate}%`}
-          meta={summary.deadlineDone ? `${summary.onTimeDone}/${summary.deadlineDone} việc` : 'Chưa có dữ liệu'}
+          meta={summary.deadlineDone ? `${summary.onTimeDone}/${summary.deadlineDone} việc có deadline` : 'Chưa có dữ liệu deadline'}
           icon={Target}
           tone="border-sky-200/70 bg-sky-50 text-sky-700"
         />
         <StatCard
           label="Đang trễ"
           value={`${summary.overdueOpen}`}
-          meta={`${summary.importantOpen} việc quan trọng`}
+          meta={`${summary.importantOpen} việc quan trọng đang mở`}
           icon={AlertTriangle}
           tone="border-amber-200/70 bg-amber-50 text-amber-700"
+          className="col-span-2 lg:col-span-1"
         />
       </div>
 
       <ReportSection
-        title="Nhịp 7 ngày"
+        title="Nhịp công việc 7 ngày"
         icon={TrendingUp}
-        trailing={<span className="text-[10px] font-semibold text-slate-400">{weekCompleted} việc · {whole.format(weekFocus)}p</span>}
+        trailing={<span className="text-[10px] font-semibold text-slate-400">{weekCompleted}/{weekPlanned} việc</span>}
       >
         <div className="rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs sm:p-4">
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {activity.map((row) => (
               <div key={row.date} className="min-w-0 text-center">
                 <div className="mx-auto flex h-24 max-w-10 items-end justify-center gap-1 rounded-xl bg-slate-50 px-1.5 pb-2 pt-2">
-                  <span
-                    className="w-2 rounded-full bg-slate-300"
-                    style={{ height: `${Math.max(5, (row.planned / activityMax) * 72)}%` }}
-                    title={`${row.planned} việc đã lên lịch`}
-                  />
-                  <span
-                    className="w-2 rounded-full bg-indigo-500"
-                    style={{ height: `${Math.max(5, (row.completed / activityMax) * 72)}%` }}
-                    title={`${row.completed} việc hoàn thành`}
-                  />
+                  <span className="w-2 rounded-full bg-slate-300" style={{ height: `${Math.max(5, (row.planned / activityMax) * 72)}%` }} title={`${row.planned} việc đã lên lịch`} />
+                  <span className="w-2 rounded-full bg-indigo-500" style={{ height: `${Math.max(5, (row.completed / activityMax) * 72)}%` }} title={`${row.completed} việc hoàn thành`} />
                 </div>
                 <p className="mt-1.5 truncate text-[9px] font-bold text-slate-500">{shortDay(row.date)}</p>
-                <p className="mt-0.5 truncate text-[8px] font-medium text-slate-400">{row.focusMinutes}p</p>
+                <p className="mt-0.5 text-[8px] font-medium tabular-nums text-slate-400">{row.completed}/{row.planned}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
             <div className="rounded-xl bg-slate-50 px-3 py-2.5">
               <p className="text-[9px] font-semibold text-slate-400">Ngày hoàn thành nhiều nhất</p>
               <p className="mt-0.5 text-xs font-bold text-slate-800">{bestDay ? `${shortDay(bestDay.date)} · ${bestDay.completed} việc` : '—'}</p>
             </div>
             <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-              <p className="text-[9px] font-semibold text-slate-400">Tập trung TB / ngày</p>
-              <p className="mt-0.5 text-xs font-bold text-slate-800">{whole.format(weekFocus / 7)} phút</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-              <p className="text-[9px] font-semibold text-slate-400">Mức tập trung cao nhất</p>
-              <p className="mt-0.5 text-xs font-bold text-slate-800">{whole.format(focusMax)} phút</p>
+              <p className="text-[9px] font-semibold text-slate-400">Tổng 7 ngày</p>
+              <p className="mt-0.5 text-xs font-bold text-slate-800">{weekCompleted} hoàn thành · {weekPlanned} lên lịch</p>
             </div>
           </div>
 
@@ -283,57 +237,28 @@ export const ReportsView: React.FC = () => {
       <ReportSection title="Dinh dưỡng & cơ thể" icon={UtensilsCrossed}>
         <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs lg:grid-cols-4">
           <div className="border-b border-r border-slate-100 lg:border-b-0">
-            <NutritionCell
-              label="Calories TB"
-              value={nutritionReport.averageCalories === null ? '—' : whole.format(nutritionReport.averageCalories)}
-              target={`/ ${whole.format(nutrition.profile.calorieTarget)} kcal`}
-              progress={calorieProgress}
-              footer={`${nutritionReport.calorieTargetDays}/${nutritionReport.loggedDays} ngày đạt`}
-              icon={UtensilsCrossed}
-            />
+            <NutritionCell label="Calories TB" value={nutritionReport.averageCalories === null ? '—' : whole.format(nutritionReport.averageCalories)} target={`/ ${whole.format(nutrition.profile.calorieTarget)} kcal`} progress={calorieProgress} footer={`${nutritionReport.calorieTargetDays}/${nutritionReport.loggedDays} ngày đạt`} icon={UtensilsCrossed} />
           </div>
           <div className="border-b border-slate-100 lg:border-b-0 lg:border-r">
-            <NutritionCell
-              label="Protein TB"
-              value={nutritionReport.averageProtein === null ? '—' : `${whole.format(nutritionReport.averageProtein)} g`}
-              target={`/ ${whole.format(nutrition.profile.proteinTarget)} g`}
-              progress={proteinProgress}
-              progressClassName="bg-sky-500"
-              footer={`${nutritionReport.proteinTargetDays}/${nutritionReport.loggedDays} ngày đạt`}
-              icon={Target}
-            />
+            <NutritionCell label="Protein TB" value={nutritionReport.averageProtein === null ? '—' : `${whole.format(nutritionReport.averageProtein)} g`} target={`/ ${whole.format(nutrition.profile.proteinTarget)} g`} progress={proteinProgress} progressClassName="bg-sky-500" footer={`${nutritionReport.proteinTargetDays}/${nutritionReport.loggedDays} ngày đạt`} icon={Target} />
           </div>
           <div className="border-r border-slate-100">
-            <NutritionCell
-              label="Steps TB"
-              value={nutritionReport.averageSteps === null ? '—' : whole.format(nutritionReport.averageSteps)}
-              target={`/ ${whole.format(nutrition.profile.stepTarget)}`}
-              progress={stepProgress}
-              progressClassName="bg-emerald-500"
-              footer={`${nutritionReport.stepTargetDays}/${nutritionReport.stepLoggedDays} ngày đạt`}
-              icon={Footprints}
-            />
+            <NutritionCell label="Steps TB" value={nutritionReport.averageSteps === null ? '—' : whole.format(nutritionReport.averageSteps)} target={`/ ${whole.format(nutrition.profile.stepTarget)}`} progress={stepProgress} progressClassName="bg-emerald-500" footer={`${nutritionReport.stepTargetDays}/${nutritionReport.stepLoggedDays} ngày đạt`} icon={Footprints} />
           </div>
           <NutritionCell
             label="Cân nặng"
             value={nutritionReport.latestWeightKg === null ? '—' : `${decimal.format(nutritionReport.latestWeightKg)} kg`}
-            target={nutritionReport.weightChangeKg === null
-              ? 'chưa đủ dữ liệu'
-              : `${nutritionReport.weightChangeKg > 0 ? '+' : ''}${decimal.format(nutritionReport.weightChangeKg)} kg`}
+            target={nutritionReport.weightChangeKg === null ? 'chưa đủ dữ liệu' : `${nutritionReport.weightChangeKg > 0 ? '+' : ''}${decimal.format(nutritionReport.weightChangeKg)} kg`}
             footer={`C ${nutritionReport.averageCarbs === null ? '—' : `${whole.format(nutritionReport.averageCarbs)}g`} · F ${nutritionReport.averageFat === null ? '—' : `${whole.format(nutritionReport.averageFat)}g`}`}
             icon={Scale}
           />
         </div>
       </ReportSection>
 
-      <ReportSection
-        title="Tiến độ dự án"
-        icon={Layers}
-        trailing={<span className="text-[10px] font-semibold text-slate-400">{projectRows.length} dự án</span>}
-      >
+      <ReportSection title="Tiến độ dự án" icon={Layers} trailing={<span className="text-[10px] font-semibold text-slate-400">{projectRows.length} dự án</span>}>
         {projectRows.length > 0 ? (
           <div className="space-y-2">
-            {projectRows.map(({ project, total, done, rate, focusMinutes }) => (
+            {projectRows.map(({ project, total, done, rate }) => (
               <div key={project.id} className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-xs">
                 <div className="mb-2.5 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -346,9 +271,6 @@ export const ReportsView: React.FC = () => {
                   </div>
                 </div>
                 <ProgressBar value={rate} />
-                {focusMinutes > 0 ? (
-                  <p className="mt-1.5 text-right text-[9px] font-medium text-slate-400">{whole.format(focusMinutes)}p tập trung</p>
-                ) : null}
               </div>
             ))}
           </div>
@@ -356,51 +278,6 @@ export const ReportsView: React.FC = () => {
           <EmptyState title="Chưa có dữ liệu dự án" description="" />
         )}
       </ReportSection>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ReportSection title="Thói quen" icon={Flame}>
-          {habitRows.length > 0 ? (
-            <div className="space-y-2">
-              {habitRows.map(({ habit, completed, target, rate }) => (
-                <div key={habit.id} className="rounded-2xl border border-slate-200/70 bg-white px-3.5 py-3 shadow-xs">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-bold text-slate-900">{habit.name}</p>
-                    <div className="flex shrink-0 items-center gap-2 text-[10px]">
-                      <span className="font-medium text-slate-400">🔥 {habit.streak || 0}</span>
-                      <span className="font-bold tabular-nums text-slate-600">{completed}/{target}</span>
-                    </div>
-                  </div>
-                  <ProgressBar value={rate} className="bg-amber-500" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="Chưa có thói quen" description="" />
-          )}
-        </ReportSection>
-
-        <ReportSection title="Mục tiêu" icon={Target}>
-          {goals.length > 0 ? (
-            <div className="space-y-2">
-              {[...goals]
-                .sort((a, b) => b.progress - a.progress || a.targetDate.localeCompare(b.targetDate))
-                .slice(0, 6)
-                .map((goal) => (
-                  <div key={goal.id} className="rounded-2xl border border-slate-200/70 bg-white px-3.5 py-3 shadow-xs">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="min-w-0 truncate text-sm font-bold text-slate-900">{goal.title}</p>
-                      <span className="shrink-0 text-xs font-bold tabular-nums text-indigo-600">{Math.round(goal.progress || 0)}%</span>
-                    </div>
-                    <ProgressBar value={goal.progress || 0} />
-                    {goal.targetDate ? <p className="mt-1.5 text-right text-[9px] font-medium text-slate-400">{goal.targetDate}</p> : null}
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <EmptyState title="Chưa có mục tiêu" description="" />
-          )}
-        </ReportSection>
-      </div>
     </div>
   );
 };

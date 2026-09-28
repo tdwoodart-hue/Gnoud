@@ -1,4 +1,4 @@
-import type { Habit, Project, Task } from '../types';
+import type { Project, Task } from '../types';
 import type { NutritionState } from './nutritionService';
 
 export type ReportRange = '7d' | '30d' | 'all';
@@ -7,7 +7,6 @@ export interface ReportSummary {
   totalTasks: number;
   doneTasks: number;
   completionRate: number;
-  focusMinutes: number;
   overdueOpen: number;
   importantOpen: number;
   onTimeDone: number;
@@ -19,16 +18,12 @@ export interface DailyTaskActivity {
   date: string;
   planned: number;
   completed: number;
-  focusMinutes: number;
 }
 
 export interface ReportComparison {
   currentCompleted: number;
   previousCompleted: number;
   completedDelta: number;
-  currentFocusMinutes: number;
-  previousFocusMinutes: number;
-  focusMinutesDelta: number;
   currentCompletionRate: number;
   previousCompletionRate: number;
   completionRateDelta: number;
@@ -38,14 +33,6 @@ export interface ProjectReportRow {
   project: Project;
   total: number;
   done: number;
-  rate: number;
-  focusMinutes: number;
-}
-
-export interface HabitReportRow {
-  habit: Habit;
-  completed: number;
-  target: number;
   rate: number;
 }
 
@@ -92,10 +79,9 @@ export function inDateRange(value: string | undefined, start: string | undefined
 
 function taskBelongsToRange(task: Task, start: string | undefined, end: string): boolean {
   if (!start) return true;
-  const representativeDate =
-    task.status === 'done' && task.completedAt
-      ? task.completedAt
-      : task.plannedDate || task.createdAt;
+  const representativeDate = task.status === 'done' && task.completedAt
+    ? task.completedAt
+    : task.plannedDate || task.createdAt;
   return inDateRange(representativeDate, start, end);
 }
 
@@ -106,15 +92,10 @@ function summarizeWindow(tasks: Task[], start: string, end: string) {
     total: rangeTasks.length,
     done: done.length,
     completionRate: rangeTasks.length ? Math.round((done.length / rangeTasks.length) * 100) : 0,
-    focusMinutes: Math.round(rangeTasks.reduce((sum, task) => sum + (task.actualMinutes || 0), 0)),
   };
 }
 
-export function buildReportSummary(
-  tasks: Task[],
-  range: ReportRange,
-  today: string,
-): ReportSummary {
+export function buildReportSummary(tasks: Task[], range: ReportRange, today: string): ReportSummary {
   const start = getReportStart(range, today);
   const rangeTasks = tasks.filter((task) => taskBelongsToRange(task, start, today));
   const doneTasks = rangeTasks.filter((task) => task.status === 'done');
@@ -127,7 +108,6 @@ export function buildReportSummary(
     totalTasks: rangeTasks.length,
     doneTasks: doneTasks.length,
     completionRate: rangeTasks.length ? Math.round((doneTasks.length / rangeTasks.length) * 100) : 0,
-    focusMinutes: Math.round(rangeTasks.reduce((sum, task) => sum + (task.actualMinutes || 0), 0)),
     overdueOpen: tasks.filter(
       (task) => task.status !== 'done' && Boolean(task.deadline) && (task.deadline || '').slice(0, 10) < today,
     ).length,
@@ -136,17 +116,11 @@ export function buildReportSummary(
     ).length,
     onTimeDone,
     deadlineDone: deadlineDoneTasks.length,
-    onTimeRate: deadlineDoneTasks.length
-      ? Math.round((onTimeDone / deadlineDoneTasks.length) * 100)
-      : null,
+    onTimeRate: deadlineDoneTasks.length ? Math.round((onTimeDone / deadlineDoneTasks.length) * 100) : null,
   };
 }
 
-export function buildPeriodComparison(
-  tasks: Task[],
-  range: ReportRange,
-  today: string,
-): ReportComparison | null {
+export function buildPeriodComparison(tasks: Task[], range: ReportRange, today: string): ReportComparison | null {
   if (range === 'all') return null;
   const days = range === '7d' ? 7 : 30;
   const currentStart = shiftIsoDate(today, -(days - 1));
@@ -159,9 +133,6 @@ export function buildPeriodComparison(
     currentCompleted: current.done,
     previousCompleted: previous.done,
     completedDelta: current.done - previous.done,
-    currentFocusMinutes: current.focusMinutes,
-    previousFocusMinutes: previous.focusMinutes,
-    focusMinutesDelta: current.focusMinutes - previous.focusMinutes,
     currentCompletionRate: current.completionRate,
     previousCompletionRate: previous.completionRate,
     completionRateDelta: current.completionRate - previous.completionRate,
@@ -170,66 +141,31 @@ export function buildPeriodComparison(
 
 export function buildDailyTaskActivity(tasks: Task[], today: string, days = 7): DailyTaskActivity[] {
   const dates = Array.from({ length: days }, (_, index) => shiftIsoDate(today, index - (days - 1)));
-
-  return dates.map((date) => {
-    const planned = tasks.filter((task) => task.plannedDate?.slice(0, 10) === date).length;
-    const completed = tasks.filter((task) => task.completedAt?.slice(0, 10) === date).length;
-    const focusMinutes = tasks
-      .filter((task) => (task.completedAt || task.plannedDate || task.createdAt)?.slice(0, 10) === date)
-      .reduce((sum, task) => sum + (task.actualMinutes || 0), 0);
-
-    return { date, planned, completed, focusMinutes: Math.round(focusMinutes) };
-  });
+  return dates.map((date) => ({
+    date,
+    planned: tasks.filter((task) => task.plannedDate?.slice(0, 10) === date).length,
+    completed: tasks.filter((task) => task.completedAt?.slice(0, 10) === date).length,
+  }));
 }
 
-export function buildProjectReport(
-  projects: Project[],
-  tasks: Task[],
-  range: ReportRange,
-  today: string,
-): ProjectReportRow[] {
+export function buildProjectReport(projects: Project[], tasks: Task[], range: ReportRange, today: string): ProjectReportRow[] {
   const start = getReportStart(range, today);
-
   return projects
     .map((project) => {
-      const related = tasks.filter(
-        (task) => task.projectId === project.id && taskBelongsToRange(task, start, today),
-      );
+      const related = tasks.filter((task) => task.projectId === project.id && taskBelongsToRange(task, start, today));
       const done = related.filter((task) => task.status === 'done').length;
       return {
         project,
         total: related.length,
         done,
         rate: related.length ? Math.round((done / related.length) * 100) : 0,
-        focusMinutes: Math.round(related.reduce((sum, task) => sum + (task.actualMinutes || 0), 0)),
       };
     })
     .filter((row) => row.total > 0 || range === 'all')
     .sort((a, b) => b.total - a.total || b.rate - a.rate || a.project.name.localeCompare(b.project.name));
 }
 
-export function buildHabitReport(habits: Habit[], today: string, days = 7): HabitReportRow[] {
-  const start = shiftIsoDate(today, -(days - 1));
-  return habits
-    .map((habit) => {
-      const completed = (habit.completedDates || []).filter((date) => inDateRange(date, start, today)).length;
-      const weeklyTarget = Math.max(1, Math.min(7, habit.targetDaysPerWeek || 7));
-      const target = days === 7 ? weeklyTarget : Math.max(1, Math.round((weeklyTarget / 7) * days));
-      return {
-        habit,
-        completed,
-        target,
-        rate: Math.min(100, Math.round((completed / target) * 100)),
-      };
-    })
-    .sort((a, b) => b.rate - a.rate || b.habit.streak - a.habit.streak || a.habit.name.localeCompare(b.habit.name));
-}
-
-export function buildNutritionReport(
-  nutrition: NutritionState,
-  range: ReportRange,
-  today: string,
-): NutritionReport {
+export function buildNutritionReport(nutrition: NutritionState, range: ReportRange, today: string): NutritionReport {
   const start = getReportStart(range, today);
   const entries = nutrition.entries.filter((entry) => inDateRange(entry.date, start, today));
   const totalsByDate = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();

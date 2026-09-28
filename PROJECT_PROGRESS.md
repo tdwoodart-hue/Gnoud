@@ -4,101 +4,95 @@ Cập nhật: 28/09/2026
 
 ## 1. Mục tiêu sản phẩm
 
-Gnoud đang đi theo hướng **personal operating system gọn**: mở app là thấy việc cần làm, theo dõi sức khỏe/dinh dưỡng, duy trì thói quen, xem tiến độ và có một nơi riêng cho các hoạt động phát triển bản thân. Ưu tiên hiện tại là **ít thao tác, giao diện nhất quán, dùng tốt trên điện thoại** thay vì nhồi nhiều module nặng.
+Gnoud đang đi theo hướng **personal operating system gọn, mobile-first**: mở app là thấy việc cần làm, dinh dưỡng/cơ thể, tiến độ dự án và các công cụ cá nhân thật sự dùng hằng ngày. Nguyên tắc là chỉ báo cáo những dữ liệu app thực sự ghi nhận, tránh tạo các chỉ số trông đẹp nhưng không có nguồn đo rõ ràng.
 
-## 2. Trạng thái hiện tại
+## 2. Thay đổi trong đợt này
 
-### Đã có trong repo
+### Trình đọc sách
 
-- Hôm nay: danh sách việc, ghi chú theo ngày/giờ, hoạt động/challenge.
-- Công việc: task, subtask, priority, focus session, project.
-- Dinh dưỡng: món ăn, macro, calories, bước chân, cân nặng.
-- Cá nhân: gom các khu vực cá nhân thay vì tách quá nhiều tab.
-- Báo cáo: completion, focus time, đúng hạn, dự án, thói quen, mục tiêu, dinh dưỡng/cơ thể.
-- Tài khoản & đồng bộ: Firebase/Auth/Firestore cho các domain chính.
-- Bảo mật: PIN lock và privacy mode.
-- Notification: push + server/cron hiện có trong repo.
+Đã thêm tab **Sách** đồng bộ với giao diện hiện tại.
 
-### Bổ sung trong đợt này
+Định dạng hỗ trợ:
 
-#### Trình đọc sách gọn
+- **PDF**: mở ngay trong web bằng trình xem PDF gốc của trình duyệt, giữ nguyên bố cục; có nút mở toàn màn hình khi cần.
+- **EPUB**: đọc trực tiếp trong app, tự đọc cấu trúc EPUB/OPF/spine, chia theo chương, có mục lục dạng chọn chương, nhớ chương + trang đang đọc.
+- **TXT / MD / Markdown**: đọc dạng text, tự chia trang.
+- Có thể **dán văn bản trực tiếp** mà không cần file.
 
-- Tab **Sách** mới, đồng bộ visual với phần còn lại của app.
-- Nhập file `.txt`, `.md` hoặc dán văn bản trực tiếp.
-- Tự chia nội dung thành trang để đọc thoải mái trên mobile.
-- Nhớ trang đang đọc.
-- Chỉnh cỡ chữ.
-- 3 chế độ nền: sáng, ấm, tối.
-- Thư viện tối đa 12 sách để tránh localStorage phình quá nhanh.
-- Dữ liệu reader được tách theo `user.uid` trên từng thiết bị, tránh hai tài khoản dùng chung một key local.
+Tính năng reader hiện có:
 
-> Bản reader hiện tại cố ý không thêm EPUB/PDF engine để giữ bundle nhẹ và không đưa dependency lớn vào app.
+- Nhớ sách đã thêm và vị trí đọc.
+- Cỡ chữ tùy chỉnh cho EPUB/TXT/MD.
+- 3 nền đọc: sáng, ấm, tối.
+- PDF/EPUB được lưu bằng **IndexedDB** trên thiết bị thay vì nhét binary vào localStorage.
+- Metadata thư viện tách theo `user.uid`, tránh lẫn thư viện giữa các tài khoản.
+- Giới hạn file hiện tại: **50 MB/file**, tối đa **24 sách** trong thư viện metadata.
+- Không thêm dependency đọc sách mới; EPUB dùng API trình duyệt để giải nén/đọc cấu trúc, giữ bundle gọn.
 
-#### Báo cáo nâng cấp
+### Báo cáo
 
-- So sánh kỳ hiện tại với kỳ ngay trước đó cho 7 ngày / 30 ngày.
-- Hiển thị delta của tỷ lệ hoàn thành và focus time.
-- Thêm **Nhịp 7 ngày**: việc đã lên lịch, việc hoàn thành, phút tập trung từng ngày.
-- Thêm tóm tắt nhanh: ngày hoàn thành nhiều nhất, focus trung bình/ngày, focus cao nhất.
-- Không thêm chart library mới; dùng CSS/Tailwind để giữ app nhẹ.
+Đã tinh gọn để chỉ giữ các dữ liệu đang được app ghi nhận rõ ràng:
+
+- Tỷ lệ hoàn thành công việc.
+- Đúng hạn / đang trễ.
+- Nhịp công việc 7 ngày: việc đã lên lịch và việc đã hoàn thành.
+- Dinh dưỡng & cơ thể: calories, protein, steps, cân nặng.
+- Tiến độ dự án.
+- So sánh tỷ lệ hoàn thành với kỳ trước cho 7 ngày / 30 ngày.
+
+Đã **bỏ khỏi giao diện báo cáo**:
+
+- Focus / thời gian tập trung.
+- Thói quen.
+- Mục tiêu.
+
+Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất quán để đưa thành KPI trong báo cáo.
+
+### Giao diện
+
+- Xóa nút **icon mắt / privacy quick toggle** khỏi `PageHeader`.
+- Xóa luôn quick toggle icon mắt ở sidebar desktop.
+- Privacy mode vẫn có thể giữ ở khu vực cài đặt/bảo mật nếu cần, nhưng không chiếm chỗ ở màn hình chính.
 
 ## 3. Nguyên tắc phát triển tiếp
 
-1. **Mobile first**: thao tác chính dùng được bằng một tay, không quá nhiều modal.
-2. **Một nguồn dữ liệu**: tránh mỗi màn hình tự tạo một dạng storage riêng nếu dữ liệu cần dùng chéo.
-3. **Tách theo domain**: UI ở `components/<domain>`, logic/storage ở `services/<domain>Service.ts`.
-4. **Không thêm dependency nặng khi chưa thật sự cần**.
-5. **Báo cáo phải trả lời được câu hỏi “tuần này khác tuần trước ở đâu?”**, không chỉ hiển thị số tổng.
-6. **Dữ liệu tài khoản không được lẫn nhau**; mọi domain mới phải có namespace theo user hoặc sync Firestore.
+1. **Mobile first**: thao tác chính dùng tốt bằng một tay trên iPhone.
+2. **Chỉ báo cáo dữ liệu có nguồn đo thật**.
+3. **Không lẫn dữ liệu tài khoản**; storage mới phải namespace theo user hoặc có sync rõ ràng.
+4. **File lớn dùng IndexedDB/Storage**, không nhét vào localStorage/Firestore document.
+5. **Reader phải ưu tiên PDF + EPUB**, vì đây là định dạng sách thực tế phổ biến hơn TXT/MD.
+6. **Giữ bundle gọn**; chỉ thêm dependency khi browser API không giải quyết được ổn định.
 
-## 4. Roadmap đề xuất
+## 4. Roadmap tiếp theo
 
-### P0 · Hoàn thiện nền tảng hiện tại
+### Reader P1
 
-- Đưa reader từ local-only sang Firestore account sync.
-- Thêm migration/versioning cho dữ liệu reader.
-- Theo dõi thời gian đọc thực tế và số trang/ngày.
-- Cho phép tạo task/challenge trực tiếp từ đoạn đang đọc.
-- Thêm test navigation + report + reader service vào CI hiện có.
+- Bookmark.
+- Highlight + ghi chú theo đoạn EPUB.
+- Tìm kiếm trong EPUB.
+- Lịch sử sách đọc gần đây.
+- Đồng bộ metadata/progress lên Firestore; file gốc nếu cần cloud thì dùng Firebase Storage.
+- PDF: nếu cần đồng bộ chính xác số trang/vị trí đọc giữa thiết bị, cân nhắc PDF renderer riêng ở bước sau.
 
-### P1 · Reader 2.0
+### Báo cáo P1
 
-- EPUB bằng lazy-loaded dependency riêng, chỉ tải khi người dùng mở EPUB.
-- Bookmark và highlight.
-- Ghi chú theo đoạn.
-- Tìm kiếm trong sách.
-- Mục tiêu đọc: phút/ngày hoặc trang/ngày.
-- Import/export dữ liệu đọc.
+- Trend calories / protein / cân nặng / steps theo 7 và 30 ngày.
+- So sánh dự án kỳ này với kỳ trước.
+- Kế hoạch vs hoàn thành theo ngày/tuần.
+- Chỉ thêm metric mới khi domain tương ứng có dữ liệu log ổn định.
 
-### P1 · Báo cáo 2.0
+## 5. File chính của đợt này
 
-- So sánh theo tuần/tháng bằng trend line tối giản.
-- Báo cáo kế hoạch vs thực tế: estimated minutes / actual minutes.
-- Báo cáo theo priority và category.
-- Heatmap ngày/giờ hoàn thành tốt nhất.
-- Dinh dưỡng: xu hướng 7/30 ngày cho calories, protein, weight, steps.
-- Reader: phút đọc, số ngày đọc, tiến độ sách; chỉ hiển thị khi có dữ liệu.
-
-### P2 · Báo cáo hành động
-
-- Từ một insight có thể bấm tạo task/goal/habit ngay.
-- Weekly review tự gom: việc xong, việc trễ, focus, dinh dưỡng, thói quen, đọc sách.
-- Cho phép lưu snapshot tuần để so sánh dài hạn.
-- Export bản tóm tắt tuần dạng ảnh/PDF khi thật sự cần chia sẻ.
-
-## 5. Những việc chưa nên làm ngay
-
-- Không đưa PDF renderer lớn vào bundle chính.
-- Không tạo thêm nhiều tab riêng cho từng tracker nhỏ.
-- Không dùng AI để tự kết luận quá nhiều khi dữ liệu chưa đủ; ưu tiên số liệu gốc + so sánh rõ ràng.
-- Không đồng bộ file sách nguyên bản lên Firestore trực tiếp; nếu cần cloud books nên dùng Storage và chỉ sync metadata/progress ở Firestore.
-
-## 6. File chính của đợt này
-
-- `src/components/reader/ReaderView.tsx` — UI reader.
-- `src/services/readerService.ts` — model, pagination, storage reader.
-- `src/components/reports/ReportsView.tsx` — báo cáo mới.
-- `src/services/reportService.ts` — so sánh kỳ và metrics.
-- `src/App.tsx`, `src/components/layout/AppShell.tsx`, `src/components/common/CommandMenuModal.tsx` — nối reader vào app.
-- `src/config/navigation.ts`, `src/types.ts` — khai báo tab mới.
-- `test/navigation.test.ts`, `test/report-service.test.ts`, `test/reader-service.test.ts` — cập nhật test.
+- `src/components/reader/ReaderView.tsx`
+- `src/services/readerService.ts`
+- `src/components/reports/ReportsView.tsx`
+- `src/services/reportService.ts`
+- `src/components/common/PageHeader.tsx`
+- `src/components/layout/AppShell.tsx`
+- `src/App.tsx`
+- `src/components/common/CommandMenuModal.tsx`
+- `src/config/navigation.ts`
+- `src/types.ts`
+- `test/navigation.test.ts`
+- `test/report-service.test.ts`
+- `test/reader-service.test.ts`

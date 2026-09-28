@@ -25,6 +25,8 @@ export interface ReaderBook {
   contentWidth: ReaderWidth;
   textAlign: ReaderTextAlign;
   ttsRate: number;
+  ttsPitch: number;
+  ttsCleanText: boolean;
   ttsVoiceUri?: string;
   theme: ReaderTheme;
   addedAt: string;
@@ -75,6 +77,40 @@ export function calculateReaderProgress(
   if (format !== 'epub' || !chapterCount || chapterCount <= 0) return 0;
   const chapter = Math.min(chapterCount - 1, Math.max(0, currentChapter || 0));
   return Math.min(1, Math.max(0, (chapter + withinPage) / chapterCount));
+}
+
+export function sanitizeSpeechText(input: string): string {
+  if (!input) return '';
+
+  const normalized = input
+    .replace(/\[([^\]]+)\]\((?:https?:\/\/|www\.)[^)]+\)/gi, '$1')
+    .replace(/<https?:\/\/[^>]+>/gi, ' ')
+    .replace(/\bhttps?:\/\/[^\s<>()]+/gi, ' ')
+    .replace(/\bwww\.[^\s<>()]+/gi, ' ')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, ' ')
+    .replace(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|vn|io|co|edu|gov|info|me|app)(?:\/[^\s]*)?/gi, ' ')
+    .replace(/\b[\w.+-]+@\b/g, ' ')
+    .replace(/\b(?:doi|isbn)\s*[:：]?\s*[0-9A-Z./:-]{5,}\b/gi, ' ')
+    .replace(/\[(?:\d+|[ivxlcdm]+)\]/gi, ' ')
+    .replace(/[_*=#~`^|<>]+/g, ' ')
+    .replace(/[•●▪■◆◇→←↑↓✓✔✦✧★☆]+/g, ' ')
+    .replace(/…{2,}/g, '…')
+    .replace(/[-–—]{3,}/g, ' — ');
+
+  return normalized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) return false;
+      if (/^(?:trang|page)\s+\d+\s*$/i.test(line)) return false;
+      if (/^(?:https?|www)\b/i.test(line)) return false;
+      return true;
+    })
+    .join(' ')
+    .replace(/\s+([,.;!?…])/g, '$1')
+    .replace(/([,.;!?…])(?=\S)/g, '$1 ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 function splitLongBlock(block: string, maxChars: number): string[] {
@@ -152,7 +188,9 @@ export function createReaderBook(input: {
     fontFamily: 'book',
     contentWidth: 'medium',
     textAlign: 'justify',
-    ttsRate: 1,
+    ttsRate: 0.95,
+    ttsPitch: 1,
+    ttsCleanText: true,
     ttsVoiceUri: undefined,
     theme: 'paper',
     addedAt: now,
@@ -178,7 +216,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
         return {
           id: book.id as string,
           title: typeof book.title === 'string' ? book.title : 'Sách chưa đặt tên',
-          author: typeof book.author === 'string' ? book.author : undefined,
+          author: typeof book.author === 'string' ? normalizeBookAuthor(book.author) : undefined,
           format,
           content: typeof book.content === 'string' ? book.content : '',
           binaryKey: typeof book.binaryKey === 'string' ? book.binaryKey : undefined,
@@ -195,7 +233,9 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           fontFamily,
           contentWidth,
           textAlign,
-          ttsRate: Math.min(2, Math.max(0.6, Number(book.ttsRate) || 1)),
+          ttsRate: Math.min(2, Math.max(0.6, Number(book.ttsRate) || 0.95)),
+          ttsPitch: Math.min(1.4, Math.max(0.7, Number(book.ttsPitch) || 1)),
+          ttsCleanText: book.ttsCleanText !== false,
           ttsVoiceUri: typeof book.ttsVoiceUri === 'string' ? book.ttsVoiceUri : undefined,
           theme,
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),
@@ -370,6 +410,28 @@ function findXmlElement(doc: Document, localName: string): Element | undefined {
   return Array.from(doc.getElementsByTagName('*')).find((element) => element.localName === localName);
 }
 
+function findXmlText(doc: Document, localNames: string[]): string | undefined {
+  const names = localNames.map((name) => name.toLowerCase());
+  const direct = Array.from(doc.getElementsByTagName('*'))
+    .find((element) => names.includes(element.localName.toLowerCase()) && element.textContent?.trim());
+  if (direct?.textContent?.trim()) return direct.textContent.trim();
+
+  const meta = Array.from(doc.getElementsByTagName('*')).find((element) => {
+    if (element.localName.toLowerCase() !== 'meta') return false;
+    const key = `${element.getAttribute('property') || ''} ${element.getAttribute('name') || ''}`.toLowerCase();
+    return names.some((name) => key.includes(name)) &&
+      Boolean(element.textContent?.trim() || element.getAttribute('content')?.trim());
+  });
+  return meta?.textContent?.trim() || meta?.getAttribute('content')?.trim() || undefined;
+}
+
+function normalizeBookAuthor(value?: string): string | undefined {
+  const cleaned = value?.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return undefined;
+  if (/^(?:unknown|unknow|n\/?a|none|null|anonymous|không rõ)$/i.test(cleaned)) return undefined;
+  return cleaned;
+}
+
 function extractChapterText(html: string): { title?: string; content: string } {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('script,style,noscript,iframe,object,embed,svg,form').forEach((node) => node.remove());
@@ -401,8 +463,8 @@ export async function parseEpubBook(blob: Blob): Promise<ParsedEpubBook> {
   const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
   if (opfDoc.querySelector('parsererror')) throw new Error('Không đọc được cấu trúc EPUB.');
 
-  const title = findXmlElement(opfDoc, 'title')?.textContent?.trim() || undefined;
-  const author = findXmlElement(opfDoc, 'creator')?.textContent?.trim() || undefined;
+  const title = findXmlText(opfDoc, ['title']);
+  const author = normalizeBookAuthor(findXmlText(opfDoc, ['creator', 'author']));
   const manifest = new Map<string, { id: string; path: string; mediaType: string; properties: string }>();
   Array.from(opfDoc.getElementsByTagName('*'))
     .filter((node) => node.localName === 'item')

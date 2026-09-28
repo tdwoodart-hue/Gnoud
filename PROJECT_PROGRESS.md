@@ -34,7 +34,9 @@ Tính năng reader hiện có:
 - Thanh tiến độ đọc theo **toàn cuốn** cho EPUB/TXT; thư viện hiển thị Chưa đọc / % đã đọc / Đã đọc xong thay vì trạng thái mơ hồ.
 - Nhớ chương + vị trí cuộn + thiết lập kiểu đọc theo từng cuốn.
 - EPUB tự lấy **tên sách, tác giả và ảnh bìa** từ metadata/manifest khi file có dữ liệu này.
-- **Nghe sách bằng TTS** cho EPUB/TXT: play/pause/stop, chọn giọng hệ thống và tốc độ đọc; bắt đầu gần vị trí đang đọc.
+- **Nghe sách bằng TTS** cho EPUB/TXT: play/pause/stop, ưu tiên và liệt kê các **giọng tiếng Việt** mà thiết bị cung cấp, có nghe thử giọng, chỉnh tốc độ + cao độ; bắt đầu gần vị trí đang đọc.
+- Bộ lọc TTS mặc định loại bỏ URL, `www`, email, domain, ISBN/DOI, số chú thích và ký hiệu rác trước khi phát để tránh đọc chuỗi web khó chịu; có thể tắt lọc nếu muốn nghe nguyên văn.
+- Metadata tác giả được làm sạch: giá trị kiểu `Unknown/Unknow/N/A` không còn hiện trong thư viện; nếu EPUB không có tác giả hợp lệ thì giao diện chỉ hiện định dạng sách.
 - PDF/EPUB lưu bằng **IndexedDB** trên thiết bị.
 - Metadata thư viện tách theo `user.uid`, tránh lẫn dữ liệu giữa các tài khoản.
 - Giới hạn file hiện tại: **50 MB/file**, tối đa **24 sách**.

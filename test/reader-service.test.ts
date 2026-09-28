@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent } from '../src/services/readerService';
+import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, sanitizeSpeechText } from '../src/services/readerService';
 
 test('reader detects supported book formats', () => {
   assert.equal(detectReaderFormat('book.pdf'), 'pdf');
@@ -32,7 +32,9 @@ test('new reader book starts at first chapter and page with compact defaults', (
   assert.equal(book.fontFamily, 'book');
   assert.equal(book.contentWidth, 'medium');
   assert.equal(book.textAlign, 'justify');
-  assert.equal(book.ttsRate, 1);
+  assert.equal(book.ttsRate, 0.95);
+  assert.equal(book.ttsPitch, 1);
+  assert.equal(book.ttsCleanText, true);
   assert.equal(book.theme, 'paper');
 });
 
@@ -42,4 +44,17 @@ test('reader progress is whole-book progress for EPUB', () => {
   assert.equal(calculateReaderProgress('epub', 4, 10, 0.5), 0.45);
   assert.equal(calculateReaderProgress('epub', 9, 10, 1), 1);
   assert.equal(calculateReaderProgress('text', 0, undefined, 0.37), 0.37);
+});
+
+
+test('speech cleanup removes URLs, emails, domains and noisy reference markers', () => {
+  const source = 'Đọc nội dung này. https://example.com/a?q=1 Liên hệ test@example.com. Xem www.thuvien.vn [12] ISBN: 978-604-00-0000-0. Tiếp tục câu cuối.';
+  const cleaned = sanitizeSpeechText(source);
+  assert.equal(cleaned.includes('https'), false);
+  assert.equal(cleaned.includes('example.com'), false);
+  assert.equal(cleaned.includes('test@'), false);
+  assert.equal(cleaned.includes('www.'), false);
+  assert.equal(cleaned.includes('[12]'), false);
+  assert.match(cleaned, /Đọc nội dung này/);
+  assert.match(cleaned, /Tiếp tục câu cuối/);
 });

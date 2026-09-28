@@ -39,6 +39,7 @@ import {
   READER_MAX_FILE_BYTES,
   saveReaderBinary,
   saveReaderLibrary,
+  sanitizeSpeechText,
   type EpubChapter,
   type ReaderBook,
   type ReaderFont,
@@ -137,6 +138,23 @@ function splitSpeechText(text: string, maxChars = 240): string[] {
   }
   if (current) chunks.push(current);
   return chunks;
+}
+
+function voiceScore(voice: SpeechSynthesisVoice): number {
+  const language = voice.lang.toLowerCase();
+  const name = voice.name.toLowerCase();
+  let score = 0;
+  if (language === 'vi-vn') score += 100;
+  else if (language.startsWith('vi')) score += 80;
+  if (voice.localService) score += 12;
+  if (/linh|nam|vietnam|tiếng việt|tieng viet|google/.test(name)) score += 8;
+  if (/enhanced|premium|neural|natural/.test(name)) score += 5;
+  return score;
+}
+
+function formatVoiceName(voice: SpeechSynthesisVoice): string {
+  const language = voice.lang.toLowerCase().startsWith('vi') ? 'Tiếng Việt' : voice.lang;
+  return `${voice.name} · ${language}${voice.localService ? ' · trên máy' : ''}`;
 }
 
 export const ReaderView: React.FC = () => {
@@ -387,10 +405,23 @@ export const ReaderView: React.FC = () => {
 
   const supportsTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
+  const vietnameseVoices = useMemo(() => {
+    const seen = new Set<string>();
+    return [...ttsVoices]
+      .filter((voice) => voice.lang.toLowerCase().startsWith('vi'))
+      .filter((voice) => {
+        const key = `${voice.voiceURI}|${voice.name}|${voice.lang}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => voiceScore(b) - voiceScore(a) || a.name.localeCompare(b.name));
+  }, [ttsVoices]);
+
+  const fallbackVoices = vietnameseVoices.length ? vietnameseVoices : ttsVoices;
+  const automaticVoice = fallbackVoices[0];
   const selectedVoice = activeBook
-    ? ttsVoices.find((voice) => voice.voiceURI === activeBook.ttsVoiceUri)
-      || ttsVoices.find((voice) => voice.lang.toLowerCase().startsWith('vi'))
-      || ttsVoices[0]
+    ? ttsVoices.find((voice) => voice.voiceURI === activeBook.ttsVoiceUri) || automaticVoice
     : undefined;
 
   const stopSpeech = () => {
@@ -414,7 +445,8 @@ export const ReaderView: React.FC = () => {
     } else {
       utterance.lang = 'vi-VN';
     }
-    utterance.rate = activeBook.ttsRate || 1;
+    utterance.rate = activeBook.ttsRate || 0.95;
+    utterance.pitch = activeBook.ttsPitch || 1;
     utterance.onend = () => {
       if (!speechStoppedRef.current) speakSpeechChunk(index + 1);
     };
@@ -431,7 +463,8 @@ export const ReaderView: React.FC = () => {
       addToast('Trình duyệt này chưa hỗ trợ đọc sách bằng giọng nói.', 'warning');
       return;
     }
-    const chunks = splitSpeechText(readerText);
+    const speechSource = activeBook.ttsCleanText ? sanitizeSpeechText(readerText) : readerText;
+    const chunks = splitSpeechText(speechSource);
     if (!chunks.length) {
       addToast('Chương này không có nội dung để đọc.', 'warning');
       return;
@@ -441,6 +474,26 @@ export const ReaderView: React.FC = () => {
     speechChunksRef.current = chunks;
     const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
     speakSpeechChunk(startIndex);
+  };
+
+  const previewVoice = () => {
+    if (!supportsTts || !activeBook) {
+      addToast('Trình duyệt này chưa hỗ trợ nghe thử giọng.', 'warning');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    speechStoppedRef.current = true;
+    const utterance = new SpeechSynthesisUtterance('Đây là giọng đọc thử tiếng Việt. Bạn có thể đổi giọng, tốc độ và cao độ để nghe tự nhiên hơn.');
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+    } else {
+      utterance.lang = 'vi-VN';
+    }
+    utterance.rate = activeBook.ttsRate || 0.95;
+    utterance.pitch = activeBook.ttsPitch || 1;
+    window.speechSynthesis.speak(utterance);
+    setTtsStatus('idle');
   };
 
   const toggleSpeech = () => {
@@ -999,39 +1052,81 @@ export const ReaderView: React.FC = () => {
                   <label>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Giọng đọc</span>
                     <select
-                      value={selectedVoice?.voiceURI || ''}
+                      value={activeBook.ttsVoiceUri || ''}
                       onChange={(event) => {
                         stopSpeech();
                         updateBook(activeBook.id, { ttsVoiceUri: event.target.value || undefined });
                       }}
                       className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
                     >
-                      {ttsVoices.length ? ttsVoices.map((voice) => (
-                        <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>
-                      )) : <option value="">Giọng mặc định của thiết bị</option>}
+                      <option value="">Tự động · ưu tiên giọng Việt</option>
+                      {fallbackVoices.length ? fallbackVoices.map((voice) => (
+                        <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>{formatVoiceName(voice)}</option>
+                      )) : <option value="">Chưa tìm thấy giọng trên thiết bị</option>}
                     </select>
+                    <button
+                      type="button"
+                      onClick={previewVoice}
+                      className="mt-2 h-9 w-full rounded-xl border border-current/15 text-[11px] font-bold transition hover:bg-black/5"
+                    >
+                      Nghe thử giọng này
+                    </button>
                   </label>
 
-                  <label>
-                    <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Tốc độ</span><span>{activeBook.ttsRate.toFixed(1)}×</span></span>
-                    <input
-                      type="range"
-                      min="0.7"
-                      max="1.6"
-                      step="0.1"
-                      value={activeBook.ttsRate}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        stopSpeech();
-                        updateBook(activeBook.id, { ttsRate: value });
-                      }}
-                      className="mt-4 w-full accent-indigo-500"
-                    />
-                  </label>
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Tốc độ</span><span>{activeBook.ttsRate.toFixed(2)}×</span></span>
+                      <input
+                        type="range"
+                        min="0.75"
+                        max="1.35"
+                        step="0.05"
+                        value={activeBook.ttsRate}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          stopSpeech();
+                          updateBook(activeBook.id, { ttsRate: value });
+                        }}
+                        className="mt-3 w-full accent-indigo-500"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Cao độ</span><span>{activeBook.ttsPitch.toFixed(2)}</span></span>
+                      <input
+                        type="range"
+                        min="0.8"
+                        max="1.2"
+                        step="0.05"
+                        value={activeBook.ttsPitch}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          stopSpeech();
+                          updateBook(activeBook.id, { ttsPitch: value });
+                        }}
+                        className="mt-3 w-full accent-indigo-500"
+                      />
+                    </label>
+                  </div>
                 </div>
 
+                <label className="mt-5 flex items-start gap-3 rounded-2xl border border-current/10 p-3">
+                  <input
+                    type="checkbox"
+                    checked={activeBook.ttsCleanText}
+                    onChange={(event) => {
+                      stopSpeech();
+                      updateBook(activeBook.id, { ttsCleanText: event.target.checked });
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-indigo-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold">Lọc nội dung gây khó chịu</span>
+                    <span className={`mt-0.5 block text-[10px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Bỏ URL, www, email, domain, ISBN/DOI, số chú thích và ký hiệu rác trước khi đọc.</span>
+                  </span>
+                </label>
+
                 <p className={`mt-4 text-center text-[10px] font-medium leading-5 ${themeStyles[activeBook.theme].muted}`}>
-                  Dùng giọng đọc có sẵn trên máy. EPUB/TXT hỗ trợ nghe; PDF hiện dùng trình xem PDF của thiết bị.
+                  Chỉ hiển thị các giọng tiếng Việt mà trình duyệt/thiết bị cung cấp. Nếu máy có nhiều giọng Việt, chúng sẽ xuất hiện đầy đủ ở danh sách trên.
                 </p>
               </div>
             </section>

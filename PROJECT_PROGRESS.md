@@ -122,3 +122,13 @@ Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất qu�
 - `test/navigation.test.ts`
 - `test/report-service.test.ts`
 - `test/reader-service.test.ts`
+
+## Reader v6 — phân trang thật + fallback TTS
+
+- Bỏ trải nghiệm cuộn một chương dài. EPUB/TXT được chia lại theo kích thước viewport và typography hiện tại; mỗi màn hình là một trang rõ ràng.
+- Hiển thị `Trang x/y` ngay trong nội dung và footer. Đổi font, cỡ chữ, giãn dòng hoặc bề rộng sẽ tự tính lại số trang nhưng giữ vị trí tương đối.
+- Vuốt trái/phải, chạm mép hoặc dùng nút mũi tên để lật trang; có hiệu ứng 3D nhẹ. Khi hết trang của chương sẽ chuyển chương tiếp/theo trước.
+- Mỗi lần lật trang tự cập nhật `currentPage`, `scrollProgress`, `overallProgress` và `lastPositionAt`; không cần bấm bookmark thủ công.
+- TTS vẫn dùng cùng vị trí tương đối nên khi nghe, trang hiển thị tự tiến theo và vị trí nghe được ghim vào tiến độ sách.
+- Nếu `/api/reader/tts` không khả dụng (ví dụ một số môi trường Preview chỉ chạy frontend), tab Online neural sẽ tự ẩn và Reader tự fallback về giọng trên máy thay vì hiện `0 dùng được`.
+- Sách mới mặc định dùng TTS trên máy; khi backend online hoạt động, người dùng có thể chuyển sang Online neural.

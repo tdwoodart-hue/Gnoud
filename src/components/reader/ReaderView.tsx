@@ -37,6 +37,7 @@ import {
   loadReaderBinary,
   loadReaderLibrary,
   parseEpubBook,
+  paginateBookContent,
   READER_MAX_BOOK_CHARS,
   READER_MAX_BOOKS,
   READER_MAX_FILE_BYTES,
@@ -208,9 +209,12 @@ export const ReaderView: React.FC = () => {
   const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [onlineVoices, setOnlineVoices] = useState<OnlineTtsVoice[]>([]);
   const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
+  const [onlineTtsError, setOnlineTtsError] = useState('');
   const [visualPage, setVisualPage] = useState(1);
   const [visualPageCount, setVisualPageCount] = useState(1);
   const [lastPinnedAt, setLastPinnedAt] = useState<string | null>(null);
+  const [readerViewport, setReaderViewport] = useState({ width: 390, height: 640 });
+  const [pageTurnFx, setPageTurnFx] = useState<'next' | 'prev' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const epubCacheRef = useRef(new Map<string, EpubChapter[]>());
@@ -223,6 +227,9 @@ export const ReaderView: React.FC = () => {
   const onlineAudioUrlRef = useRef<string | null>(null);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const lastTtsPinWriteRef = useRef(0);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const pageTurnTimerRef = useRef<number | null>(null);
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -278,16 +285,23 @@ export const ReaderView: React.FC = () => {
   useEffect(() => {
     let disposed = false;
     setOnlineVoicesLoading(true);
+    setOnlineTtsError('');
     void fetch('/api/reader/tts')
       .then(async (response) => {
-        if (!response.ok) throw new Error('Không tải được danh sách giọng online.');
+        if (!response.ok) throw new Error(`API giọng online trả lỗi ${response.status}.`);
         return response.json() as Promise<{ voices?: OnlineTtsVoice[] }>;
       })
       .then((payload) => {
-        if (!disposed) setOnlineVoices(Array.isArray(payload.voices) ? payload.voices : []);
+        if (disposed) return;
+        const voices = Array.isArray(payload.voices) ? payload.voices.filter((voice) => voice.available) : [];
+        setOnlineVoices(voices);
+        if (!voices.length) setOnlineTtsError('Chưa có provider giọng online khả dụng trên server hiện tại.');
       })
       .catch(() => {
-        if (!disposed) setOnlineVoices([]);
+        if (!disposed) {
+          setOnlineVoices([]);
+          setOnlineTtsError('Bản Preview hiện tại không kết nối được API giọng online.');
+        }
       })
       .finally(() => {
         if (!disposed) setOnlineVoicesLoading(false);
@@ -382,6 +396,27 @@ export const ReaderView: React.FC = () => {
     [readerText],
   );
 
+  const pageCharLimit = useMemo(() => {
+    if (!activeBook) return 470;
+    const widthFactor = clamp(readerViewport.width / 390, 0.78, 1.8);
+    const heightFactor = clamp(readerViewport.height / 640, 0.72, 1.8);
+    const fontFactor = Math.pow(19 / Math.max(15, activeBook.fontSize), 1.72);
+    const lineFactor = 1.8 / Math.max(1.4, activeBook.lineHeight);
+    const widthSettingFactor = activeBook.contentWidth === 'narrow' ? 0.88 : activeBook.contentWidth === 'wide' ? 1.1 : 1;
+    return Math.round(clamp(470 * widthFactor * heightFactor * fontFactor * lineFactor * widthSettingFactor, 220, 1650));
+  }, [activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, readerViewport.height, readerViewport.width]);
+
+  const readerPages = useMemo(
+    () => activeBook?.format === 'pdf' ? [''] : paginateBookContent(readerText, pageCharLimit),
+    [activeBook?.format, readerText, pageCharLimit],
+  );
+
+  const visiblePageText = readerPages[Math.max(0, Math.min(readerPages.length - 1, visualPage - 1))] || '';
+  const visiblePageParagraphs = useMemo(
+    () => visiblePageText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean),
+    [visiblePageText],
+  );
+
   const progressRatio = useMemo(() => {
     if (!activeBook) return 0;
     return calculateReaderProgress(
@@ -393,43 +428,39 @@ export const ReaderView: React.FC = () => {
   }, [activeBook, chapterIndex, epubChapters.length, liveScrollProgress]);
   const progress = Math.round(progressRatio * 100);
 
-  const refreshPageMetrics = () => {
-    const element = readingScrollRef.current;
-    if (!element || !activeBook || activeBook.format === 'pdf') return;
-    const pageStep = Math.max(1, element.clientHeight * 0.82);
-    const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-    const count = Math.max(1, Math.ceil(maxScroll / pageStep) + 1);
-    const page = Math.min(count, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
-    setVisualPageCount(count);
-    setVisualPage(page);
-  };
-
-  useEffect(() => {
-    if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
-    setLiveScrollProgress(clamp(activeBook.scrollProgress || 0, 0, 1));
-    const frame = window.requestAnimationFrame(() => {
-      const element = readingScrollRef.current;
-      if (!element) return;
-      const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-      element.scrollTop = maxScroll * clamp(activeBook.scrollProgress || 0, 0, 1);
-      refreshPageMetrics();
-      setLastPinnedAt(activeBook.lastPositionAt || null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerText]);
-
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
     const element = readingScrollRef.current;
     if (!element) return undefined;
-    const frame = window.requestAnimationFrame(refreshPageMetrics);
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => refreshPageMetrics()) : null;
-    observer?.observe(element);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer?.disconnect();
+
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      setReaderViewport({
+        width: Math.max(280, rect.width),
+        height: Math.max(360, rect.height),
+      });
     };
-  }, [readingOpen, readerText, activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, activeBook?.fontFamily]);
+
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(element);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [readingOpen, activeBook?.id, activeBook?.format]);
+
+  useEffect(() => {
+    if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
+    const count = Math.max(1, readerPages.length);
+    const savedRatio = clamp(activeBook.scrollProgress || 0, 0, 1);
+    const page = count <= 1 ? 1 : Math.round(savedRatio * (count - 1)) + 1;
+    setVisualPageCount(count);
+    setVisualPage(clamp(page, 1, count));
+    setLiveScrollProgress(savedRatio);
+    setLastPinnedAt(activeBook.lastPositionAt || null);
+  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerPages.length]);
 
   useEffect(() => {
     if (!readingOpen) return undefined;
@@ -508,9 +539,11 @@ export const ReaderView: React.FC = () => {
   const availableOnlineVoices = onlineVoices.filter((voice) => voice.available);
   const selectedOnlineVoice = activeBook
     ? availableOnlineVoices.find((voice) => voice.id === activeBook.ttsOnlineVoiceId)
-      || availableOnlineVoices.find((voice) => voice.provider === 'edge')
+      || availableOnlineVoices.find((voice) => voice.provider === 'azure')
       || availableOnlineVoices[0]
     : undefined;
+
+  const ttsPlaybackMode: ReaderTtsMode = activeBook?.ttsMode === 'online' && selectedOnlineVoice ? 'online' : 'device';
 
   const cleanupOnlineAudio = () => {
     ttsAbortRef.current?.abort();
@@ -531,11 +564,6 @@ export const ReaderView: React.FC = () => {
   const pinListeningPosition = (chunkIndex: number, chunkCount: number) => {
     if (!activeBook || activeBook.format === 'pdf' || chunkCount <= 0) return;
     const ratio = clamp(chunkIndex / chunkCount, 0, 1);
-    const element = readingScrollRef.current;
-    if (element) {
-      const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-      element.scrollTop = maxScroll * ratio;
-    }
     setLiveScrollProgress(ratio);
     const overallProgress = calculateReaderProgress(
       activeBook.format,
@@ -679,7 +707,7 @@ export const ReaderView: React.FC = () => {
     speechStoppedRef.current = false;
     speechChunksRef.current = chunks;
     const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
-    if (activeBook.ttsMode === 'online' && selectedOnlineVoice) {
+    if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
       void speakOnlineChunk(startIndex);
       return;
     }
@@ -695,7 +723,7 @@ export const ReaderView: React.FC = () => {
     const sample = 'Đây là giọng đọc thử tiếng Việt. Hãy chọn giọng bạn thấy dễ nghe nhất để nghe sách.';
     stopSpeech();
     speechStoppedRef.current = false;
-    if (activeBook.ttsMode === 'online' && selectedOnlineVoice) {
+    if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
       try {
         const blob = await requestOnlineAudio(sample);
         if (speechStoppedRef.current) return;
@@ -733,7 +761,7 @@ export const ReaderView: React.FC = () => {
 
   const toggleSpeech = () => {
     if (!activeBook) return;
-    if (activeBook.ttsMode === 'online' && onlineAudioRef.current) {
+    if (ttsPlaybackMode === 'online' && onlineAudioRef.current) {
       if (ttsStatus === 'playing') {
         onlineAudioRef.current.pause();
         setTtsStatus('paused');
@@ -745,7 +773,7 @@ export const ReaderView: React.FC = () => {
       }
       return;
     }
-    if (activeBook.ttsMode === 'device' && supportsDeviceTts) {
+    if (ttsPlaybackMode === 'device' && supportsDeviceTts) {
       if (ttsStatus === 'playing') {
         window.speechSynthesis.pause();
         setTtsStatus('paused');
@@ -886,14 +914,11 @@ export const ReaderView: React.FC = () => {
     addToast(`Đã xóa “${book.title}” khỏi thư viện`, 'info');
   };
 
-  const persistCurrentReadingPosition = () => {
-    const element = readingScrollRef.current;
-    if (!element || !activeBook || activeBook.format === 'pdf') return;
-    const maxScroll = Math.max(1, element.scrollHeight - element.clientHeight);
-    const ratio = clamp(element.scrollTop / maxScroll, 0, 1);
-    const pageStep = Math.max(1, element.clientHeight * 0.82);
-    const pageCount = Math.max(1, Math.ceil(Math.max(0, element.scrollHeight - element.clientHeight) / pageStep) + 1);
-    const page = Math.min(pageCount, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
+  const persistCurrentReadingPosition = (pageOverride?: number) => {
+    if (!activeBook || activeBook.format === 'pdf') return;
+    const pageCount = Math.max(1, readerPages.length);
+    const page = clamp(pageOverride || visualPage, 1, pageCount);
+    const ratio = pageCount <= 1 ? 0 : (page - 1) / (pageCount - 1);
     const overallProgress = calculateReaderProgress(
       activeBook.format,
       chapterIndex,
@@ -914,21 +939,6 @@ export const ReaderView: React.FC = () => {
     });
   };
 
-  const handleReaderScroll = () => {
-    const element = readingScrollRef.current;
-    if (!element || !activeBook || activeBook.format === 'pdf') return;
-    const maxScroll = Math.max(1, element.scrollHeight - element.clientHeight);
-    const ratio = clamp(element.scrollTop / maxScroll, 0, 1);
-    const pageStep = Math.max(1, element.clientHeight * 0.82);
-    const pageCount = Math.max(1, Math.ceil(Math.max(0, element.scrollHeight - element.clientHeight) / pageStep) + 1);
-    const page = Math.min(pageCount, Math.max(1, Math.floor((element.scrollTop + pageStep * 0.08) / pageStep) + 1));
-    setLiveScrollProgress(ratio);
-    setVisualPageCount(pageCount);
-    setVisualPage(page);
-    if (scrollSaveTimerRef.current) window.clearTimeout(scrollSaveTimerRef.current);
-    scrollSaveTimerRef.current = window.setTimeout(persistCurrentReadingPosition, 220);
-  };
-
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
     const flush = () => persistCurrentReadingPosition();
@@ -943,19 +953,20 @@ export const ReaderView: React.FC = () => {
     };
   }, [readingOpen, activeBook?.id, activeBook?.format, chapterIndex, readerText]);
 
-  const changeChapter = (nextIndex: number) => {
+  const changeChapter = (nextIndex: number, edge: 'start' | 'end' = 'start') => {
     if (!activeBook || activeBook.format !== 'epub' || epubChapters.length === 0) return;
     const target = clamp(nextIndex, 0, epubChapters.length - 1);
     stopSpeech();
-    setLiveScrollProgress(0);
-    setVisualPage(1);
+    const ratio = edge === 'end' ? 1 : 0;
+    setLiveScrollProgress(ratio);
+    setVisualPage(edge === 'end' ? Math.max(1, visualPageCount) : 1);
     const now = new Date().toISOString();
     setLastPinnedAt(now);
     updateBook(activeBook.id, {
       currentChapter: target,
       currentPage: 0,
-      scrollProgress: 0,
-      overallProgress: calculateReaderProgress('epub', target, epubChapters.length, 0),
+      scrollProgress: ratio,
+      overallProgress: calculateReaderProgress('epub', target, epubChapters.length, ratio),
       chapterCount: epubChapters.length,
       lastPositionAt: now,
       lastOpenedAt: now,
@@ -965,24 +976,48 @@ export const ReaderView: React.FC = () => {
     setControlsVisible(true);
   };
 
+  const commitPage = (page: number) => {
+    const count = Math.max(1, readerPages.length);
+    const nextPage = clamp(page, 1, count);
+    setVisualPageCount(count);
+    setVisualPage(nextPage);
+    persistCurrentReadingPosition(nextPage);
+  };
+
   const stepViewport = (direction: -1 | 1) => {
-    const element = readingScrollRef.current;
-    if (!element || !activeBook || activeBook.format === 'pdf') return;
-    const atTop = element.scrollTop <= 4;
-    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 6;
-    if (direction < 0 && atTop && activeBook.format === 'epub' && chapterIndex > 0) {
-      changeChapter(chapterIndex - 1);
-      window.requestAnimationFrame(() => {
-        const reader = readingScrollRef.current;
-        if (reader) reader.scrollTop = reader.scrollHeight;
-      });
-      return;
-    }
-    if (direction > 0 && atBottom && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
-      changeChapter(chapterIndex + 1);
-      return;
-    }
-    element.scrollBy({ top: direction * element.clientHeight * 0.82, behavior: 'smooth' });
+    if (!activeBook || activeBook.format === 'pdf' || pageTurnFx) return;
+    const count = Math.max(1, readerPages.length);
+    const target = visualPage + direction;
+
+    setPageTurnFx(direction > 0 ? 'next' : 'prev');
+    if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+    pageTurnTimerRef.current = window.setTimeout(() => {
+      if (target >= 1 && target <= count) {
+        commitPage(target);
+      } else if (direction > 0 && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
+        changeChapter(chapterIndex + 1, 'start');
+      } else if (direction < 0 && activeBook.format === 'epub' && chapterIndex > 0) {
+        changeChapter(chapterIndex - 1, 'end');
+      }
+      setPageTurnFx(null);
+    }, 150);
+  };
+
+  const handlePageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchStartXRef.current = touch?.clientX ?? null;
+    touchStartYRef.current = touch?.clientY ?? null;
+  };
+
+  const handlePageTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const touch = event.changedTouches[0];
+    const dx = (touch?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
+    const dy = (touch?.clientY ?? touchStartYRef.current) - touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.15) return;
+    stepViewport(dx < 0 ? 1 : -1);
   };
 
   const handleReadingSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -1019,6 +1054,10 @@ export const ReaderView: React.FC = () => {
     if (scrollSaveTimerRef.current) {
       window.clearTimeout(scrollSaveTimerRef.current);
       scrollSaveTimerRef.current = null;
+    }
+    if (pageTurnTimerRef.current) {
+      window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = null;
     }
     persistCurrentReadingPosition();
     stopSpeech();
@@ -1060,37 +1099,49 @@ export const ReaderView: React.FC = () => {
         ) : (
           <div
             ref={readingScrollRef}
-            onScroll={handleReaderScroll}
-            className="h-full w-full overflow-y-auto overscroll-y-contain scroll-smooth"
+            onTouchStart={handlePageTouchStart}
+            onTouchEnd={handlePageTouchEnd}
+            className="relative h-full w-full overflow-hidden [perspective:1400px]"
           >
             <article
-              className={`mx-auto min-h-full px-7 pb-28 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]}`}
+              key={`${activeBook.id}-${chapterIndex}-${visualPage}-${pageCharLimit}`}
+              className={`reader-page mx-auto flex h-full flex-col px-7 pb-24 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]} ${
+                pageTurnFx === 'next' ? 'reader-page-turn-next' : pageTurnFx === 'prev' ? 'reader-page-turn-prev' : ''
+              }`}
               style={{
                 fontFamily: fontFamilies[activeBook.fontFamily],
                 fontSize: `${activeBook.fontSize}px`,
                 lineHeight: activeBook.lineHeight,
               }}
             >
-              {activeBook.format === 'epub' && activeChapter?.title ? (
-                <h1 className="mb-8 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
-              ) : null}
-              <div lang="vi" className="[text-wrap:pretty]">
-                {readerParagraphs.map((paragraph, index) => (
-                  <p
-                    key={`${index}-${paragraph.slice(0, 18)}`}
-                    className="mb-[0.95em] last:mb-0"
-                    style={{
-                      textAlign: activeBook.textAlign,
-                      textJustify: 'inter-word',
-                      hyphens: 'auto',
-                      wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
-                    }}
-                  >
-                    {paragraph}
-                  </p>
-                ))}
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeBook.format === 'epub' && activeChapter?.title && visualPage === 1 ? (
+                  <h1 className="mb-7 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
+                ) : null}
+                <div lang="vi" className="[text-wrap:pretty]">
+                  {visiblePageParagraphs.map((paragraph, index) => (
+                    <p
+                      key={`${visualPage}-${index}-${paragraph.slice(0, 18)}`}
+                      className="mb-[0.95em] last:mb-0"
+                      style={{
+                        textAlign: activeBook.textAlign,
+                        textJustify: 'inter-word',
+                        hyphens: 'auto',
+                        wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
+                      }}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className={`pointer-events-none mt-3 flex items-center justify-between text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
+                <span>{activeBook.format === 'epub' ? `Chương ${chapterIndex + 1}` : 'Sách'}</span>
+                <span>{visualPage}/{Math.max(1, visualPageCount)}</span>
               </div>
             </article>
+            <div className="pointer-events-none absolute inset-y-20 left-0 w-5 bg-gradient-to-r from-black/[0.035] to-transparent" />
+            <div className="pointer-events-none absolute inset-y-20 right-0 w-5 bg-gradient-to-l from-black/[0.035] to-transparent" />
           </div>
         )}
 
@@ -1356,40 +1407,48 @@ export const ReaderView: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-current/10 p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopSpeech();
-                      updateBook(activeBook.id, { ttsMode: 'online' });
-                    }}
-                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${activeBook.ttsMode === 'online' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
-                  >
-                    <Cloud className="h-4 w-4" /> Online neural
-                  </button>
+                <div className={`mt-5 grid gap-2 rounded-2xl border border-current/10 p-1.5 ${availableOnlineVoices.length ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {availableOnlineVoices.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopSpeech();
+                        updateBook(activeBook.id, { ttsMode: 'online' });
+                      }}
+                      className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'online' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                    >
+                      <Cloud className="h-4 w-4" /> Online neural
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
                       stopSpeech();
                       updateBook(activeBook.id, { ttsMode: 'device' });
                     }}
-                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${activeBook.ttsMode === 'device' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'device' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
                   >
                     <Smartphone className="h-4 w-4" /> Trên máy
                   </button>
                 </div>
+
+                {!onlineVoicesLoading && availableOnlineVoices.length === 0 && onlineTtsError ? (
+                  <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-3 text-[10px] font-semibold leading-5 text-amber-800">
+                    {onlineTtsError} Reader đã tự chuyển sang giọng trên máy; khi API online hoạt động, tab Online neural sẽ tự xuất hiện lại.
+                  </div>
+                ) : null}
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label>
                     <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>
                       <span>Giọng đọc</span>
                       <span className="normal-case tracking-normal">
-                        {activeBook.ttsMode === 'online'
+                        {ttsPlaybackMode === 'online'
                           ? `${availableOnlineVoices.length} dùng được`
                           : `${vietnameseVoices.length || fallbackVoices.length} trên máy`}
                       </span>
                     </span>
-                    {activeBook.ttsMode === 'online' ? (
+                    {ttsPlaybackMode === 'online' ? (
                       <select
                         value={selectedOnlineVoice ? `${selectedOnlineVoice.provider}|${selectedOnlineVoice.id}` : ''}
                         onChange={(event) => {
@@ -1398,17 +1457,16 @@ export const ReaderView: React.FC = () => {
                           const voiceId = voiceParts.join('|');
                           if (!voiceId) return;
                           updateBook(activeBook.id, {
-                            ttsOnlineProvider: provider === 'google' ? 'google' : 'edge',
+                            ttsOnlineProvider: provider === 'google' ? 'google' : 'azure',
                             ttsOnlineVoiceId: voiceId,
                           });
                         }}
                         className="mt-2 h-11 w-full rounded-xl border border-current/15 bg-transparent px-3 text-sm outline-none"
                       >
                         {onlineVoicesLoading && <option value="">Đang tải giọng online…</option>}
-                        {!onlineVoicesLoading && onlineVoices.length === 0 && <option value="">Không kết nối được giọng online</option>}
-                        {onlineVoices.some((voice) => voice.provider === 'edge') && (
-                          <optgroup label="Microsoft · dùng ngay">
-                            {onlineVoices.filter((voice) => voice.provider === 'edge').map((voice) => (
+                        {onlineVoices.some((voice) => voice.provider === 'azure') && (
+                          <optgroup label="Microsoft Azure">
+                            {onlineVoices.filter((voice) => voice.provider === 'azure').map((voice) => (
                               <option key={`${voice.provider}-${voice.id}`} value={`${voice.provider}|${voice.id}`} disabled={!voice.available}>
                                 {voice.name} · {voice.quality === 'hd' ? 'HD' : 'Neural'}
                               </option>
@@ -1448,9 +1506,9 @@ export const ReaderView: React.FC = () => {
                       Nghe thử giọng này
                     </button>
                     <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>
-                      {activeBook.ttsMode === 'online'
-                        ? 'Microsoft có Hoài My/Nam Minh (giọng Việt gốc) + các giọng Multilingual để nghe thử ngay. Gói Google nhiều giọng hơn sẽ tự mở khi server có GOOGLE_TTS_API_KEY.'
-                        : 'iPhone/Safari thường chỉ trả về rất ít giọng hệ thống; dùng Online neural để có thêm lựa chọn.'}
+                      {ttsPlaybackMode === 'online'
+                        ? 'Microsoft Azure có Hoài My/Nam Minh; Google Cloud có nhiều giọng hơn. Các nhóm chỉ hiện khi server đã cấu hình API key tương ứng.'
+                        : availableOnlineVoices.length ? 'iPhone/Safari thường chỉ trả về ít giọng hệ thống; có thể chuyển sang Online neural khi API đang hoạt động.' : 'Đây là các giọng mà trình duyệt/thiết bị đang cung cấp. Giọng online sẽ tự hiện khi API reader TTS kết nối được.'}
                     </p>
                   </label>
 

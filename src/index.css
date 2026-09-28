@@ -43,3 +43,51 @@ body {
   }
 }
 
+.reader-page {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity, filter;
+}
+
+.reader-page-turn-next {
+  transform-origin: left center;
+  animation: reader-page-turn-next 150ms cubic-bezier(0.22, 0.72, 0.26, 1) both;
+}
+
+.reader-page-turn-prev {
+  transform-origin: right center;
+  animation: reader-page-turn-prev 150ms cubic-bezier(0.22, 0.72, 0.26, 1) both;
+}
+
+@keyframes reader-page-turn-next {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(-13deg) translateX(-7%);
+    opacity: 0.22;
+    filter: brightness(0.93);
+  }
+}
+
+@keyframes reader-page-turn-prev {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(13deg) translateX(7%);
+    opacity: 0.22;
+    filter: brightness(0.93);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-page-turn-next,
+  .reader-page-turn-prev {
+    animation-duration: 1ms;
+  }
+}

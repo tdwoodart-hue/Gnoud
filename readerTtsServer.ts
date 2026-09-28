@@ -1,6 +1,4 @@
-import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
-
-export type ReaderOnlineTtsProvider = 'edge' | 'google';
+export type ReaderOnlineTtsProvider = 'azure' | 'google';
 
 export interface ReaderOnlineVoice {
   id: string;
@@ -13,75 +11,11 @@ export interface ReaderOnlineVoice {
   note?: string;
 }
 
-const EDGE_VOICES: ReaderOnlineVoice[] = [
-  {
-    id: 'vi-VN-HoaiMyNeural',
-    provider: 'edge',
-    name: 'Hoài My · nữ',
-    gender: 'female',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Neural · giọng Việt gốc',
-  },
-  {
-    id: 'vi-VN-NamMinhNeural',
-    provider: 'edge',
-    name: 'Nam Minh · nam',
-    gender: 'male',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Neural · giọng Việt gốc',
-  },
-  // Edge also exposes multilingual neural voices. They are not native vi-VN
-  // personas, but they can be useful for users who want more voice colours.
-  // Keep them clearly labelled so the two native Vietnamese voices remain easy
-  // to identify and users can preview before choosing.
-  {
-    id: 'en-US-AvaMultilingualNeural',
-    provider: 'edge',
-    name: 'Ava · nữ đa ngôn ngữ',
-    gender: 'female',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Multilingual · thử nghiệm tiếng Việt',
-  },
-  {
-    id: 'en-US-EmmaMultilingualNeural',
-    provider: 'edge',
-    name: 'Emma · nữ đa ngôn ngữ',
-    gender: 'female',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Multilingual · thử nghiệm tiếng Việt',
-  },
-  {
-    id: 'en-US-AndrewMultilingualNeural',
-    provider: 'edge',
-    name: 'Andrew · nam đa ngôn ngữ',
-    gender: 'male',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Multilingual · thử nghiệm tiếng Việt',
-  },
-  {
-    id: 'en-US-BrianMultilingualNeural',
-    provider: 'edge',
-    name: 'Brian · nam đa ngôn ngữ',
-    gender: 'male',
-    locale: 'vi-VN',
-    quality: 'neural',
-    available: true,
-    note: 'Microsoft Multilingual · thử nghiệm tiếng Việt',
-  },
+const AZURE_VOICE_DEFS: Array<Omit<ReaderOnlineVoice, 'available'>> = [
+  { id: 'vi-VN-HoaiMyNeural', provider: 'azure', name: 'Hoài My · nữ', gender: 'female', locale: 'vi-VN', quality: 'neural', note: 'Microsoft Azure Neural' },
+  { id: 'vi-VN-NamMinhNeural', provider: 'azure', name: 'Nam Minh · nam', gender: 'male', locale: 'vi-VN', quality: 'neural', note: 'Microsoft Azure Neural' },
 ];
 
-// Official vi-VN voice IDs from Google Cloud TTS. These only become selectable
-// when GOOGLE_TTS_API_KEY (or GOOGLE_API_KEY) is configured on the server.
 const GOOGLE_VOICE_DEFS: Array<Omit<ReaderOnlineVoice, 'available'>> = [
   { id: 'vi-VN-Neural2-A', provider: 'google', name: 'Neural 2A · nữ', gender: 'female', locale: 'vi-VN', quality: 'neural', note: 'Google Neural2' },
   { id: 'vi-VN-Neural2-D', provider: 'google', name: 'Neural 2D · nam', gender: 'male', locale: 'vi-VN', quality: 'neural', note: 'Google Neural2' },
@@ -118,10 +52,21 @@ function getGoogleTtsKey(): string | undefined {
   return process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_API_KEY || undefined;
 }
 
+function getAzureConfig(): { key: string; region: string } | null {
+  const key = process.env.AZURE_SPEECH_KEY || process.env.SPEECH_KEY || '';
+  const region = process.env.AZURE_SPEECH_REGION || process.env.SPEECH_REGION || '';
+  return key && region ? { key, region } : null;
+}
+
 export function getReaderOnlineVoices(): ReaderOnlineVoice[] {
+  const azureReady = Boolean(getAzureConfig());
   const googleReady = Boolean(getGoogleTtsKey());
   return [
-    ...EDGE_VOICES,
+    ...AZURE_VOICE_DEFS.map((voice) => ({
+      ...voice,
+      available: azureReady,
+      note: azureReady ? voice.note : `${voice.note} · cần AZURE_SPEECH_KEY + AZURE_SPEECH_REGION`,
+    })),
     ...GOOGLE_VOICE_DEFS.map((voice) => ({
       ...voice,
       available: googleReady,
@@ -143,24 +88,29 @@ function escapeXml(text: string): string {
     .replace(/'/g, '&apos;');
 }
 
-async function synthesizeEdge(text: string, voice: string, rate: number, pitch: number): Promise<{ audio: Buffer; contentType: string }> {
-  const allowed = EDGE_VOICES.some((item) => item.id === voice);
-  const voiceId = allowed ? voice : EDGE_VOICES[0].id;
-  const tts = new MsEdgeTTS();
-  const outputFormat = (OUTPUT_FORMAT as any).AUDIO_24KHZ_48KBITRATE_MONO_MP3
-    || (OUTPUT_FORMAT as any).AUDIO_24KHZ_96KBITRATE_MONO_MP3
-    || (OUTPUT_FORMAT as any).WEBM_24KHZ_16BIT_MONO_OPUS;
-  await tts.setMetadata(voiceId, outputFormat);
+async function synthesizeAzure(text: string, voice: string, rate: number, pitch: number): Promise<{ audio: Buffer; contentType: string }> {
+  const config = getAzureConfig();
+  if (!config) throw new Error('Azure Speech chưa được cấu hình.');
+  const allowed = AZURE_VOICE_DEFS.some((item) => item.id === voice);
+  const voiceId = allowed ? voice : AZURE_VOICE_DEFS[0].id;
   const rateOffset = Math.round((clamp(rate, 0.7, 1.4) - 1) * 100);
-  const pitchHz = Math.round((clamp(pitch, 0.8, 1.2) - 1) * 80);
-  const { audioStream } = await tts.toStream(escapeXml(text), {
-    rate: `${rateOffset >= 0 ? '+' : ''}${rateOffset}%`,
-    pitch: `${pitchHz >= 0 ? '+' : ''}${pitchHz}Hz`,
-  } as any);
-  const chunks: Buffer[] = [];
-  for await (const chunk of audioStream as any) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  if (!chunks.length) throw new Error('Không nhận được audio từ Microsoft Edge TTS.');
-  return { audio: Buffer.concat(chunks), contentType: 'audio/mpeg' };
+  const pitchOffset = Math.round((clamp(pitch, 0.8, 1.2) - 1) * 100);
+  const ssml = `<speak version="1.0" xml:lang="vi-VN"><voice name="${voiceId}"><prosody rate="${rateOffset >= 0 ? '+' : ''}${rateOffset}%" pitch="${pitchOffset >= 0 ? '+' : ''}${pitchOffset}%">${escapeXml(text)}</prosody></voice></speak>`;
+  const response = await fetch(`https://${encodeURIComponent(config.region)}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': config.key,
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+      'User-Agent': 'GnoudReader',
+    },
+    body: ssml,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Azure Speech lỗi ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+  }
+  return { audio: Buffer.from(await response.arrayBuffer()), contentType: 'audio/mpeg' };
 }
 
 async function synthesizeGoogle(text: string, voice: string, rate: number, pitch: number): Promise<{ audio: Buffer; contentType: string }> {
@@ -201,9 +151,9 @@ export async function synthesizeReaderTts(input: {
 }): Promise<{ audio: Buffer; contentType: string }> {
   const text = String(input.text || '').trim().slice(0, 1400);
   if (!text) throw new Error('Không có nội dung để đọc.');
-  const provider = input.provider === 'google' ? 'google' : 'edge';
+  const provider: ReaderOnlineTtsProvider = input.provider === 'google' ? 'google' : 'azure';
   const rate = Number.isFinite(input.rate) ? Number(input.rate) : 0.95;
   const pitch = Number.isFinite(input.pitch) ? Number(input.pitch) : 1;
   if (provider === 'google') return synthesizeGoogle(text, input.voice || 'vi-VN-Neural2-A', rate, pitch);
-  return synthesizeEdge(text, input.voice || 'vi-VN-HoaiMyNeural', rate, pitch);
+  return synthesizeAzure(text, input.voice || 'vi-VN-HoaiMyNeural', rate, pitch);
 }

@@ -4,7 +4,7 @@ export type ReaderFont = 'book' | 'serif' | 'sans';
 export type ReaderWidth = 'narrow' | 'medium' | 'wide';
 export type ReaderTextAlign = 'left' | 'justify';
 export type ReaderTtsMode = 'online' | 'device';
-export type ReaderTtsProvider = 'edge' | 'google';
+export type ReaderTtsProvider = 'azure' | 'google';
 
 export interface ReaderBook {
   id: string;
@@ -199,9 +199,9 @@ export function createReaderBook(input: {
     ttsPitch: 1,
     ttsCleanText: true,
     ttsVoiceUri: undefined,
-    ttsMode: 'online',
+    ttsMode: 'device',
     ttsOnlineVoiceId: 'vi-VN-HoaiMyNeural',
-    ttsOnlineProvider: 'edge',
+    ttsOnlineProvider: 'azure',
     listeningProgress: 0,
     lastPositionAt: undefined,
     theme: 'paper',
@@ -251,7 +251,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           ttsVoiceUri: typeof book.ttsVoiceUri === 'string' ? book.ttsVoiceUri : undefined,
           ttsMode: book.ttsMode === 'device' ? 'device' : 'online',
           ttsOnlineVoiceId: typeof book.ttsOnlineVoiceId === 'string' ? book.ttsOnlineVoiceId : 'vi-VN-HoaiMyNeural',
-          ttsOnlineProvider: book.ttsOnlineProvider === 'google' ? 'google' : 'edge',
+          ttsOnlineProvider: book.ttsOnlineProvider === 'google' ? 'google' : 'azure',
           listeningProgress: Math.min(1, Math.max(0, Number(book.listeningProgress) || 0)),
           lastPositionAt: typeof book.lastPositionAt === 'string' ? book.lastPositionAt : undefined,
           theme,

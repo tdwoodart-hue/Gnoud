@@ -10,24 +10,32 @@ Gnoud đang đi theo hướng **personal operating system gọn, mobile-first**:
 
 ### Trình đọc sách
 
-Đã thêm tab **Sách** đồng bộ với giao diện hiện tại.
+Đã làm lại tab **Sách** theo hướng reader-first, ưu tiên cảm giác đọc trên mobile thay vì dồn quản lý file và nội dung vào cùng một màn.
 
 Định dạng hỗ trợ:
 
-- **PDF**: mở ngay trong web bằng trình xem PDF gốc của trình duyệt, giữ nguyên bố cục; có nút mở toàn màn hình khi cần.
-- **EPUB**: đọc trực tiếp trong app, tự đọc cấu trúc EPUB/OPF/spine, chia theo chương, có mục lục dạng chọn chương, nhớ chương + trang đang đọc.
-- **TXT / MD / Markdown**: đọc dạng text, tự chia trang.
+- **PDF**: mở trong chế độ đọc phủ toàn bộ ứng dụng, có nút bật **fullscreen hệ thống** khi trình duyệt cho phép và nút mở file riêng.
+- **EPUB**: đọc trực tiếp trong app, tự đọc OPF/spine, mục lục dạng sheet, chuyển chương và nhớ vị trí cuộn trong chương.
+- **TXT / MD / Markdown**: đọc dạng văn bản liên tục.
 - Có thể **dán văn bản trực tiếp** mà không cần file.
 
 Tính năng reader hiện có:
 
-- Nhớ sách đã thêm và vị trí đọc.
-- Cỡ chữ tùy chỉnh cho EPUB/TXT/MD.
+- Màn thư viện gọn: **Đọc tiếp** + danh sách sách + nút thêm sách, không nhét toolbar đọc vào màn quản lý.
+- **Chế độ đọc immersive/full-screen trong app** che toàn bộ bottom navigation.
+- Nút **fullscreen hệ thống** (Fullscreen API) khi browser hỗ trợ.
+- Toolbar tự ẩn khi đọc; chạm giữa màn để ẩn/hiện.
+- Chạm mép trái/phải hoặc dùng nút mũi tên để lùi/tiến gần một màn hình; desktop hỗ trợ PageUp/PageDown và phím mũi tên.
+- **Đổi font**: Book / Serif / Sans.
+- Chỉnh **cỡ chữ**, **giãn dòng**, **bề rộng trang**.
 - 3 nền đọc: sáng, ấm, tối.
-- PDF/EPUB được lưu bằng **IndexedDB** trên thiết bị thay vì nhét binary vào localStorage.
-- Metadata thư viện tách theo `user.uid`, tránh lẫn thư viện giữa các tài khoản.
-- Giới hạn file hiện tại: **50 MB/file**, tối đa **24 sách** trong thư viện metadata.
-- Không thêm dependency đọc sách mới; EPUB dùng API trình duyệt để giải nén/đọc cấu trúc, giữ bundle gọn.
+- Mục lục EPUB dạng bottom sheet thay vì select lớn giữa nội dung.
+- Thanh tiến độ đọc luôn có nhưng giảm tối đa chrome khi toolbar ẩn.
+- Nhớ chương + vị trí cuộn + thiết lập kiểu đọc theo từng cuốn.
+- PDF/EPUB lưu bằng **IndexedDB** trên thiết bị.
+- Metadata thư viện tách theo `user.uid`, tránh lẫn dữ liệu giữa các tài khoản.
+- Giới hạn file hiện tại: **50 MB/file**, tối đa **24 sách**.
+- Không thêm dependency reader nặng; EPUB vẫn dùng browser API để giữ bundle gọn.
 
 ### Báo cáo
 
@@ -67,12 +75,13 @@ Lý do: hiện tại các phần này chưa có dữ liệu đo đủ nhất qu�
 
 ### Reader P1
 
-- Bookmark.
+- Bookmark nhiều vị trí.
 - Highlight + ghi chú theo đoạn EPUB.
-- Tìm kiếm trong EPUB.
-- Lịch sử sách đọc gần đây.
+- Tìm kiếm toàn sách EPUB.
+- Lịch sử / thời gian đọc gần đây nếu sau này muốn đo thật.
 - Đồng bộ metadata/progress lên Firestore; file gốc nếu cần cloud thì dùng Firebase Storage.
-- PDF: nếu cần đồng bộ chính xác số trang/vị trí đọc giữa thiết bị, cân nhắc PDF renderer riêng ở bước sau.
+- PDF: nếu cần nhớ chính xác trang đọc và đồng bộ giữa thiết bị, cân nhắc PDF renderer riêng ở bước sau.
+- EPUB: nếu cần giữ nguyên hình ảnh, bảng và typography gốc, chuyển parser text hiện tại sang renderer EPUB đầy đủ.
 
 ### Báo cáo P1
 

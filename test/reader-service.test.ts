@@ -25,6 +25,10 @@ test('new reader book starts at first chapter and page with compact defaults', (
   assert.equal(book.format, 'text');
   assert.equal(book.currentChapter, 0);
   assert.equal(book.currentPage, 0);
-  assert.equal(book.fontSize, 18);
+  assert.equal(book.scrollProgress, 0);
+  assert.equal(book.fontSize, 19);
+  assert.equal(book.lineHeight, 1.8);
+  assert.equal(book.fontFamily, 'book');
+  assert.equal(book.contentWidth, 'medium');
   assert.equal(book.theme, 'paper');
 });

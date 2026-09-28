@@ -1,5 +1,7 @@
 export type ReaderTheme = 'paper' | 'warm' | 'night';
 export type ReaderFormat = 'text' | 'pdf' | 'epub';
+export type ReaderFont = 'book' | 'serif' | 'sans';
+export type ReaderWidth = 'narrow' | 'medium' | 'wide';
 
 export interface ReaderBook {
   id: string;
@@ -12,7 +14,11 @@ export interface ReaderBook {
   fileSize?: number;
   currentChapter: number;
   currentPage: number;
+  scrollProgress: number;
   fontSize: number;
+  lineHeight: number;
+  fontFamily: ReaderFont;
+  contentWidth: ReaderWidth;
   theme: ReaderTheme;
   addedAt: string;
   updatedAt: string;
@@ -115,7 +121,11 @@ export function createReaderBook(input: {
     fileSize: input.fileSize,
     currentChapter: 0,
     currentPage: 0,
-    fontSize: 18,
+    scrollProgress: 0,
+    fontSize: 19,
+    lineHeight: 1.8,
+    fontFamily: 'book',
+    contentWidth: 'medium',
     theme: 'paper',
     addedAt: now,
     updatedAt: now,
@@ -134,6 +144,8 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
       .map((book): ReaderBook => {
         const format: ReaderFormat = book.format === 'pdf' || book.format === 'epub' ? book.format : 'text';
         const theme: ReaderTheme = book.theme === 'warm' || book.theme === 'night' ? book.theme : 'paper';
+        const fontFamily: ReaderFont = book.fontFamily === 'serif' || book.fontFamily === 'sans' ? book.fontFamily : 'book';
+        const contentWidth: ReaderWidth = book.contentWidth === 'narrow' || book.contentWidth === 'wide' ? book.contentWidth : 'medium';
         return {
           id: book.id as string,
           title: typeof book.title === 'string' ? book.title : 'Sách chưa đặt tên',
@@ -145,7 +157,11 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           fileSize: typeof book.fileSize === 'number' ? book.fileSize : undefined,
           currentChapter: Math.max(0, Number(book.currentChapter) || 0),
           currentPage: Math.max(0, Number(book.currentPage) || 0),
-          fontSize: Math.min(26, Math.max(15, Number(book.fontSize) || 18)),
+          scrollProgress: Math.min(1, Math.max(0, Number(book.scrollProgress) || 0)),
+          fontSize: Math.min(30, Math.max(15, Number(book.fontSize) || 19)),
+          lineHeight: Math.min(2.3, Math.max(1.4, Number(book.lineHeight) || 1.8)),
+          fontFamily,
+          contentWidth,
           theme,
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),
           updatedAt: typeof book.updatedAt === 'string' ? book.updatedAt : new Date().toISOString(),
@@ -313,8 +329,10 @@ function findXmlElement(doc: Document, localName: string): Element | undefined {
 function extractChapterText(html: string): { title?: string; content: string } {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('script,style,noscript,iframe,object,embed,svg,form').forEach((node) => node.remove());
-  const heading = doc.querySelector('h1,h2,h3,h4')?.textContent?.replace(/\s+/g, ' ').trim();
+  const headingNode = doc.querySelector('h1,h2,h3,h4');
+  const heading = headingNode?.textContent?.replace(/\s+/g, ' ').trim();
   const blocks = Array.from(doc.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,pre'))
+    .filter((node) => node !== headingNode)
     .map((node) => node.textContent?.replace(/[\t ]+/g, ' ').replace(/\n+/g, ' ').trim() || '')
     .filter(Boolean);
   const fallback = doc.body?.textContent?.replace(/\s+/g, ' ').trim() || '';

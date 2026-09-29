@@ -16,6 +16,7 @@ import { TaskEditModal } from './components/common/TaskEditModal';
 import { FocusSessionModal } from './components/common/FocusSessionModal';
 import { ToastContainer } from './components/common/ToastContainer';
 import { CommandMenuModal } from './components/common/CommandMenuModal';
+import { AssistantModal } from './components/common/AssistantModal';
 import { MorningPlanningModal } from './components/flows/MorningPlanningModal';
 import { EveningReviewModal } from './components/flows/EveningReviewModal';
 import { DailyActivityDock } from './components/activities/DailyActivityDock';
@@ -63,6 +64,8 @@ const GlobalModals: React.FC = () => {
   const {
     isCommandMenuOpen,
     setIsCommandMenuOpen,
+    isAssistantOpen,
+    setIsAssistantOpen,
     isMorningPlanningOpen,
     setIsMorningPlanningOpen,
     isEveningReviewOpen,
@@ -76,6 +79,10 @@ const GlobalModals: React.FC = () => {
       <CommandMenuModal
         isOpen={isCommandMenuOpen}
         onClose={() => setIsCommandMenuOpen(false)}
+      />
+      <AssistantModal
+        isOpen={isAssistantOpen}
+        onClose={() => setIsAssistantOpen(false)}
       />
       <MorningPlanningModal
         isOpen={isMorningPlanningOpen}

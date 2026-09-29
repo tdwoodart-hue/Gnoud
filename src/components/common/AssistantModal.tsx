@@ -391,7 +391,9 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
       12,
       Math.max(12, window.innerHeight - panel.offsetHeight - 12),
     );
-    setPosition({ x, y });
+    const next = { x, y };
+    setPosition(next);
+    saveAssistantPosition(next);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -762,12 +764,19 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
             </button>
             <button
               type="button"
-              disabled={busy || !action || Boolean(parsed?.errors.length)}
-              onClick={() => void confirm()}
+              disabled={!readIntent && (busy || !action || Boolean(parsed?.errors.length))}
+              onClick={() => {
+                if (readIntent) {
+                  rememberCurrentCommand();
+                  setMinimized(true);
+                  return;
+                }
+                void confirm();
+              }}
               className="h-11 rounded-2xl bg-indigo-600 text-xs font-bold text-white shadow-xs disabled:bg-slate-200 disabled:text-slate-400"
             >
               {readIntent
-                ? 'Chỉ xem'
+                ? 'Ẩn'
                 : busy
                   ? 'Đang lưu…'
                   : action?.type === 'workout'

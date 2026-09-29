@@ -154,8 +154,9 @@ export function applyQuickNutritionAction(
   state: NutritionState,
   action: QuickNutritionAction,
   fallbackDate: string,
+  requestedBatchId?: string,
 ): { state: NutritionState; batchId: string; addedIds: string[] } {
-  const batchId = `nutrition-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const batchId = requestedBatchId || `nutrition-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const date = action.date || fallbackDate;
   const stamp = Date.now();
   const added = action.items.map((item, index): NutritionEntry => ({

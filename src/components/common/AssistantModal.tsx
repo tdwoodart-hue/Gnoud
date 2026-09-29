@@ -474,20 +474,22 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[220]">
-      <button
-        type="button"
-        aria-label="Ẩn trợ lý"
-        onClick={() => setMinimized(true)}
-        className="pointer-events-auto absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] sm:hidden"
-      />
+      {!floating ? (
+        <button
+          type="button"
+          aria-label="Ẩn trợ lý"
+          onClick={() => setMinimized(true)}
+          className="pointer-events-auto absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] sm:hidden"
+        />
+      ) : null}
 
       <section
         ref={panelRef}
         style={windowStyle}
-        className={`pointer-events-auto fixed flex max-h-[92dvh] flex-col overflow-hidden bg-white shadow-2xl ${
+        className={`pointer-events-auto fixed flex flex-col overflow-hidden bg-white shadow-2xl ${
           floating
-            ? 'left-0 top-0 w-[calc(100vw-24px)] max-w-[520px] rounded-[24px] border border-slate-200'
-            : 'inset-x-0 bottom-0 w-full rounded-t-[28px] sm:inset-auto sm:right-6 sm:top-24 sm:w-[520px] sm:max-w-[calc(100vw-24px)] sm:rounded-[24px] sm:border sm:border-slate-200'
+            ? 'left-0 top-0 max-h-[72dvh] w-[calc(100vw-24px)] max-w-[520px] rounded-[24px] border border-slate-200 sm:max-h-[86dvh]'
+            : 'inset-x-0 bottom-0 max-h-[92dvh] w-full rounded-t-[28px] sm:inset-auto sm:right-6 sm:top-24 sm:w-[520px] sm:max-w-[calc(100vw-24px)] sm:rounded-[24px] sm:border sm:border-slate-200'
         }`}
       >
         <div

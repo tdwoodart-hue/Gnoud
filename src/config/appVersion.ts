@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.6';
-export const APP_UPDATED_AT = '2026-09-29T14:28:00+07:00';
+export const APP_VERSION = '0.9.7';
+export const APP_UPDATED_AT = '2026-09-29T14:36:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.7',
+    updatedAt: '2026-09-29T14:36:00+07:00',
+    title: 'Ẩn hoàn toàn nút Trợ lý',
+    changes: [
+      'Bấm Ẩn trong Trợ lý sẽ tắt luôn launcher Trợ lý trên mobile và desktop.',
+      'Khi đã ẩn, phím tắt mở Trợ lý cũng không hoạt động để tránh bật lại ngoài ý muốn.',
+      'Cài đặt có công tắc Hiện nút Trợ lý để bật launcher trở lại.',
+      'Thu gọn vẫn chỉ thu cửa sổ thành pill; Ẩn mới là tắt hoàn toàn launcher.',
+    ],
+  },
   {
     version: '0.9.6',
     updatedAt: '2026-09-29T14:28:00+07:00',

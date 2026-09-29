@@ -193,6 +193,152 @@ const normalizeWorkoutExercise = (
   };
 };
 
+const stripMarkdown = (value: string): string =>
+  value
+    .replace(/^\s*(?:[-*•–—]|\d+[.)])\s*/u, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .trim();
+
+const parseLocaleNumber = (value: string | undefined): number | undefined => {
+  if (!value) return undefined;
+  const number = Number(value.replace(',', '.').replace(/~/g, '').trim());
+  return Number.isFinite(number) ? number : undefined;
+};
+
+const extractAmountFromLabel = (label: string): Pick<QuickNutritionItem, 'amount' | 'unit'> => {
+  const matches = [...label.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l|quả|qua|miếng|mieng|bát|bat|cốc|coc|phần|phan)\b/giu)];
+  const match = matches.at(-1);
+  if (!match) return {};
+  const amount = parseLocaleNumber(match[1]);
+  if (amount === undefined) return {};
+  const rawUnit = match[2].toLocaleLowerCase('vi');
+  const unitAliases: Record<string, string> = {
+    qua: 'quả',
+    mieng: 'miếng',
+    bat: 'bát',
+    coc: 'cốc',
+    phan: 'phần',
+  };
+  return { amount, unit: unitAliases[rawUnit] || rawUnit };
+};
+
+const detectMealFromText = (raw: string): QuickNutritionMeal | undefined => {
+  const normalized = normalizeText(raw);
+  if (/\bbua sang\b|\bbreakfast\b/.test(normalized)) return 'breakfast';
+  if (/\bbua trua\b|\blunch\b/.test(normalized)) return 'lunch';
+  if (/\bbua toi\b|\bdinner\b/.test(normalized)) return 'dinner';
+  if (/\ban nhe\b|\bsnack\b/.test(normalized)) return 'snack';
+  return undefined;
+};
+
+const isNutritionSummaryLine = (line: string): boolean => {
+  const normalized = normalizeText(line);
+  return /^(chot|tong|total|ca bua|tong bua|chot ca bua)\b/.test(normalized);
+};
+
+const parseNutritionTextLine = (line: string): QuickNutritionItem | null => {
+  const cleaned = stripMarkdown(line);
+  if (!cleaned || isNutritionSummaryLine(cleaned)) return null;
+
+  const calories = parseLocaleNumber(cleaned.match(/~?\s*(\d+(?:[.,]\d+)?)\s*kcal\b/i)?.[1]);
+  const protein = parseLocaleNumber(cleaned.match(/(?:^|[·|;,\s])(?:P|Protein)\s*[:=]?\s*~?\s*(\d+(?:[.,]\d+)?)\s*g\b/i)?.[1]);
+  const carbs = parseLocaleNumber(cleaned.match(/(?:^|[·|;,\s])(?:C|Carb|Carbs)\s*[:=]?\s*~?\s*(\d+(?:[.,]\d+)?)\s*g\b/i)?.[1]);
+  const fat = parseLocaleNumber(cleaned.match(/(?:^|[·|;,\s])(?:F|Fat)\s*[:=]?\s*~?\s*(\d+(?:[.,]\d+)?)\s*g\b/i)?.[1]);
+
+  if (calories === undefined || protein === undefined || carbs === undefined || fat === undefined) return null;
+
+  const kcalIndex = cleaned.search(/~?\s*\d+(?:[.,]\d+)?\s*kcal\b/i);
+  const prefix = kcalIndex >= 0 ? cleaned.slice(0, kcalIndex) : cleaned;
+  const name = prefix
+    .replace(/[:：\-–—·|]+\s*$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!name) return null;
+
+  return {
+    name,
+    calories: Math.round(calories * 10) / 10,
+    protein: Math.round(protein * 10) / 10,
+    carbs: Math.round(carbs * 10) / 10,
+    fat: Math.round(fat * 10) / 10,
+    ...extractAmountFromLabel(name),
+  };
+};
+
+const parsePlainNutritionText = (
+  raw: string,
+  fallbackDate?: string,
+  fallbackMeal?: QuickNutritionMeal,
+): QuickActionParseResult | null => {
+  const items = raw
+    .split(/\r?\n/)
+    .map(parseNutritionTextLine)
+    .filter((item): item is QuickNutritionItem => Boolean(item));
+
+  if (!items.length) return null;
+
+  const warnings: string[] = [];
+  const detectedMeal = detectMealFromText(raw);
+  const meal = detectedMeal || fallbackMeal || 'snack';
+  if (!detectedMeal) warnings.push('Không thấy tên bữa trong nội dung; hãy kiểm tra bữa ăn trước khi lưu.');
+
+  return {
+    action: {
+      type: 'nutrition',
+      meal,
+      items,
+      source: 'assistant',
+      ...(validIsoDate(fallbackDate) ? { date: fallbackDate } : {}),
+    },
+    errors: [],
+    warnings,
+  };
+};
+
+const parsePlainWorkoutText = (
+  raw: string,
+  fallbackDate?: string,
+): QuickActionParseResult | null => {
+  const exercises: QuickWorkoutExercise[] = [];
+  raw.split(/\r?\n/).forEach((line) => {
+    const cleaned = stripMarkdown(line);
+    if (!cleaned) return;
+    const weightKg = parseLocaleNumber(cleaned.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i)?.[1]);
+    const reps = parseLocaleNumber(cleaned.match(/(?:x|×)?\s*(\d+)\s*(?:reps?|rep)\b/i)?.[1]);
+    const sets = parseLocaleNumber(cleaned.match(/(\d+)\s*(?:sets?|hiệp|hiep)\b/i)?.[1]);
+    if (weightKg === undefined && reps === undefined && sets === undefined) return;
+
+    const firstMetricIndex = [cleaned.search(/\d+(?:[.,]\d+)?\s*kg\b/i), cleaned.search(/\d+\s*(?:reps?|rep|sets?|hiệp|hiep)\b/i)]
+      .filter((index) => index >= 0)
+      .sort((a, b) => a - b)[0];
+    const name = (firstMetricIndex === undefined ? cleaned : cleaned.slice(0, firstMetricIndex))
+      .replace(/[:：\-–—·|x×]+\s*$/u, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!name) return;
+
+    exercises.push({
+      name,
+      ...(weightKg !== undefined ? { weightKg } : {}),
+      ...(reps !== undefined ? { reps: Math.round(reps) } : {}),
+      ...(sets !== undefined ? { sets: Math.round(sets) } : {}),
+    });
+  });
+
+  if (!exercises.length) return null;
+  return {
+    action: {
+      type: 'workout',
+      exercises,
+      source: 'assistant',
+      ...(validIsoDate(fallbackDate) ? { date: fallbackDate } : {}),
+    },
+    errors: [],
+    warnings: [],
+  };
+};
+
 const inferDomain = (record: Record<string, unknown>, fallback?: QuickActionDomain): QuickActionDomain | undefined => {
   const type = typeof record.type === 'string' ? normalizeText(record.type) : '';
   if (type === 'nutrition' || type === 'food' || type === 'meal' || type === 'dinh duong') return 'nutrition';
@@ -206,6 +352,7 @@ export function parseQuickAction(
   raw: string,
   fallbackDomain?: QuickActionDomain,
   fallbackDate?: string,
+  fallbackMeal?: QuickNutritionMeal,
 ): QuickActionParseResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -216,9 +363,15 @@ export function parseQuickAction(
   try {
     parsed = JSON.parse(text);
   } catch {
+    const plain = fallbackDomain === 'nutrition'
+      ? parsePlainNutritionText(raw, fallbackDate, fallbackMeal)
+      : fallbackDomain === 'workout'
+        ? parsePlainWorkoutText(raw, fallbackDate)
+        : parsePlainNutritionText(raw, fallbackDate, fallbackMeal) || parsePlainWorkoutText(raw, fallbackDate);
+    if (plain) return plain;
     return {
       action: null,
-      errors: ['Form chưa phải JSON hợp lệ. Có thể dán cả khối \`\`\`json ... \`\`\`.'],
+      errors: ['Chưa đọc được nội dung. Có thể dán câu trả lời ChatGPT/AI có kcal + P/C/F từng món, hoặc dùng JSON.'],
       warnings,
     };
   }
@@ -240,9 +393,10 @@ export function parseQuickAction(
   const source: QuickActionSource = sourceValue === 'assistant' || sourceValue === 'ai' ? 'assistant' : 'quick';
 
   if (domain === 'nutrition') {
-    const meal = resolveMeal(firstDefined(record, ['meal', 'mealType', 'bua', 'bữa'])) || 'snack';
-    if (!resolveMeal(firstDefined(record, ['meal', 'mealType', 'bua', 'bữa']))) {
-      warnings.push('Không thấy bữa ăn hợp lệ nên tạm dùng Ăn nhẹ.');
+    const explicitMeal = resolveMeal(firstDefined(record, ['meal', 'mealType', 'bua', 'bữa']));
+    const meal = explicitMeal || fallbackMeal || 'snack';
+    if (!explicitMeal) {
+      warnings.push('Không thấy bữa ăn hợp lệ; hãy kiểm tra bữa ăn trước khi lưu.');
     }
 
     const rawItems = firstDefined(record, ['items', 'foods', 'entries', 'mon', 'món']);

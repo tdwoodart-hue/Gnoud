@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.6';
+export const APP_VERSION = '0.8.7';
 export const APP_UPDATED_AT = '2026-09-29T12:38:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.8.7',
+    updatedAt: '2026-09-29T12:38:00+07:00',
+    title: 'Buổi tập: thay bài bằng bài đã có',
+    changes: [
+      'Mỗi bài trong chế độ sửa có nút Thay để chọn một bài đã từng dùng trước đó.',
+      'Có thể tìm bài cũ, xem ảnh tham khảo và kg/reps gần nhất trước khi chọn.',
+      'Thêm mới cũng có thể chọn trực tiếp từ thư viện bài đã có.',
+      'Khi thay sang bài đã có, app dùng đúng lịch sử kg/reps và ảnh của bài đích; đổi thứ tự không làm lẫn dữ liệu.',
+    ],
+  },
   {
     version: '0.8.6',
     updatedAt: '2026-09-29T12:38:00+07:00',

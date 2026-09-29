@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.5';
-export const APP_UPDATED_AT = '2026-09-29T11:36:00+07:00';
+export const APP_VERSION = '0.8.6';
+export const APP_UPDATED_AT = '2026-09-29T12:38:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.8.6',
+    updatedAt: '2026-09-29T12:38:00+07:00',
+    title: 'Buổi tập: sửa bài tập nhanh ngay trong màn hình tập',
+    changes: [
+      'Thêm nút Sửa bài ngay trên danh sách bài tập của buổi tập.',
+      'Có thể đổi tên, thêm, xóa và đổi thứ tự bài tập mà không cần mở form sửa task lớn.',
+      'Giữ lại lịch sử kg/reps và ảnh tham khảo khi đổi cách ghi tên bài nếu có thể.',
+    ],
+  },
   {
     version: '0.8.5',
     updatedAt: '2026-09-29T11:36:00+07:00',

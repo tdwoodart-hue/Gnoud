@@ -47,6 +47,8 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     calendarEvents,
     habits,
     goals,
+    isAssistantLauncherVisible,
+    setIsAssistantLauncherVisible,
   } = useApp();
   const [state, setState] = useState<NotificationState>('default');
   const [reminderPreferences, setReminderPreferences] = useState(() => getNotificationPreferences());
@@ -327,6 +329,28 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
             <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Ứng dụng</p>
             <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
               <div className="flex items-center gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Hiện nút Trợ lý</p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-400">
+                    Tắt để ẩn hoàn toàn nút Trợ lý khỏi giao diện. Có thể bật lại tại đây.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAssistantLauncherVisible(!isAssistantLauncherVisible)}
+                  className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                    isAssistantLauncherVisible ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                  aria-label="Bật tắt nút Trợ lý"
+                  aria-pressed={isAssistantLauncherVisible}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
+                    isAssistantLauncherVisible ? 'left-6' : 'left-1'
+                  }`} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 border-t border-slate-100 p-4">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
                   <GitBranch className="h-5 w-5" />
                 </span>

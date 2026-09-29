@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.4';
-export const APP_UPDATED_AT = '2026-09-29T14:02:00+07:00';
+export const APP_VERSION = '0.9.5';
+export const APP_UPDATED_AT = '2026-09-29T14:12:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.5',
+    updatedAt: '2026-09-29T14:12:00+07:00',
+    title: 'Trợ lý kéo được trên điện thoại',
+    changes: [
+      'Bỏ chặn drag trên mobile: giữ thanh kéo phía trên rồi kéo cửa sổ tới vị trí mong muốn.',
+      'Khi bắt đầu kéo trên điện thoại, bottom sheet chuyển thành cửa sổ nổi thật sự.',
+      'Cửa sổ nổi mobile thấp hơn để còn không gian di chuyển và không che toàn màn hình.',
+      'Sau khi nổi, phần app phía sau dùng được bình thường; vị trí vẫn được nhớ.',
+      'Pill Trợ lý khi thu gọn cũng kéo được trên điện thoại.',
+    ],
+  },
   {
     version: '0.9.4',
     updatedAt: '2026-09-29T14:02:00+07:00',

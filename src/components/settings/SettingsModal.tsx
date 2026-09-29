@@ -5,6 +5,8 @@ import {
   ChevronRight,
   Download,
   FileJson2,
+  GitBranch,
+  History,
   LogIn,
   LogOut,
   RotateCcw,
@@ -29,6 +31,7 @@ import { formatDisplayDate } from '../../data/mockData';
 import { buildChatGPTSnapshot, downloadChatGPTSnapshot } from '../../services/dataSnapshot';
 import { getTelemetrySnapshot, recordUsageEvent } from '../../services/usageTelemetry';
 import { SecuritySettingsSection } from '../security/SecuritySettingsSection';
+import { APP_RELEASES, APP_UPDATED_AT, APP_VERSION } from '../../config/appVersion';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const {
@@ -51,6 +54,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const [testingReminder, setTestingReminder] = useState<ReminderScheduleTestKind | null>(null);
   const [schedulerReady, setSchedulerReady] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
   const [pendingPermanentDeleteId, setPendingPermanentDeleteId] = useState<string | null>(null);
 
   const refresh = async () => {
@@ -316,6 +320,73 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                   </div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Ứng dụng</p>
+            <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+              <div className="flex items-center gap-3 p-4">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+                  <GitBranch className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">Phiên bản {APP_VERSION}</p>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">Bản hiện tại</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Cập nhật {new Date(APP_UPDATED_AT).toLocaleString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowVersions((value) => !value)}
+                className="flex w-full items-center gap-3 border-t border-slate-100 p-4 text-left"
+              >
+                <History className="h-5 w-5 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Lịch sử cập nhật</p>
+                  <p className="text-xs text-slate-400">{APP_RELEASES.length} phiên bản gần nhất</p>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-slate-300 transition-transform ${showVersions ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showVersions ? (
+                <div className="space-y-2 border-t border-slate-100 bg-slate-50 p-3">
+                  {APP_RELEASES.map((release, index) => (
+                    <div key={release.version} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-800">v{release.version}</span>
+                            {index === 0 ? (
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold text-indigo-600">Hiện tại</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm font-semibold text-slate-700">{release.title}</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-semibold text-slate-400">
+                          {new Date(release.updatedAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        {release.changes.map((change) => (
+                          <p key={change} className="text-xs leading-5 text-slate-500">• {change}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </section>
 

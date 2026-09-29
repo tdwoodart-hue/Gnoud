@@ -12,13 +12,13 @@ export const APP_RELEASES: AppRelease[] = [
   {
     version: '0.9.1',
     updatedAt: '2026-09-29T13:00:00+07:00',
-    title: 'Nhập nhanh: dán thẳng câu trả lời ChatGPT/AI',
+    title: 'Trợ lý hành động + nhập nhanh bằng câu tự nhiên',
     changes: [
-      'Không còn bắt buộc JSON: có thể dán trực tiếp danh sách món với kcal · P · C · F như câu trả lời ChatGPT.',
-      'Tự bỏ qua dòng tổng cả bữa để không bị cộng dinh dưỡng hai lần.',
-      'Tự lấy khối lượng và đơn vị từ tên món khi có, đồng thời cho chọn lại bữa Sáng/Trưa/Tối/Ăn nhẹ trước khi lưu.',
-      'Nhập nhanh buổi tập cũng nhận text kiểu Tên bài: kg · reps · sets.',
-      'JSON vẫn được giữ như định dạng kỹ thuật chung cho Action Engine và trợ lý sau này.',
+      'Thêm Trợ lý thật: nhập một câu tự nhiên, xem preview rồi xác nhận trước khi ghi dữ liệu.',
+      'Hiểu câu một dòng kiểu “Lưu bữa tối hôm nay: ...” với nhiều món ngăn bằng dấu chấm phẩy.',
+      'Dán trực tiếp danh sách kcal · P · C · F vẫn hoạt động; tự bỏ qua dòng tổng để tránh cộng hai lần.',
+      'Trợ lý có thể lưu dinh dưỡng hoặc cập nhật/tạo buổi tập bằng cùng Action Engine dùng chung.',
+      'Bỏ icon lấp lánh/AI khỏi Nhập nhanh và Trợ lý; launcher dùng chữ đơn giản.',
     ],
   },
   {

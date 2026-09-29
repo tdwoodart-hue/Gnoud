@@ -1,8 +1,8 @@
+import type { QuickNutritionAction } from './quickActionService';
+
 export type NutritionSex = 'male' | 'female';
 export type NutritionGoal = 'recomp' | 'cut' | 'maintain' | 'gain';
 export type NutritionActivityLevel = 'sedentary' | 'desk_training' | 'moderate' | 'active';
-import type { QuickNutritionAction } from './quickActionService';
-
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface NutritionProfile {

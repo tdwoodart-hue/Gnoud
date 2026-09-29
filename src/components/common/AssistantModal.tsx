@@ -81,6 +81,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     deleteTask,
     addToast,
     setActiveTab,
+    setIsAssistantLauncherVisible,
   } = useApp();
 
   const today = getFormattedToday(0);
@@ -358,9 +359,10 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     setMinimized(true);
   };
 
-  const closeAssistant = () => {
+  const hideAssistantCompletely = () => {
     setMinimized(false);
     setHistoryOpen(false);
+    setIsAssistantLauncherVisible(false);
     onClose();
   };
 
@@ -574,7 +576,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
           </button>
           <button
             type="button"
-            onClick={closeAssistant}
+            onClick={hideAssistantCompletely}
             className="h-7 rounded-full px-2 text-[10px] font-bold text-slate-400"
           >
             Ẩn
@@ -651,7 +653,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
             </button>
             <button
               type="button"
-              onClick={closeAssistant}
+              onClick={hideAssistantCompletely}
               className="h-8 rounded-lg px-2 text-[10px] font-bold text-slate-400 hover:bg-slate-100"
             >
               Ẩn

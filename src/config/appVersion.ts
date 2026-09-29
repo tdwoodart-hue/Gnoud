@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.0';
-export const APP_UPDATED_AT = '2026-09-29T12:38:00+07:00';
+export const APP_VERSION = '0.9.1';
+export const APP_UPDATED_AT = '2026-09-29T13:00:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.1',
+    updatedAt: '2026-09-29T13:00:00+07:00',
+    title: 'Trợ lý hành động + nhập nhanh bằng câu tự nhiên',
+    changes: [
+      'Thêm Trợ lý thật: nhập một câu tự nhiên, xem preview rồi xác nhận trước khi ghi dữ liệu.',
+      'Hiểu câu một dòng kiểu “Lưu bữa tối hôm nay: ...” với nhiều món ngăn bằng dấu chấm phẩy.',
+      'Dán trực tiếp danh sách kcal · P · C · F vẫn hoạt động; tự bỏ qua dòng tổng để tránh cộng hai lần.',
+      'Trợ lý có thể lưu dinh dưỡng hoặc cập nhật/tạo buổi tập bằng cùng Action Engine dùng chung.',
+      'Bỏ icon lấp lánh/AI khỏi Nhập nhanh và Trợ lý; launcher dùng chữ đơn giản.',
+    ],
+  },
   {
     version: '0.9.0',
     updatedAt: '2026-09-29T12:38:00+07:00',

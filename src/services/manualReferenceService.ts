@@ -5,6 +5,7 @@ export interface ManualReferenceLine {
 }
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
+const REFERENCE_LIST_LINE = /^(?:(?:\d+|[a-zA-Z])[.)-]|[-*•–—])\s+/u;
 
 export function stripReferenceMarker(value: string): string {
   return normalizeWhitespace(
@@ -71,7 +72,7 @@ export function parseManualReferenceList(value?: string): ManualReferenceLine[] 
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const listLines = lines.filter((line) => /^(?:(?:\d+|[a-zA-Z])[.)-]|[-*•–—])\s+/u.test(line));
+  const listLines = lines.filter((line) => REFERENCE_LIST_LINE.test(line));
 
   // Chỉ biến thành card khi nội dung thực sự là một danh sách, tránh phá đoạn mô tả bình thường.
   if (listLines.length < 2 || listLines.length < Math.ceil(lines.length * 0.6)) return [];
@@ -84,4 +85,26 @@ export function parseManualReferenceList(value?: string): ManualReferenceLine[] 
       key: canonicalReferenceKey(label),
     };
   });
+}
+
+export function replaceManualReferenceList(value: string | undefined, labels: string[]): string {
+  const nextLabels = labels.map(normalizeWhitespace).filter(Boolean);
+  const originalLines = (value || '').split(/\r?\n/);
+  const listIndexes = originalLines
+    .map((line, index) => (REFERENCE_LIST_LINE.test(line.trim()) ? index : -1))
+    .filter((index) => index >= 0);
+
+  const replacement = nextLabels.map((label, index) => `${index + 1}. ${label}`);
+
+  if (listIndexes.length === 0) {
+    return replacement.join('\n').trim();
+  }
+
+  const first = listIndexes[0];
+  const last = listIndexes[listIndexes.length - 1];
+  return [
+    ...originalLines.slice(0, first),
+    ...replacement,
+    ...originalLines.slice(last + 1),
+  ].join('\n').trim();
 }

@@ -14,7 +14,6 @@ import {
   Link2,
   ListChecks,
   Plus,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -1006,8 +1005,7 @@ export const TodayView: React.FC = () => {
                           type="button"
                           onClick={() => setQuickWorkoutOpen(true)}
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" /> Nhập nhanh
+                        >Nhập nhanh
                         </button>
                         <button
                           type="button"

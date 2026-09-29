@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.0';
-export const APP_UPDATED_AT = '2026-09-29T12:38:00+07:00';
+export const APP_VERSION = '0.9.1';
+export const APP_UPDATED_AT = '2026-09-29T13:00:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.1',
+    updatedAt: '2026-09-29T13:00:00+07:00',
+    title: 'Nhập nhanh: dán thẳng câu trả lời ChatGPT/AI',
+    changes: [
+      'Không còn bắt buộc JSON: có thể dán trực tiếp danh sách món với kcal · P · C · F như câu trả lời ChatGPT.',
+      'Tự bỏ qua dòng tổng cả bữa để không bị cộng dinh dưỡng hai lần.',
+      'Tự lấy khối lượng và đơn vị từ tên món khi có, đồng thời cho chọn lại bữa Sáng/Trưa/Tối/Ăn nhẹ trước khi lưu.',
+      'Nhập nhanh buổi tập cũng nhận text kiểu Tên bài: kg · reps · sets.',
+      'JSON vẫn được giữ như định dạng kỹ thuật chung cho Action Engine và trợ lý sau này.',
+    ],
+  },
   {
     version: '0.9.0',
     updatedAt: '2026-09-29T12:38:00+07:00',

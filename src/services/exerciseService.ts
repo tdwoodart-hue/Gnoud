@@ -44,15 +44,41 @@ export function exerciseId(label: string): string {
   return `exercise-${(hash >>> 0).toString(36)}`;
 }
 
+const newerLog = (left?: ExerciseLogEntry, right?: ExerciseLogEntry): ExerciseLogEntry | undefined => {
+  if (!left) return right;
+  if (!right) return left;
+  return right.date >= left.date ? right : left;
+};
+
+const mergeProgress = (left: ExerciseProgress | undefined, right: ExerciseProgress): ExerciseProgress => {
+  if (!left) return right;
+  const latest = newerLog(left.latest, right.latest);
+  const candidates = [left.latest, left.previous, right.latest, right.previous]
+    .filter((entry): entry is ExerciseLogEntry => Boolean(entry))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const previous = candidates.find((entry) => !latest || entry.date < latest.date);
+  return { ...(latest ? { latest } : {}), ...(previous ? { previous } : {}) };
+};
+
 export function loadExerciseProgress(): ExerciseProgressStore {
   if (typeof window === 'undefined') return {};
   try {
     const raw = window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as ExerciseProgressStore
-      : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    // v0.9 chuẩn hóa khóa bài tập. Dữ liệu cũ dùng tên bài làm key vẫn được migrate tự động.
+    const migrated: ExerciseProgressStore = {};
+    Object.entries(parsed as ExerciseProgressStore).forEach(([legacyKey, value]) => {
+      const nextKey = exerciseKey(legacyKey) || legacyKey;
+      migrated[nextKey] = mergeProgress(migrated[nextKey], value);
+    });
+
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      persistExerciseProgress(migrated);
+    }
+    return migrated;
   } catch {
     return {};
   }

@@ -237,8 +237,14 @@ const isNutritionSummaryLine = (line: string): boolean => {
   return /^(chot|tong|total|ca bua|tong bua|chot ca bua)\b/.test(normalized);
 };
 
+const stripNutritionCommandPrefix = (value: string): string =>
+  value.replace(
+    /^(?:(?:lưu|ghi|thêm|log)\s+)?(?:(?:vào|cho)\s+)?(?:bữa\s+)?(?:sáng|trưa|tối|ăn nhẹ|snack|breakfast|lunch|dinner)(?:\s+hôm nay)?\s*[:：\-–—]?\s*/iu,
+    '',
+  ).trim();
+
 const parseNutritionTextLine = (line: string): QuickNutritionItem | null => {
-  const cleaned = stripMarkdown(line);
+  const cleaned = stripNutritionCommandPrefix(stripMarkdown(line));
   if (!cleaned || isNutritionSummaryLine(cleaned)) return null;
 
   const calories = parseLocaleNumber(cleaned.match(/~?\s*(\d+(?:[.,]\d+)?)\s*kcal\b/i)?.[1]);
@@ -272,7 +278,7 @@ const parsePlainNutritionText = (
   fallbackMeal?: QuickNutritionMeal,
 ): QuickActionParseResult | null => {
   const items = raw
-    .split(/\r?\n/)
+    .split(/(?:\r?\n|\s*;\s*)/)
     .map(parseNutritionTextLine)
     .filter((item): item is QuickNutritionItem => Boolean(item));
 
@@ -301,7 +307,7 @@ const parsePlainWorkoutText = (
   fallbackDate?: string,
 ): QuickActionParseResult | null => {
   const exercises: QuickWorkoutExercise[] = [];
-  raw.split(/\r?\n/).forEach((line) => {
+  raw.split(/(?:\r?\n|\s*;\s*)/).forEach((line) => {
     const cleaned = stripMarkdown(line);
     if (!cleaned) return;
     const weightKg = parseLocaleNumber(cleaned.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i)?.[1]);

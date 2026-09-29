@@ -31,7 +31,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setActiveTab,
     setIsCommandMenuOpen,
     setIsAssistantOpen,
-    isAssistantLauncherVisible,
   } = useApp();
   const { pinEnabled, lockApp } = useSecurity();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -47,13 +46,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLocaleLowerCase() !== 'a') return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
-      if (!isAssistantLauncherVisible) return;
       event.preventDefault();
       setIsAssistantOpen(true);
     };
     window.addEventListener('keydown', handleAssistantShortcut);
     return () => window.removeEventListener('keydown', handleAssistantShortcut);
-  }, [setIsAssistantOpen, isAssistantLauncherVisible]);
+  }, [setIsAssistantOpen]);
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#fafbfc] font-sans text-slate-900">
@@ -95,15 +93,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
           <div className="space-y-2 border-t border-slate-100/90 pt-5">
             <div className="flex items-center gap-1.5">
-              {isAssistantLauncherVisible ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAssistantOpen(true)}
-                  className="flex h-8 flex-1 items-center justify-center rounded-xl border border-slate-200/60 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Trợ lý
-                </button>
-              ) : null}
               <button
                 type="button"
                 onClick={() => setIsCommandMenuOpen(true)}
@@ -143,16 +132,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           {children}
         </main>
       </div>
-
-      {isAssistantLauncherVisible ? (
-        <button
-          type="button"
-          onClick={() => setIsAssistantOpen(true)}
-          className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-3 z-40 h-9 rounded-full border border-slate-200 bg-white/95 px-4 text-[11px] font-bold text-slate-700 shadow-sm backdrop-blur-md md:hidden"
-        >
-          Trợ lý
-        </button>
-      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
         {PRIMARY_NAV_ITEMS.map((item) => {

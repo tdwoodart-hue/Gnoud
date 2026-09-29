@@ -66,7 +66,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   );
 
   useEffect(() => {
-    if (parsed?.action?.type === 'nutrition') setSelectedMeal(actionForPreview.meal);
+    if (parsed?.action?.type === 'nutrition') setSelectedMeal(parsed.action.meal);
   }, [raw]);
 
   const actionForPreview = parsed?.action?.type === 'nutrition'

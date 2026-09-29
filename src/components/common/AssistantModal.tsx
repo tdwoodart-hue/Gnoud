@@ -165,8 +165,6 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     const onResize = () => {
       const nextDesktop = window.innerWidth >= 640;
       setDesktop(nextDesktop);
-      if (!nextDesktop) return;
-
       window.requestAnimationFrame(() => {
         const panel = panelRef.current;
         if (!panel || !position) return;
@@ -366,7 +364,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
   };
 
   const startDrag = (event: React.PointerEvent<HTMLElement>) => {
-    if (!desktop || (event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
+    if ((event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
     const panel = panelRef.current;
     if (!panel) return;
 
@@ -434,19 +432,23 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
-  const desktopStyle: React.CSSProperties | undefined =
-    desktop && position ? { left: position.x, top: position.y } : undefined;
+  const windowStyle: React.CSSProperties | undefined =
+    position ? { left: position.x, top: position.y } : undefined;
+  const floating = Boolean(position);
 
   if (minimized) {
     return (
       <div className="pointer-events-none fixed inset-0 z-[220]">
         <section
           ref={panelRef}
-          style={desktopStyle}
-          className="pointer-events-auto fixed bottom-[calc(82px+env(safe-area-inset-bottom))] right-3 flex h-10 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-lg shadow-slate-900/10 sm:bottom-auto sm:right-auto"
+          style={windowStyle}
+          className={`pointer-events-auto fixed flex h-10 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-lg shadow-slate-900/10 ${
+            floating ? 'left-0 top-0' : 'bottom-[calc(82px+env(safe-area-inset-bottom))] right-3'
+          }`}
         >
           <div
             onPointerDown={startDrag}
+            style={{ touchAction: 'none' }}
             className="cursor-grab select-none px-2 text-[11px] font-bold text-slate-700 active:cursor-grabbing"
           >
             Trợ lý
@@ -472,29 +474,41 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[220]">
-      <button
-        type="button"
-        aria-label="Ẩn trợ lý"
-        onClick={() => setMinimized(true)}
-        className="pointer-events-auto absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] sm:hidden"
-      />
+      {!floating ? (
+        <button
+          type="button"
+          aria-label="Ẩn trợ lý"
+          onClick={() => setMinimized(true)}
+          className="pointer-events-auto absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] sm:hidden"
+        />
+      ) : null}
 
       <section
         ref={panelRef}
-        style={desktopStyle}
-        className="pointer-events-auto fixed inset-x-0 bottom-0 flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:inset-auto sm:w-[520px] sm:max-w-[calc(100vw-24px)] sm:rounded-[24px] sm:border sm:border-slate-200"
+        style={windowStyle}
+        className={`pointer-events-auto fixed flex flex-col overflow-hidden bg-white shadow-2xl ${
+          floating
+            ? 'left-0 top-0 max-h-[72dvh] w-[calc(100vw-24px)] max-w-[520px] rounded-[24px] border border-slate-200 sm:max-h-[86dvh]'
+            : 'inset-x-0 bottom-0 max-h-[92dvh] w-full rounded-t-[28px] sm:inset-auto sm:right-6 sm:top-24 sm:w-[520px] sm:max-w-[calc(100vw-24px)] sm:rounded-[24px] sm:border sm:border-slate-200'
+        }`}
       >
-        <header
+        <div
           onPointerDown={startDrag}
           style={{ touchAction: 'none' }}
-          className={`flex cursor-default select-none items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5 ${
-            dragging ? 'sm:cursor-grabbing' : 'sm:cursor-grab'
+          className={`flex h-7 shrink-0 cursor-grab items-center justify-center select-none ${
+            dragging ? 'cursor-grabbing' : ''
           }`}
+          aria-label="Kéo để di chuyển trợ lý"
+        >
+          <span className="h-1 w-10 rounded-full bg-slate-300" />
+        </div>
+        <header
+          className="flex select-none items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3.5 sm:px-5"
         >
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Trợ lý</h2>
             <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
-              Giữ và kéo thanh này để di chuyển · Ctrl/⌘ + Enter để xác nhận
+              Kéo thanh phía trên để di chuyển · Ctrl/⌘ + Enter để xác nhận
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -507,15 +521,13 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
                 Gần đây
               </button>
             ) : null}
-            {desktop ? (
-              <button
-                type="button"
-                onClick={resetPosition}
-                className="h-8 rounded-lg px-2 text-[10px] font-bold text-slate-400 hover:bg-slate-100"
-              >
-                Vị trí
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={resetPosition}
+              className="h-8 rounded-lg px-2 text-[10px] font-bold text-slate-400 hover:bg-slate-100"
+            >
+              Vị trí
+            </button>
             <button
               type="button"
               onClick={() => setMinimized(true)}

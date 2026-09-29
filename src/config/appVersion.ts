@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.5';
-export const APP_UPDATED_AT = '2026-09-29T14:12:00+07:00';
+export const APP_VERSION = '0.9.6';
+export const APP_UPDATED_AT = '2026-09-29T14:28:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.6',
+    updatedAt: '2026-09-29T14:28:00+07:00',
+    title: 'Sửa hẳn kéo mobile + tách Thu gọn và Ẩn',
+    changes: [
+      'Kéo mobile dùng listener gắn ngay khi chạm, không chờ render; thêm fallback touchmove/touchend cho Safari/WebView.',
+      'Khi bắt đầu kéo, cửa sổ mobile thu về khoảng 82% chiều rộng để thực sự có khoảng trống kéo trái/phải.',
+      'Thanh kéo được làm cao và rõ hơn, có chữ Kéo trên điện thoại.',
+      'Thu gọn chỉ biến Trợ lý thành pill; Ẩn thì biến mất hoàn toàn khỏi màn hình.',
+      'Pill thu gọn cũng kéo được; nút Ẩn trên pill đóng hẳn Trợ lý nhưng vẫn giữ draft để mở lại sau.',
+    ],
+  },
   {
     version: '0.9.5',
     updatedAt: '2026-09-29T14:12:00+07:00',

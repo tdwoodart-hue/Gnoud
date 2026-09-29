@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ClipboardPaste,
   Dumbbell,
-  Sparkles,
   UtensilsCrossed,
   X,
 } from 'lucide-react';
@@ -94,9 +93,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
-            <Sparkles className="h-4.5 w-4.5" />
-          </span>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600"></span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-bold text-slate-900">
               {domain === 'nutrition' ? 'Nhập nhanh dinh dưỡng' : 'Nhập nhanh buổi tập'}

@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.3';
-export const APP_UPDATED_AT = '2026-09-29T11:25:00+07:00';
+export const APP_VERSION = '0.8.4';
+export const APP_UPDATED_AT = '2026-09-29T11:36:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.8.4',
+    updatedAt: '2026-09-29T11:36:00+07:00',
+    title: 'Reader clean kiểu Kindle + báo cáo thời gian đọc',
+    changes: [
+      'Khi thanh công cụ ẩn, màn hình đọc chỉ còn nội dung sách; không hiện chương, trang, phần trăm hay progress bar.',
+      'Chạm vùng bar trên hoặc bar dưới để mở menu; chạm giữa nội dung không bật menu.',
+      'Cuộn dọc chỉ diễn ra bên trong trang hiện tại; vuốt ngang trái/phải để lật sang trang khác.',
+      'Báo cáo thêm thời gian đọc, thời gian nghe sách, tổng thời gian với sách và số ngày có đọc.',
+    ],
+  },
   {
     version: '0.8.3',
     updatedAt: '2026-09-29T11:25:00+07:00',

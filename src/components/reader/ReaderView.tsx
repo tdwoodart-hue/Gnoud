@@ -763,13 +763,18 @@ export const ReaderView: React.FC = () => {
     );
     const nowMs = Date.now();
     const isFinal = chunkIndex >= chunkCount;
-    const page = Math.max(1, Math.min(visualPageCount, Math.floor(ratio * Math.max(1, visualPageCount - 1)) + 1));
-    setVisualPage(page);
-    if (readingMode === 'scroll') {
+    const pageCount = Math.max(1, readerPages.length);
+    const pagePosition = clamp(ratio, 0, 1) * pageCount;
+    const page = ratio >= 1 ? pageCount : Math.min(pageCount, Math.floor(pagePosition) + 1);
+    const withinPage = ratio >= 1 ? 1 : clamp(pagePosition - (page - 1), 0, 1);
+    if (page !== visualPage) {
+      pendingPageScrollRef.current = withinPage;
+      setVisualPage(page);
+    } else if (readingMode === 'scroll') {
       const element = readingScrollRef.current;
       if (element) {
         const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-        element.scrollTop = maxScroll * ratio;
+        element.scrollTop = maxScroll * withinPage;
       }
     }
     if (!isFinal && nowMs - lastTtsPinWriteRef.current < 700) return;
@@ -781,6 +786,7 @@ export const ReaderView: React.FC = () => {
       overallProgress,
       listeningProgress: overallProgress,
       currentPage: page - 1,
+      pageScrollProgress: withinPage,
       lastPositionAt: now,
       lastOpenedAt: now,
     });

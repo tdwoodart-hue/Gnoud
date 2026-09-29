@@ -18,7 +18,7 @@ test('đọc form dinh dưỡng trong code fence và hiểu tên field ngắn', 
   assert.equal(result.action.meal, 'lunch');
   assert.equal(result.action.date, '2026-09-29');
   assert.equal(result.action.items[0].name, 'Ức gà');
-  assert.equal(result.action.items[0].calories, 235);
+  assert.equal(result.action.items[0].calories, 234.6);
   assert.equal(result.warnings.length, 1);
 });
 

@@ -992,7 +992,7 @@ export const TodayView: React.FC = () => {
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Bài tập trong buổi</p>
                       <p className="mt-0.5 text-[10px] text-slate-400">
-                        {editingExercises ? 'Đổi tên, thứ tự, thêm hoặc xóa ngay tại đây.' : 'Kg và reps lưu riêng theo từng ngày tập.'}
+                        {editingExercises ? 'Đổi tên, thay bài, đổi thứ tự, thêm hoặc xóa ngay tại đây.' : 'Kg và reps lưu riêng theo từng ngày tập.'}
                       </p>
                     </div>
                     {editingExercises ? (

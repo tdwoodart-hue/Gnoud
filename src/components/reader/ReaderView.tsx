@@ -700,10 +700,10 @@ export const ReaderView: React.FC = () => {
   }, [readingOpen, activeBook?.format, readingMode, visualPage, readerPages.length, chapterIndex, epubChapters.length, activeBook?.pageTransition]);
 
   useEffect(() => {
-    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || ttsOpen || activeBook?.format === 'pdf') return undefined;
+    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || ttsOpen) return undefined;
     const timer = window.setTimeout(() => setControlsVisible(false), 4200);
     return () => window.clearTimeout(timer);
-  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen, activeBook?.format]);
+  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen]);
 
   const supportsDeviceTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
@@ -1361,9 +1361,13 @@ export const ReaderView: React.FC = () => {
 
     if (direction > 0 && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
       setPageTurnFx('next');
+      if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
       changeChapter(chapterIndex + 1, 'start');
     } else if (direction < 0 && activeBook.format === 'epub' && chapterIndex > 0) {
       setPageTurnFx('prev');
+      if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
       changeChapter(chapterIndex - 1, 'end');
     }
   };

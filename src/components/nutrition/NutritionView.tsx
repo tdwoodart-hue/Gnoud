@@ -13,7 +13,6 @@ import {
   Scale,
   Search,
   Settings2,
-  Sparkles,
   Trash2,
   UtensilsCrossed,
   Wheat,
@@ -1857,9 +1856,7 @@ export const NutritionView: React.FC = () => {
                   type="button"
                   onClick={() => setQuickInputOpen(true)}
                   className="flex h-9 items-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Nhập nhanh
+                >Nhập nhanh
                 </button>
                 <button
                   type="button"

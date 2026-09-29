@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.3';
-export const APP_UPDATED_AT = '2026-09-29T13:50:00+07:00';
+export const APP_VERSION = '0.9.4';
+export const APP_UPDATED_AT = '2026-09-29T14:02:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.4',
+    updatedAt: '2026-09-29T14:02:00+07:00',
+    title: 'Sửa kéo cửa sổ Trợ lý',
+    changes: [
+      'Sửa cơ chế kéo: pointer move/up được bắt ở toàn cửa sổ trình duyệt thay vì chỉ trên thanh tiêu đề.',
+      'Giữ kéo liên tục kể cả khi con trỏ rời khỏi header.',
+      'Thêm cursor grab/grabbing rõ ràng và khóa touch-action trên vùng kéo.',
+      'Vị trí vẫn được lưu sau khi kéo.',
+    ],
+  },
   {
     version: '0.9.3',
     updatedAt: '2026-09-29T13:50:00+07:00',

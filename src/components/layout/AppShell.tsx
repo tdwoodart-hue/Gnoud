@@ -36,6 +36,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return () => window.removeEventListener('lich-song-open-settings', open);
   }, []);
 
+  useEffect(() => {
+    const handleAssistantShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLocaleLowerCase() !== 'a') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      setIsAssistantOpen(true);
+    };
+    window.addEventListener('keydown', handleAssistantShortcut);
+    return () => window.removeEventListener('keydown', handleAssistantShortcut);
+  }, [setIsAssistantOpen]);
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#fafbfc] font-sans text-slate-900">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl overflow-x-hidden">

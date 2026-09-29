@@ -9,8 +9,6 @@ import {
 } from 'lucide-react';
 import {
   parseQuickAction,
-  quickNutritionTemplate,
-  quickWorkoutTemplate,
   type QuickAction,
   type QuickActionDomain,
   type QuickNutritionMeal,
@@ -40,21 +38,12 @@ const guessMeal = (): QuickNutritionMeal => {
   return 'snack';
 };
 
-const nutritionTextExample = `Bún chín 250g: ~275 kcal · P 5g · C 63g · F 0,5g
-Ức gà chín 52g: ~86 kcal · P 16g · C 0g · F 2g
-Thịt bò chín 74g: ~165 kcal · P 20g · C 0g · F 9g`;
-
-const workoutTextExample = `Lat Pulldown: 40kg · 10 reps · 3 sets
-Chest Press: 35kg · 12 reps · 3 sets`;
-
 export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   domain,
   date,
   onClose,
   onApply,
 }) => {
-  const jsonTemplate = domain === 'nutrition' ? quickNutritionTemplate(date) : quickWorkoutTemplate(date);
-  const textTemplate = domain === 'nutrition' ? nutritionTextExample : workoutTextExample;
   const initialMeal = useMemo(() => guessMeal(), []);
   const [raw, setRaw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -113,18 +102,9 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                <ClipboardPaste className="h-3.5 w-3.5 text-slate-400" />
-                Nội dung cần lưu
-              </p>
-              <button
-                type="button"
-                onClick={() => setRaw(textTemplate)}
-                className="rounded-lg bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-600 ring-1 ring-slate-200"
-              >
-                Điền mẫu text
-              </button>
+            <div className="mb-2 flex items-center gap-1.5">
+              <ClipboardPaste className="h-3.5 w-3.5 text-slate-400" />
+              <p className="text-[11px] font-bold text-slate-700">Nội dung cần lưu</p>
             </div>
             <textarea
               autoFocus
@@ -132,7 +112,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
               onChange={(event) => setRaw(event.target.value)}
               rows={10}
               spellCheck={false}
-              placeholder={textTemplate}
+              placeholder="Dán nội dung cần lưu vào đây…"
               className="min-h-52 w-full resize-y rounded-xl border border-slate-200 bg-white p-3 font-mono text-[11px] leading-5 text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
             />
             {domain === 'nutrition' ? (
@@ -154,10 +134,6 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
                 </div>
               </div>
             ) : null}
-            <details className="mt-3">
-              <summary className="cursor-pointer text-[10px] font-semibold text-slate-400">Cần JSON? Xem mẫu kỹ thuật</summary>
-              <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-[9px] leading-4 text-slate-300">{jsonTemplate}</pre>
-            </details>
           </div>
 
           {parsed ? (

@@ -52,8 +52,6 @@ interface AppContextType {
   setIsCommandMenuOpen: (open: boolean) => void;
   isAssistantOpen: boolean;
   setIsAssistantOpen: (open: boolean) => void;
-  isAssistantLauncherVisible: boolean;
-  setIsAssistantLauncherVisible: (visible: boolean) => void;
   isMorningPlanningOpen: boolean;
   setIsMorningPlanningOpen: (open: boolean) => void;
   isEveningReviewOpen: boolean;
@@ -116,7 +114,6 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'lich_song_';
 const DEMO_DATA_REMOVED_KEY = 'lich_song_demo_data_removed_v1';
-const ASSISTANT_LAUNCHER_VISIBLE_KEY = 'lich_song_assistant_launcher_visible_v1';
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const cascadeProjectDeletion = (
@@ -219,13 +216,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentView, setCurrentView] = useState<string>('today');
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [isAssistantLauncherVisible, setIsAssistantLauncherVisible] = useState(() => {
-    try {
-      return localStorage.getItem(ASSISTANT_LAUNCHER_VISIBLE_KEY) !== 'false';
-    } catch {
-      return true;
-    }
-  });
   const [isMorningPlanningOpen, setIsMorningPlanningOpen] = useState(false);
   const [isEveningReviewOpen, setIsEveningReviewOpen] = useState(false);
 
@@ -290,15 +280,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeToast = useCallback((id: string) => {
     setToasts((previous) => previous.filter((toast) => toast.id !== id));
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(ASSISTANT_LAUNCHER_VISIBLE_KEY, String(isAssistantLauncherVisible));
-    } catch {
-      // Không chặn app nếu trình duyệt từ chối localStorage.
-    }
-    if (!isAssistantLauncherVisible) setIsAssistantOpen(false);
-  }, [isAssistantLauncherVisible]);
 
   useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
   useEffect(() => { saveToStorage('deleted_tasks', trashTasks); }, [trashTasks]);
@@ -972,8 +953,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCommandMenuOpen,
         isAssistantOpen,
         setIsAssistantOpen,
-        isAssistantLauncherVisible,
-        setIsAssistantLauncherVisible,
         isMorningPlanningOpen,
         setIsMorningPlanningOpen,
         isEveningReviewOpen,

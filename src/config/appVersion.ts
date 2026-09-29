@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.7';
-export const APP_UPDATED_AT = '2026-09-29T14:36:00+07:00';
+export const APP_VERSION = '0.9.8';
+export const APP_UPDATED_AT = '2026-09-29T14:45:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.8',
+    updatedAt: '2026-09-29T14:45:00+07:00',
+    title: 'Xóa hẳn launcher Trợ lý khỏi giao diện',
+    changes: [
+      'Xóa nút Trợ lý khỏi sidebar desktop.',
+      'Xóa nút Trợ lý nổi trên mobile.',
+      'Xóa luôn công tắc Hiện nút Trợ lý trong Cài đặt và state lưu ẩn/hiện launcher.',
+      'Phần Trợ lý bên trong vẫn được giữ lại; không còn launcher cố định chiếm giao diện.',
+    ],
+  },
   {
     version: '0.9.7',
     updatedAt: '2026-09-29T14:36:00+07:00',

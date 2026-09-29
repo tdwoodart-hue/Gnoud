@@ -238,22 +238,10 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
             value={input}
             onChange={(event) => setInput(event.target.value)}
             rows={5}
-            placeholder="Ví dụ: Lưu bữa tối hôm nay: bún chín 250g 275 kcal P5g C63g F0,5g; ức gà chín 52g 86 kcal P16g C0g F2g"
+            placeholder="Nhập lệnh hoặc dán nội dung cần xử lý…"
             className="w-full resize-y rounded-2xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
           />
 
-          {!input.trim() ? (
-            <div className="mt-3 rounded-2xl bg-slate-50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Câu test nhanh</p>
-              <button
-                type="button"
-                onClick={() => setInput('Lưu bữa tối hôm nay: bún chín 250g 275 kcal P5g C63g F0,5g; ức gà chín 52g 86 kcal P16g C0g F2g; thịt bò chín 74g 165 kcal P20g C0g F9g')}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-left text-[11px] font-medium leading-5 text-slate-600"
-              >
-                Lưu bữa tối hôm nay: bún chín 250g 275 kcal P5g C63g F0,5g; ức gà chín 52g 86 kcal P16g C0g F2g; thịt bò chín 74g 165 kcal P20g C0g F9g
-              </button>
-            </div>
-          ) : null}
 
           {parsed?.errors.length ? (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3">

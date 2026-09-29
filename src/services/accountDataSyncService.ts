@@ -141,6 +141,8 @@ function canonicalNutrition(state: NutritionState) {
         ...(entry.foodId !== undefined ? { foodId: entry.foodId } : {}),
         ...(entry.variantId !== undefined ? { variantId: entry.variantId } : {}),
         ...(entry.portionId !== undefined ? { portionId: entry.portionId } : {}),
+        ...(entry.batchId !== undefined ? { batchId: entry.batchId } : {}),
+        ...(entry.source !== undefined ? { source: entry.source } : {}),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     dailyMetrics: [...state.dailyMetrics]

@@ -245,6 +245,8 @@ export const ReaderView: React.FC = () => {
   const lastTtsPinWriteRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const scrollTouchEdgeRef = useRef<'top' | 'bottom' | null>(null);
+  const chapterEdgeWheelAtRef = useRef(0);
   const pageTurnTimerRef = useRef<number | null>(null);
   const cloudMetadataTimerRef = useRef<number | null>(null);
 
@@ -533,11 +535,6 @@ export const ReaderView: React.FC = () => {
     : 0;
   const activeChapter = epubChapters[chapterIndex];
   const readerText = activeBook?.format === 'epub' ? (activeChapter?.content || '') : (activeBook?.content || '');
-  const readerParagraphs = useMemo(
-    () => readerText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean),
-    [readerText],
-  );
-
   const pageCharLimit = useMemo(() => {
     if (!activeBook) return 470;
     const widthFactor = clamp(readerViewport.width / 390, 0.78, 1.8);
@@ -552,6 +549,20 @@ export const ReaderView: React.FC = () => {
     () => activeBook?.format === 'pdf' ? [''] : paginateBookContent(readerText, pageCharLimit),
     [activeBook?.format, readerText, pageCharLimit],
   );
+
+  const epubPageCounts = useMemo(
+    () => activeBook?.format === 'epub'
+      ? epubChapters.map((chapter) => Math.max(1, paginateBookContent(chapter.content, pageCharLimit).length))
+      : [],
+    [activeBook?.format, epubChapters, pageCharLimit],
+  );
+  const bookPageOffset = activeBook?.format === 'epub'
+    ? epubPageCounts.slice(0, chapterIndex).reduce((sum, count) => sum + count, 0)
+    : 0;
+  const bookPageCount = activeBook?.format === 'epub'
+    ? Math.max(1, epubPageCounts.reduce((sum, count) => sum + count, 0))
+    : Math.max(1, readerPages.length);
+  const bookVisualPage = Math.min(bookPageCount, Math.max(1, bookPageOffset + visualPage));
 
   const visiblePageText = readerPages[Math.max(0, Math.min(readerPages.length - 1, visualPage - 1))] || '';
   const visiblePageParagraphs = useMemo(
@@ -615,11 +626,15 @@ export const ReaderView: React.FC = () => {
         const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
         const savedRatio = clamp(activeBook.scrollProgress || 0, 0, 1);
         element.scrollTop = maxScroll * savedRatio;
-        const pageCount = Math.max(1, Math.ceil(element.scrollHeight / Math.max(1, element.clientHeight)));
-        const page = Math.min(pageCount, Math.max(1, Math.floor(element.scrollTop / Math.max(1, element.clientHeight)) + 1));
+        const pages = Array.from(element.querySelectorAll<HTMLElement>('[data-reader-page]'));
+        const center = element.scrollTop + element.clientHeight * 0.45;
+        let pageIndex = 0;
+        pages.forEach((page, index) => {
+          if (page.offsetTop <= center) pageIndex = index;
+        });
         setLiveScrollProgress(savedRatio);
-        setVisualPageCount(pageCount);
-        setVisualPage(page);
+        setVisualPageCount(Math.max(1, pages.length || readerPages.length));
+        setVisualPage(Math.min(Math.max(1, pages.length || readerPages.length), pageIndex + 1));
       });
     });
 
@@ -1121,8 +1136,14 @@ export const ReaderView: React.FC = () => {
     const viewportHeight = Math.max(1, element.clientHeight);
     const maxScroll = Math.max(0, element.scrollHeight - viewportHeight);
     const ratio = maxScroll <= 0 ? 0 : clamp(element.scrollTop / maxScroll, 0, 1);
-    const pageCount = Math.max(1, Math.ceil(element.scrollHeight / viewportHeight));
-    const page = Math.min(pageCount, Math.max(1, Math.floor(element.scrollTop / viewportHeight) + 1));
+    const pageElements = Array.from(element.querySelectorAll<HTMLElement>('[data-reader-page]'));
+    const pageCount = Math.max(1, pageElements.length || readerPages.length);
+    const focusLine = element.scrollTop + viewportHeight * 0.45;
+    let pageIndex = 0;
+    pageElements.forEach((page, index) => {
+      if (page.offsetTop <= focusLine) pageIndex = index;
+    });
+    const page = Math.min(pageCount, Math.max(1, pageIndex + 1));
     return { ratio, page, pageCount };
   };
 
@@ -1275,22 +1296,59 @@ export const ReaderView: React.FC = () => {
   };
 
   const handlePageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (readingMode !== 'paged') return;
     const touch = event.touches[0];
     touchStartXRef.current = touch?.clientX ?? null;
     touchStartYRef.current = touch?.clientY ?? null;
+    scrollTouchEdgeRef.current = null;
+
+    if (readingMode === 'scroll') {
+      const element = readingScrollRef.current;
+      if (!element) return;
+      const atTop = element.scrollTop <= 4;
+      const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 4;
+      scrollTouchEdgeRef.current = atTop ? 'top' : atBottom ? 'bottom' : null;
+    }
   };
 
   const handlePageTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (readingMode !== 'paged') return;
     if (touchStartXRef.current === null || touchStartYRef.current === null) return;
     const touch = event.changedTouches[0];
     const dx = (touch?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
     const dy = (touch?.clientY ?? touchStartYRef.current) - touchStartYRef.current;
+    const startEdge = scrollTouchEdgeRef.current;
     touchStartXRef.current = null;
     touchStartYRef.current = null;
+    scrollTouchEdgeRef.current = null;
+
+    if (readingMode === 'scroll') {
+      if (Math.abs(dy) < 48 || Math.abs(dy) < Math.abs(dx) * 1.15) return;
+      if (startEdge === 'bottom' && dy < 0 && activeBook?.format === 'epub' && chapterIndex < epubChapters.length - 1) {
+        changeChapter(chapterIndex + 1, 'start');
+      } else if (startEdge === 'top' && dy > 0 && activeBook?.format === 'epub' && chapterIndex > 0) {
+        changeChapter(chapterIndex - 1, 'end');
+      }
+      return;
+    }
+
     if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.15) return;
     stepViewport(dx < 0 ? 1 : -1);
+  };
+
+  const handleReadingWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (readingMode !== 'scroll' || !activeBook || activeBook.format !== 'epub' || Math.abs(event.deltaY) < 20) return;
+    const element = readingScrollRef.current;
+    if (!element) return;
+    const now = Date.now();
+    if (now - chapterEdgeWheelAtRef.current < 600) return;
+    const atTop = element.scrollTop <= 2;
+    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 2;
+    if (event.deltaY > 0 && atBottom && chapterIndex < epubChapters.length - 1) {
+      chapterEdgeWheelAtRef.current = now;
+      changeChapter(chapterIndex + 1, 'start');
+    } else if (event.deltaY < 0 && atTop && chapterIndex > 0) {
+      chapterEdgeWheelAtRef.current = now;
+      changeChapter(chapterIndex - 1, 'end');
+    }
   };
 
   const handleReadingSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -1377,44 +1435,66 @@ export const ReaderView: React.FC = () => {
           <div
             ref={readingScrollRef}
             onScroll={handleReadingScroll}
+            onWheel={handleReadingWheel}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
             className={`relative h-full w-full ${readingMode === 'scroll' ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden'}`}
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {readingMode === 'scroll' ? (
-              <article
-                className={`reader-scroll mx-auto min-h-full px-7 pb-28 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]}`}
-                style={{
-                  fontFamily: fontFamilies[activeBook.fontFamily],
-                  fontSize: `${activeBook.fontSize}px`,
-                  lineHeight: activeBook.lineHeight,
-                }}
-              >
-                {activeBook.format === 'epub' && activeChapter?.title ? (
-                  <h1 className="mb-7 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
-                ) : null}
-                <div lang="vi" className="[text-wrap:pretty]">
-                  {readerParagraphs.map((paragraph, index) => (
-                    <p
-                      key={`${index}-${paragraph.slice(0, 18)}`}
-                      className="mb-[0.95em] last:mb-0"
+              <div className="mx-auto w-full">
+                {readerPages.map((pageText, pageIndex) => {
+                  const paragraphs = pageText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+                  const globalPage = Math.min(bookPageCount, bookPageOffset + pageIndex + 1);
+                  const isLastPage = pageIndex === readerPages.length - 1;
+                  return (
+                    <section
+                      key={`${activeBook.id}-${chapterIndex}-scroll-${pageIndex}-${pageCharLimit}`}
+                      data-reader-page={pageIndex + 1}
+                      className={`reader-scroll-page mx-auto box-border flex w-full flex-col border-b border-current/10 px-7 pb-20 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]}`}
                       style={{
-                        textAlign: activeBook.textAlign,
-                        textJustify: 'inter-word',
-                        hyphens: 'auto',
-                        wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
+                        minHeight: `${Math.max(520, readerViewport.height)}px`,
+                        fontFamily: fontFamilies[activeBook.fontFamily],
+                        fontSize: `${activeBook.fontSize}px`,
+                        lineHeight: activeBook.lineHeight,
                       }}
                     >
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-                <div className={`pointer-events-none mt-10 flex items-center justify-between pb-2 text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
-                  <span>{activeBook.format === 'epub' ? `Chương ${chapterIndex + 1}` : 'Sách'}</span>
-                  <span>{progress}%</span>
-                </div>
-              </article>
+                      {activeBook.format === 'epub' && activeChapter?.title && pageIndex === 0 ? (
+                        <h1 className="mb-7 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
+                      ) : null}
+                      <div lang="vi" className="flex-1 [text-wrap:pretty]">
+                        {paragraphs.map((paragraph, index) => (
+                          <p
+                            key={`${pageIndex}-${index}-${paragraph.slice(0, 18)}`}
+                            className="mb-[0.95em] last:mb-0"
+                            style={{
+                              textAlign: activeBook.textAlign,
+                              textJustify: 'inter-word',
+                              hyphens: 'auto',
+                              wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
+                            }}
+                          >
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                      <div className={`pointer-events-none mt-8 flex items-end justify-between gap-3 pb-2 text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
+                        <span>
+                          {activeBook.format === 'epub'
+                            ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)}`
+                            : 'Sách'}
+                        </span>
+                        <span>Trang {globalPage}/{bookPageCount}</span>
+                      </div>
+                      {isLastPage && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1 ? (
+                        <p className={`pointer-events-none mt-2 text-center text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
+                          Hết chương · vuốt tiếp để sang chương {chapterIndex + 2}
+                        </p>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
             ) : (
               <>
                 <article
@@ -1451,7 +1531,7 @@ export const ReaderView: React.FC = () => {
                   </div>
                   <div className={`pointer-events-none mt-3 flex items-center justify-between text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
                     <span>{activeBook.format === 'epub' ? `Chương ${chapterIndex + 1}` : 'Sách'}</span>
-                    <span>{visualPage}/{Math.max(1, visualPageCount)}</span>
+                    <span>{bookVisualPage}/{bookPageCount}</span>
                   </div>
                 </article>
                 <div className="pointer-events-none absolute inset-y-20 left-0 w-5 bg-gradient-to-r from-black/[0.035] to-transparent" />
@@ -1547,12 +1627,12 @@ export const ReaderView: React.FC = () => {
                     >
                       <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-current">
                         <BookmarkCheck className="h-3.5 w-3.5 text-indigo-500" />
-                        {formatSavedAt(lastPinnedAt || activeBook.lastPositionAt)} · {readingMode === 'paged' ? `Trang ${visualPage}/${visualPageCount}` : `${progress}% đã đọc`}
+                        {formatSavedAt(lastPinnedAt || activeBook.lastPositionAt)} · Trang {bookVisualPage}/{bookPageCount}
                       </span>
                       <span className="mt-0.5 block text-[9px] font-medium">
                         {activeBook.format === 'epub'
-                          ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)} · ${readingMode === 'scroll' ? 'vuốt lên/xuống để đọc' : `${progress}% toàn sách`}`
-                          : readingMode === 'scroll' ? 'Vuốt lên/xuống để đọc liên tục' : `${progress}% toàn sách · chạm hai mép để chuyển trang`}
+                          ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)} · ${progress}% toàn sách`
+                          : `${progress}% toàn sách · ${readingMode === 'scroll' ? 'cuộn dọc qua từng trang' : 'chạm hai mép để chuyển trang'}`}
                       </span>
                     </button>
                     {readingMode === 'paged' ? (
@@ -1587,7 +1667,7 @@ export const ReaderView: React.FC = () => {
               <div className="h-full bg-indigo-500/80" style={{ width: `${progress}%` }} />
             </div>
             <div className={`pointer-events-none absolute bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 rounded-full border px-3 py-1.5 text-[10px] font-bold shadow-sm backdrop-blur-md ${themeStyles[activeBook.theme].panel}`}>
-              {readingMode === 'paged' ? `Trang ${visualPage}/${visualPageCount} · ${progress}%` : `${progress}% · Cuộn dọc`}
+              Trang {bookVisualPage}/{bookPageCount} · {progress}%
             </div>
           </>
         )}
@@ -1611,7 +1691,7 @@ export const ReaderView: React.FC = () => {
                   <div>
                     <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Cách đọc</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {([['scroll', 'Cuộn dọc'], ['paged', 'Theo trang']] as Array<[ReaderReadingMode, string]>).map(([id, label]) => (
+                      {([['scroll', 'Cuộn theo trang'], ['paged', 'Lật ngang']] as Array<[ReaderReadingMode, string]>).map(([id, label]) => (
                         <button
                           key={id}
                           type="button"
@@ -1622,7 +1702,7 @@ export const ReaderView: React.FC = () => {
                         </button>
                       ))}
                     </div>
-                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Cuộn dọc cho phép vuốt lên/xuống liên tục. Theo trang dùng vuốt trái/phải.</p>
+                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Cuộn theo trang: vẫn có Trang x/y, vuốt lên/xuống qua từng trang; tới cuối chương, vuốt tiếp để sang chương mới. Lật ngang dùng trái/phải.</p>
                   </div>
 
                   <div>

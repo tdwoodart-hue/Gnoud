@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.2';
-export const APP_UPDATED_AT = '2026-09-29T10:32:00+07:00';
+export const APP_VERSION = '0.8.3';
+export const APP_UPDATED_AT = '2026-09-29T11:25:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.8.3',
+    updatedAt: '2026-09-29T11:25:00+07:00',
+    title: 'Reader: cuộn dọc theo từng trang',
+    changes: [
+      'Cuộn dọc vẫn giữ ranh giới từng trang và hiển thị Trang x/y.',
+      'Cuộn hết một trang sẽ đi sang trang kế tiếp; vuốt tiếp ở cuối chương sẽ sang chương mới.',
+      'Số trang được tính trên toàn cuốn theo cỡ chữ và kích thước màn hình hiện tại.',
+    ],
+  },
   {
     version: '0.8.2',
     updatedAt: '2026-09-29T10:32:00+07:00',

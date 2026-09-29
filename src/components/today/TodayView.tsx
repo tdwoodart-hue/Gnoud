@@ -3,7 +3,9 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Circle,
   Clock3,
   Edit2,
@@ -21,7 +23,10 @@ import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
 import { DailyHourlyNotesSection } from './DailyHourlyNotesSection';
 import { fileToCompactDataUrl } from '../../services/imageAttachmentService';
-import { parseManualReferenceList } from '../../services/manualReferenceService';
+import {
+  parseManualReferenceList,
+  replaceManualReferenceList,
+} from '../../services/manualReferenceService';
 import {
   bootstrapReferenceLibrary,
   deleteReferenceLibraryItem,
@@ -522,6 +527,9 @@ export const TodayView: React.FC = () => {
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceLibraryItem[]>(() => loadReferenceLibraryCache());
   const [reflectionDrafts, setReflectionDrafts] = useState<Record<string, string>>({});
   const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress());
+  const [exerciseEditingTaskId, setExerciseEditingTaskId] = useState<string | null>(null);
+  const [exerciseDraft, setExerciseDraft] = useState<string[]>([]);
+  const [newExerciseName, setNewExerciseName] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -620,6 +628,93 @@ export const TodayView: React.FC = () => {
             ? 'Nhẹ'
             : 'Thường';
     const referenceLines = parseManualReferenceList(selectedTask.description);
+    const editingExercises = exerciseEditingTaskId === selectedTask.id;
+
+    const beginExerciseEdit = () => {
+      setExerciseEditingTaskId(selectedTask.id);
+      setExerciseDraft(referenceLines.map((reference) => reference.label));
+      setNewExerciseName('');
+    };
+
+    const cancelExerciseEdit = () => {
+      setExerciseEditingTaskId(null);
+      setExerciseDraft([]);
+      setNewExerciseName('');
+    };
+
+    const addExerciseDraft = () => {
+      const next = newExerciseName.trim();
+      if (!next) return;
+      setExerciseDraft((current) => [...current, next]);
+      setNewExerciseName('');
+    };
+
+    const moveExerciseDraft = (index: number, direction: -1 | 1) => {
+      setExerciseDraft((current) => {
+        const target = index + direction;
+        if (target < 0 || target >= current.length) return current;
+        const next = [...current];
+        [next[index], next[target]] = [next[target], next[index]];
+        return next;
+      });
+    };
+
+    const saveExercisePlan = async () => {
+      const cleaned = exerciseDraft.map((item) => item.trim()).filter(Boolean);
+      if (cleaned.length === 0) {
+        addToast('Buổi tập cần ít nhất một bài.', 'warning');
+        return;
+      }
+
+      const oldLabels = referenceLines.map((reference) => reference.label);
+      updateTask(selectedTask.id, {
+        description: replaceManualReferenceList(selectedTask.description, cleaned),
+      });
+
+      setExerciseProgress((current) => {
+        const next = { ...current };
+        oldLabels.forEach((oldLabel, index) => {
+          const newLabel = cleaned[index];
+          if (!newLabel) return;
+          const oldKey = getExerciseProgressKey(oldLabel);
+          const newKey = getExerciseProgressKey(newLabel);
+          if (oldKey !== newKey && current[oldKey] && !next[newKey]) next[newKey] = current[oldKey];
+        });
+        persistExerciseProgress(next);
+        return next;
+      });
+
+      const imageCopies = oldLabels.flatMap((oldLabel, index) => {
+        const newLabel = cleaned[index];
+        if (!newLabel || getExerciseProgressKey(oldLabel) === getExerciseProgressKey(newLabel)) return [];
+        const image = getReferenceLibraryItem(referenceLibrary, oldLabel);
+        if (!image || getReferenceLibraryItem(referenceLibrary, newLabel)) return [];
+        const copied = image.source === 'url'
+          ? makeReferenceLibraryItemFromUrl(newLabel, image.dataUrl)
+          : makeReferenceLibraryItem(newLabel, image.dataUrl, image.fileName);
+        setReferenceLibrary((current) => {
+          const next = upsertReferenceLibraryItem(current, copied);
+          saveReferenceLibraryCache(next);
+          return next;
+        });
+        return [saveReferenceLibraryItem(user?.uid, copied)];
+      });
+
+      if (imageCopies.length) {
+        try {
+          await Promise.all(imageCopies);
+        } catch (error) {
+          console.warn('Could not copy renamed exercise images:', error);
+          addToast('Đã lưu bài tập nhưng có ảnh tham khảo chưa đồng bộ.', 'warning');
+        }
+      }
+
+      setExerciseEditingTaskId(null);
+      setExerciseDraft([]);
+      setNewExerciseName('');
+      addToast('Đã cập nhật các bài trong buổi tập', 'success');
+    };
+
     const visibleNotes = getVisibleTaskNotes(selectedTask.notes);
     const reflectionDraft = reflectionDrafts[selectedTask.id] ?? selectedTask.reflection ?? '';
     const reflectionChanged = reflectionDraft !== (selectedTask.reflection || '');
@@ -779,79 +874,181 @@ export const TodayView: React.FC = () => {
             {selectedTask.description ? (
               referenceLines.length > 0 ? (
                 <div className="mt-5">
-                  <div className="mb-3">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Các bước / tham khảo</p>
-                  </div>
-                  <div className="space-y-2.5">
-                    {referenceLines.map((reference, index) => {
-                      const image = getReferenceLibraryItem(referenceLibrary, reference.label);
-                      const progress = exerciseProgress[getExerciseProgressKey(reference.label)];
-                      const currentEntry = progress?.latest?.date === today ? progress.latest : undefined;
-                      const previousEntry = progress?.latest?.date === today ? progress.previous : progress?.latest;
-                      const hasPrevious = Boolean(previousEntry?.weight || previousEntry?.reps);
-
-                      return (
-                        <div
-                          key={reference.id}
-                          className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/35 p-3"
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Bài tập trong buổi</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {editingExercises ? 'Đổi tên, thứ tự, thêm hoặc xóa ngay tại đây.' : 'Kg và reps lưu riêng theo từng ngày tập.'}
+                      </p>
+                    </div>
+                    {editingExercises ? (
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={cancelExerciseEdit}
+                          className="h-8 rounded-lg px-2.5 text-[10px] font-bold text-slate-500 hover:bg-slate-100"
                         >
-                          <ReferenceImagePicker
-                            label={reference.label}
-                            image={image}
-                            onPick={chooseReferenceImage}
-                            onLink={chooseReferenceImageUrl}
-                            onRemove={clearReferenceImage}
-                          />
-                          <span className="w-5 shrink-0 text-[11px] font-bold tabular-nums text-slate-400">
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveExercisePlan()}
+                          className="h-8 rounded-lg bg-indigo-600 px-3 text-[10px] font-bold text-white shadow-xs hover:bg-indigo-700"
+                        >
+                          Lưu
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={beginExerciseEdit}
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" /> Sửa bài
+                      </button>
+                    )}
+                  </div>
+
+                  {editingExercises ? (
+                    <div className="space-y-2.5">
+                      {exerciseDraft.map((label, index) => (
+                        <div key={`${selectedTask.id}-exercise-edit-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5">
+                          <span className="w-6 shrink-0 text-center text-[10px] font-bold tabular-nums text-slate-400">
                             {String(index + 1).padStart(2, '0')}
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="break-words text-sm font-semibold leading-5 text-slate-800">{reference.label}</p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <label className="relative">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  min="0"
-                                  step="0.5"
-                                  value={currentEntry?.weight ?? ''}
-                                  onChange={(event) => updateExerciseLog(reference.label, 'weight', event.target.value)}
-                                  placeholder="0"
-                                  aria-label={`Cân tạ cho ${reference.label}`}
-                                  className="h-8 w-[76px] rounded-lg border border-slate-200 bg-white px-2 pr-7 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                                />
-                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
-                                  kg
-                                </span>
-                              </label>
-                              <label className="relative">
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  min="0"
-                                  step="1"
-                                  value={currentEntry?.reps ?? ''}
-                                  onChange={(event) => updateExerciseLog(reference.label, 'reps', event.target.value)}
-                                  placeholder="0"
-                                  aria-label={`Số reps cho ${reference.label}`}
-                                  className="h-8 w-[82px] rounded-lg border border-slate-200 bg-white px-2 pr-9 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                                />
-                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
-                                  reps
-                                </span>
-                              </label>
-                              {hasPrevious ? (
-                                <span className="text-[10px] font-medium text-slate-400">
-                                  Trước: {previousEntry?.weight || '—'}kg × {previousEntry?.reps || '—'}
-                                </span>
-                              ) : null}
+                          <input
+                            value={label}
+                            onChange={(event) =>
+                              setExerciseDraft((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))
+                            }
+                            placeholder="Tên bài tập, ví dụ Bench press 3x10"
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                          />
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => moveExerciseDraft(index, -1)}
+                              className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-400 ring-1 ring-slate-200 disabled:opacity-25"
+                              aria-label="Đưa bài tập lên"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === exerciseDraft.length - 1}
+                              onClick={() => moveExerciseDraft(index, 1)}
+                              className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-400 ring-1 ring-slate-200 disabled:opacity-25"
+                              aria-label="Đưa bài tập xuống"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExerciseDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                              className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-400 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-500"
+                              aria-label="Xóa bài tập"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex gap-2">
+                        <input
+                          value={newExerciseName}
+                          onChange={(event) => setNewExerciseName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              addExerciseDraft();
+                            }
+                          }}
+                          placeholder="Thêm bài tập mới…"
+                          className="h-11 min-w-0 flex-1 rounded-xl border border-dashed border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={addExerciseDraft}
+                          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600"
+                          aria-label="Thêm bài tập"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {referenceLines.map((reference, index) => {
+                        const image = getReferenceLibraryItem(referenceLibrary, reference.label);
+                        const progress = exerciseProgress[getExerciseProgressKey(reference.label)];
+                        const currentEntry = progress?.latest?.date === today ? progress.latest : undefined;
+                        const previousEntry = progress?.latest?.date === today ? progress.previous : progress?.latest;
+                        const hasPrevious = Boolean(previousEntry?.weight || previousEntry?.reps);
+
+                        return (
+                          <div
+                            key={reference.id}
+                            className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/35 p-3"
+                          >
+                            <ReferenceImagePicker
+                              label={reference.label}
+                              image={image}
+                              onPick={chooseReferenceImage}
+                              onLink={chooseReferenceImageUrl}
+                              onRemove={clearReferenceImage}
+                            />
+                            <span className="w-5 shrink-0 text-[11px] font-bold tabular-nums text-slate-400">
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-sm font-semibold leading-5 text-slate-800">{reference.label}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <label className="relative">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min="0"
+                                    step="0.5"
+                                    value={currentEntry?.weight ?? ''}
+                                    onChange={(event) => updateExerciseLog(reference.label, 'weight', event.target.value)}
+                                    placeholder="0"
+                                    aria-label={`Cân tạ cho ${reference.label}`}
+                                    className="h-8 w-[76px] rounded-lg border border-slate-200 bg-white px-2 pr-7 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                                  />
+                                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                                    kg
+                                  </span>
+                                </label>
+                                <label className="relative">
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    step="1"
+                                    value={currentEntry?.reps ?? ''}
+                                    onChange={(event) => updateExerciseLog(reference.label, 'reps', event.target.value)}
+                                    placeholder="0"
+                                    aria-label={`Số reps cho ${reference.label}`}
+                                    className="h-8 w-[82px] rounded-lg border border-slate-200 bg-white px-2 pr-9 text-xs font-semibold tabular-nums text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                                  />
+                                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                                    reps
+                                  </span>
+                                </label>
+                                {hasPrevious ? (
+                                  <span className="text-[10px] font-medium text-slate-400">
+                                    Trước: {previousEntry?.weight || '—'}kg × {previousEntry?.reps || '—'}
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
-
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-slate-600">{selectedTask.description}</p>

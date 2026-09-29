@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,6 +14,7 @@ import {
   quickWorkoutTemplate,
   type QuickAction,
   type QuickActionDomain,
+  type QuickNutritionMeal,
 } from '../../services/quickActionService';
 
 interface QuickActionModalProps {
@@ -25,25 +26,58 @@ interface QuickActionModalProps {
 
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
 
+const mealLabels: Record<QuickNutritionMeal, string> = {
+  breakfast: 'Sáng',
+  lunch: 'Trưa',
+  dinner: 'Tối',
+  snack: 'Ăn nhẹ',
+};
+
+const guessMeal = (): QuickNutritionMeal => {
+  const hour = new Date().getHours();
+  if (hour < 10) return 'breakfast';
+  if (hour < 15) return 'lunch';
+  if (hour < 21) return 'dinner';
+  return 'snack';
+};
+
+const nutritionTextExample = `Bún chín 250g: ~275 kcal · P 5g · C 63g · F 0,5g
+Ức gà chín 52g: ~86 kcal · P 16g · C 0g · F 2g
+Thịt bò chín 74g: ~165 kcal · P 20g · C 0g · F 9g`;
+
+const workoutTextExample = `Lat Pulldown: 40kg · 10 reps · 3 sets
+Chest Press: 35kg · 12 reps · 3 sets`;
+
 export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   domain,
   date,
   onClose,
   onApply,
 }) => {
-  const template = domain === 'nutrition' ? quickNutritionTemplate(date) : quickWorkoutTemplate(date);
+  const jsonTemplate = domain === 'nutrition' ? quickNutritionTemplate(date) : quickWorkoutTemplate(date);
+  const textTemplate = domain === 'nutrition' ? nutritionTextExample : workoutTextExample;
+  const initialMeal = useMemo(() => guessMeal(), []);
   const [raw, setRaw] = useState('');
   const [busy, setBusy] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState<QuickNutritionMeal>(initialMeal);
   const parsed = useMemo(
-    () => raw.trim() ? parseQuickAction(raw, domain, date) : null,
-    [raw, domain, date],
+    () => raw.trim() ? parseQuickAction(raw, domain, date, initialMeal) : null,
+    [raw, domain, date, initialMeal],
   );
 
+  useEffect(() => {
+    if (parsed?.action?.type === 'nutrition') setSelectedMeal(actionForPreview.meal);
+  }, [raw]);
+
+  const actionForPreview = parsed?.action?.type === 'nutrition'
+    ? { ...parsed.action, meal: selectedMeal }
+    : parsed?.action || null;
+
   const apply = async () => {
-    if (!parsed?.action || parsed.errors.length) return;
+    if (!actionForPreview || parsed?.errors.length) return;
     setBusy(true);
     try {
-      await onApply(parsed.action);
+      await onApply(actionForPreview);
       onClose();
     } finally {
       setBusy(false);
@@ -68,7 +102,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
               {domain === 'nutrition' ? 'Nhập nhanh dinh dưỡng' : 'Nhập nhanh buổi tập'}
             </h2>
             <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
-              Dán form JSON từ ChatGPT/AI. App kiểm tra trước rồi mới lưu.
+              Dán thẳng câu trả lời ChatGPT/AI như bình thường. JSON vẫn dùng được nhưng không bắt buộc.
             </p>
           </div>
           <button
@@ -86,14 +120,14 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
                 <ClipboardPaste className="h-3.5 w-3.5 text-slate-400" />
-                Form cần lưu
+                Nội dung cần lưu
               </p>
               <button
                 type="button"
-                onClick={() => setRaw(template)}
+                onClick={() => setRaw(textTemplate)}
                 className="rounded-lg bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-600 ring-1 ring-slate-200"
               >
-                Điền mẫu
+                Điền mẫu text
               </button>
             </div>
             <textarea
@@ -102,9 +136,32 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
               onChange={(event) => setRaw(event.target.value)}
               rows={10}
               spellCheck={false}
-              placeholder={template}
+              placeholder={textTemplate}
               className="min-h-52 w-full resize-y rounded-xl border border-slate-200 bg-white p-3 font-mono text-[11px] leading-5 text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
             />
+            {domain === 'nutrition' ? (
+              <div className="mt-3">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Lưu vào bữa</p>
+                <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-white p-1 ring-1 ring-slate-200">
+                  {(Object.keys(mealLabels) as QuickNutritionMeal[]).map((meal) => (
+                    <button
+                      key={meal}
+                      type="button"
+                      onClick={() => setSelectedMeal(meal)}
+                      className={`h-9 rounded-lg text-[10px] font-bold transition ${
+                        selectedMeal === meal ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {mealLabels[meal]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[10px] font-semibold text-slate-400">Cần JSON? Xem mẫu kỹ thuật</summary>
+              <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-[9px] leading-4 text-slate-300">{jsonTemplate}</pre>
+            </details>
           </div>
 
           {parsed ? (
@@ -128,22 +185,22 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
                 </div>
               ) : null}
 
-              {parsed.action ? (
+              {actionForPreview ? (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3">
                   <div className="mb-3 flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                     <p className="text-[11px] font-bold text-emerald-800">Sẵn sàng lưu</p>
                   </div>
 
-                  {parsed.action.type === 'nutrition' ? (
+                  {actionForPreview?.type === 'nutrition' ? (
                     <>
                       <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold text-slate-500">
                         <UtensilsCrossed className="h-3.5 w-3.5" />
-                        {parsed.action.items.length} món · {parsed.action.meal}
-                        {parsed.action.date ? ` · ${parsed.action.date}` : ''}
+                        {actionForPreview.items.length} món · {actionForPreview.meal}
+                        {actionForPreview.date ? ` · ${actionForPreview.date}` : ''}
                       </div>
                       <div className="space-y-2">
-                        {parsed.action.items.map((item, index) => (
+                        {actionForPreview.items.map((item, index) => (
                           <div key={`${item.name}-${index}`} className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200/70">
                             <div className="flex items-center justify-between gap-3">
                               <p className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800">{item.name}</p>
@@ -161,11 +218,11 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
                     <>
                       <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold text-slate-500">
                         <Dumbbell className="h-3.5 w-3.5" />
-                        {parsed.action.exercises.length} bài
-                        {parsed.action.date ? ` · ${parsed.action.date}` : ''}
+                        {actionForPreview.exercises.length} bài
+                        {actionForPreview.date ? ` · ${actionForPreview.date}` : ''}
                       </div>
                       <div className="space-y-2">
-                        {parsed.action.exercises.map((exercise, index) => (
+                        {actionForPreview.exercises.map((exercise, index) => (
                           <div key={`${exercise.name}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200/70">
                             <p className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800">{exercise.name}</p>
                             <p className="shrink-0 text-[10px] font-semibold text-slate-500">
@@ -191,7 +248,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={busy || !parsed?.action || Boolean(parsed.errors.length)}
+            disabled={busy || !actionForPreview || Boolean(parsed?.errors.length)}
             onClick={() => void apply()}
             className="h-12 rounded-2xl bg-indigo-600 text-sm font-bold text-white shadow-xs disabled:bg-slate-200 disabled:text-slate-400"
           >

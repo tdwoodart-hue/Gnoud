@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.4';
+export const APP_VERSION = '0.8.5';
 export const APP_UPDATED_AT = '2026-09-29T11:36:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.8.5',
+    updatedAt: '2026-09-29T11:36:00+07:00',
+    title: 'Reader: chạm mép để lật trang',
+    changes: [
+      'Chạm vùng mép trái để quay lại trang trước.',
+      'Chạm vùng mép phải để sang trang tiếp theo.',
+      'Vuốt ngang vẫn hoạt động như cũ và được chống lật hai lần sau thao tác vuốt.',
+    ],
+  },
   {
     version: '0.8.4',
     updatedAt: '2026-09-29T11:36:00+07:00',

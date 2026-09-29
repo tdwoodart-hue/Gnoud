@@ -447,6 +447,79 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     };
   };
 
+  const startTouchDrag = (event: React.TouchEvent<HTMLElement>) => {
+    if (dragRef.current || (event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
+    const panel = panelRef.current;
+    const touch = event.touches[0];
+    if (!panel || !touch) return;
+
+    stopActiveDrag();
+
+    const rect = panel.getBoundingClientRect();
+    const targetWidth = Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.82)));
+    const targetHeight = Math.min(rect.height, Math.round(window.innerHeight * 0.68));
+    const initialX = position?.x ?? clamp(
+      touch.clientX - targetWidth / 2,
+      12,
+      Math.max(12, window.innerWidth - targetWidth - 12),
+    );
+    const initialY = position?.y ?? clamp(
+      rect.top,
+      12,
+      Math.max(12, window.innerHeight - targetHeight - 12),
+    );
+    const initialPosition = { x: initialX, y: initialY };
+
+    dragRef.current = {
+      pointerId: touch.identifier,
+      offsetX: touch.clientX - initialX,
+      offsetY: touch.clientY - initialY,
+    };
+    setPosition(initialPosition);
+    saveAssistantPosition(initialPosition);
+    setDragging(true);
+
+    const handleTouchMove = (touchEvent: TouchEvent) => {
+      const drag = dragRef.current;
+      const activePanel = panelRef.current;
+      if (!drag || !activePanel) return;
+      const activeTouch = Array.from(touchEvent.touches).find((item) => item.identifier === drag.pointerId);
+      if (!activeTouch) return;
+      if (touchEvent.cancelable) touchEvent.preventDefault();
+
+      const x = clamp(
+        activeTouch.clientX - drag.offsetX,
+        12,
+        Math.max(12, window.innerWidth - activePanel.offsetWidth - 12),
+      );
+      const y = clamp(
+        activeTouch.clientY - drag.offsetY,
+        12,
+        Math.max(12, window.innerHeight - activePanel.offsetHeight - 12),
+      );
+      const next = { x, y };
+      setPosition(next);
+      saveAssistantPosition(next);
+    };
+
+    const finishTouchDrag = (touchEvent: TouchEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const ended = Array.from(touchEvent.changedTouches).some((item) => item.identifier === drag.pointerId);
+      if (ended) stopActiveDrag();
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', finishTouchDrag);
+    window.addEventListener('touchcancel', finishTouchDrag);
+
+    dragCleanupRef.current = () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', finishTouchDrag);
+      window.removeEventListener('touchcancel', finishTouchDrag);
+    };
+  };
+
   const resetPosition = () => {
     stopActiveDrag();
     clearAssistantPosition();
@@ -486,6 +559,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
         >
           <div
             onPointerDown={startDrag}
+            onTouchStart={startTouchDrag}
             style={{ touchAction: 'none' }}
             className="cursor-grab select-none px-2 text-[11px] font-bold text-slate-700 active:cursor-grabbing"
           >
@@ -532,6 +606,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
       >
         <div
           onPointerDown={startDrag}
+          onTouchStart={startTouchDrag}
           style={{ touchAction: 'none' }}
           className={`flex h-9 shrink-0 cursor-grab items-center justify-center select-none bg-slate-50/80 ${
             dragging ? 'cursor-grabbing' : ''

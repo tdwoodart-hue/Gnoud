@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  BookOpen,
+  CalendarDays,
   CheckCircle2,
+  Clock3,
   Footprints,
+  Headphones,
   Layers,
   Scale,
   Target,
@@ -15,6 +19,7 @@ import {
   buildDailyTaskActivity,
   buildNutritionReport,
   buildPeriodComparison,
+  buildReadingReport,
   buildProjectReport,
   buildReportSummary,
   formatLocalDate,
@@ -22,6 +27,8 @@ import {
 } from '../../services/reportService';
 import { EmptyState } from '../common/EmptyState';
 import { PageHeader } from '../common/PageHeader';
+import { loadReaderLibrary, type ReaderBook } from '../../services/readerService';
+import { fetchCloudReaderBooks, mergeReaderLibraries } from '../../services/readerCloudService';
 
 const whole = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -34,6 +41,14 @@ const rangeLabels: Record<ReportRange, string> = {
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
 const shortDay = (date: string) => new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(new Date(`${date}T12:00:00`));
+
+const formatReadingTime = (seconds: number) => {
+  const minutes = Math.round(Math.max(0, seconds) / 60);
+  if (minutes < 60) return `${minutes} phút`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}g ${rest}p` : `${hours} giờ`;
+};
 
 const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, className = 'bg-indigo-500' }) => (
   <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -115,9 +130,10 @@ const NutritionCell: React.FC<{
 );
 
 export const ReportsView: React.FC = () => {
-  const { tasks, projects } = useApp();
+  const { tasks, projects, user } = useApp();
   const [range, setRange] = useState<ReportRange>('7d');
   const [nutrition, setNutrition] = useState<NutritionState>(() => loadNutritionState());
+  const [readerBooks, setReaderBooks] = useState<ReaderBook[]>(() => loadReaderLibrary(user?.uid));
   const today = formatLocalDate(new Date());
 
   useEffect(() => {
@@ -135,11 +151,40 @@ export const ReportsView: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      const local = loadReaderLibrary(user?.uid);
+      if (!disposed) setReaderBooks(local);
+      if (!user?.uid) return;
+      try {
+        const remote = await fetchCloudReaderBooks(user.uid);
+        if (!disposed) setReaderBooks(mergeReaderLibraries(local, remote));
+      } catch {
+        // Báo cáo vẫn dùng dữ liệu local nếu cloud tạm thời không truy cập được.
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    void refresh();
+    window.addEventListener('storage', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      disposed = true;
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user?.uid]);
+
   const summary = useMemo(() => buildReportSummary(tasks, range, today), [tasks, range, today]);
   const comparison = useMemo(() => buildPeriodComparison(tasks, range, today), [tasks, range, today]);
   const activity = useMemo(() => buildDailyTaskActivity(tasks, today, 7), [tasks, today]);
   const projectRows = useMemo(() => buildProjectReport(projects, tasks, range, today), [projects, tasks, range, today]);
   const nutritionReport = useMemo(() => buildNutritionReport(nutrition, range, today), [nutrition, range, today]);
+  const readingReport = useMemo(() => buildReadingReport(readerBooks, range, today), [readerBooks, range, today]);
 
   const calorieProgress = nutritionReport.averageCalories === null ? 0 : (nutritionReport.averageCalories / nutrition.profile.calorieTarget) * 100;
   const proteinProgress = nutritionReport.averageProtein === null ? 0 : (nutritionReport.averageProtein / nutrition.profile.proteinTarget) * 100;
@@ -231,6 +276,43 @@ export const ReportsView: React.FC = () => {
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-slate-300" /> Đã lên lịch</span>
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-indigo-500" /> Hoàn thành</span>
           </div>
+        </div>
+      </ReportSection>
+
+      <ReportSection
+        title="Đọc sách"
+        icon={BookOpen}
+        trailing={<span className="text-[10px] font-semibold text-slate-400">Tính từ v0.8.4</span>}
+      >
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          <StatCard
+            label="Thời gian đọc"
+            value={formatReadingTime(readingReport.readingSeconds)}
+            meta="Đọc chủ động"
+            icon={Clock3}
+            tone="border-indigo-200/70 bg-indigo-50 text-indigo-700"
+          />
+          <StatCard
+            label="Nghe sách"
+            value={formatReadingTime(readingReport.listeningSeconds)}
+            meta="TTS khi đang phát"
+            icon={Headphones}
+            tone="border-violet-200/70 bg-violet-50 text-violet-700"
+          />
+          <StatCard
+            label="Tổng với sách"
+            value={formatReadingTime(readingReport.totalSeconds)}
+            meta={readingReport.booksTouched ? `${readingReport.booksTouched} cuốn có hoạt động` : 'Chưa có dữ liệu'}
+            icon={BookOpen}
+            tone="border-sky-200/70 bg-sky-50 text-sky-700"
+          />
+          <StatCard
+            label="Ngày có đọc"
+            value={`${readingReport.activeDays}`}
+            meta={range === 'all' ? 'Toàn bộ dữ liệu' : `Trong ${range === '7d' ? '7' : '30'} ngày`}
+            icon={CalendarDays}
+            tone="border-emerald-200/70 bg-emerald-50 text-emerald-700"
+          />
         </div>
       </ReportSection>
 

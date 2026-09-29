@@ -146,6 +146,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function readerDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function readingLabel(book: ReaderBook): string {
   if (book.format === 'pdf') return 'PDF';
   const value = Math.round(clamp(book.overallProgress || 0, 0, 1) * 100);
@@ -245,10 +252,11 @@ export const ReaderView: React.FC = () => {
   const lastTtsPinWriteRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
-  const scrollTouchEdgeRef = useRef<'top' | 'bottom' | null>(null);
-  const chapterEdgeWheelAtRef = useRef(0);
+  const pendingPageScrollRef = useRef<number | null>(null);
   const pageTurnTimerRef = useRef<number | null>(null);
   const cloudMetadataTimerRef = useRef<number | null>(null);
+  const readerActivityAtRef = useRef(Date.now());
+  const readerTimePendingRef = useRef({ reading: 0, listening: 0 });
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -542,8 +550,9 @@ export const ReaderView: React.FC = () => {
     const fontFactor = Math.pow(19 / Math.max(15, activeBook.fontSize), 1.72);
     const lineFactor = 1.8 / Math.max(1.4, activeBook.lineHeight);
     const widthSettingFactor = activeBook.contentWidth === 'narrow' ? 0.88 : activeBook.contentWidth === 'wide' ? 1.1 : 1;
-    return Math.round(clamp(470 * widthFactor * heightFactor * fontFactor * lineFactor * widthSettingFactor, 220, 1650));
-  }, [activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, readerViewport.height, readerViewport.width]);
+    const modeFactor = readingMode === 'scroll' ? 2.15 : 1;
+    return Math.round(clamp(470 * widthFactor * heightFactor * fontFactor * lineFactor * widthSettingFactor * modeFactor, 220, 3200));
+  }, [activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, readerViewport.height, readerViewport.width, readingMode]);
 
   const readerPages = useMemo(
     () => activeBook?.format === 'pdf' ? [''] : paginateBookContent(readerText, pageCharLimit),
@@ -607,34 +616,27 @@ export const ReaderView: React.FC = () => {
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
     const count = Math.max(1, readerPages.length);
-    const savedRatio = clamp(activeBook.scrollProgress || 0, 0, 1);
-    const page = count <= 1 ? 1 : Math.round(savedRatio * (count - 1)) + 1;
+    const page = clamp((activeBook.currentPage || 0) + 1, 1, count);
     setVisualPageCount(count);
-    setVisualPage(clamp(page, 1, count));
-    setLiveScrollProgress(savedRatio);
+    setVisualPage(page);
+    setLiveScrollProgress(clamp(activeBook.scrollProgress || 0, 0, 1));
     setLastPinnedAt(activeBook.lastPositionAt || null);
-  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerPages.length]);
+    pendingPageScrollRef.current = readingMode === 'scroll' ? clamp(activeBook.pageScrollProgress || 0, 0, 1) : 0;
+  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerPages.length, readingMode]);
 
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return undefined;
     const element = readingScrollRef.current;
     if (!element) return undefined;
+    const requested = pendingPageScrollRef.current;
+    if (requested === null) return undefined;
 
     let secondFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-        const savedRatio = clamp(activeBook.scrollProgress || 0, 0, 1);
-        element.scrollTop = maxScroll * savedRatio;
-        const pages = Array.from(element.querySelectorAll<HTMLElement>('[data-reader-page]'));
-        const center = element.scrollTop + element.clientHeight * 0.45;
-        let pageIndex = 0;
-        pages.forEach((page, index) => {
-          if (page.offsetTop <= center) pageIndex = index;
-        });
-        setLiveScrollProgress(savedRatio);
-        setVisualPageCount(Math.max(1, pages.length || readerPages.length));
-        setVisualPage(Math.min(Math.max(1, pages.length || readerPages.length), pageIndex + 1));
+        element.scrollTop = maxScroll * clamp(requested, 0, 1);
+        pendingPageScrollRef.current = null;
       });
     });
 
@@ -642,18 +644,7 @@ export const ReaderView: React.FC = () => {
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
     };
-  }, [
-    readingOpen,
-    activeBook?.id,
-    activeBook?.currentChapter,
-    activeBook?.format,
-    activeBook?.fontSize,
-    activeBook?.lineHeight,
-    activeBook?.fontFamily,
-    activeBook?.contentWidth,
-    readingMode,
-    readerText,
-  ]);
+  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readingMode, visualPage, visiblePageText]);
 
   useEffect(() => {
     if (!readingOpen) return undefined;
@@ -709,10 +700,10 @@ export const ReaderView: React.FC = () => {
   }, [readingOpen, activeBook?.format, readingMode, visualPage, readerPages.length, chapterIndex, epubChapters.length, activeBook?.pageTransition]);
 
   useEffect(() => {
-    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || ttsOpen || activeBook?.format === 'pdf') return undefined;
+    if (!readingOpen || !controlsVisible || settingsOpen || tocOpen || ttsOpen) return undefined;
     const timer = window.setTimeout(() => setControlsVisible(false), 4200);
     return () => window.clearTimeout(timer);
-  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen, activeBook?.format]);
+  }, [readingOpen, controlsVisible, settingsOpen, tocOpen, ttsOpen]);
 
   const supportsDeviceTts = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
@@ -772,13 +763,18 @@ export const ReaderView: React.FC = () => {
     );
     const nowMs = Date.now();
     const isFinal = chunkIndex >= chunkCount;
-    const page = Math.max(1, Math.min(visualPageCount, Math.floor(ratio * Math.max(1, visualPageCount - 1)) + 1));
-    setVisualPage(page);
-    if (readingMode === 'scroll') {
+    const pageCount = Math.max(1, readerPages.length);
+    const pagePosition = clamp(ratio, 0, 1) * pageCount;
+    const page = ratio >= 1 ? pageCount : Math.min(pageCount, Math.floor(pagePosition) + 1);
+    const withinPage = ratio >= 1 ? 1 : clamp(pagePosition - (page - 1), 0, 1);
+    if (page !== visualPage) {
+      pendingPageScrollRef.current = withinPage;
+      setVisualPage(page);
+    } else if (readingMode === 'scroll') {
       const element = readingScrollRef.current;
       if (element) {
         const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-        element.scrollTop = maxScroll * ratio;
+        element.scrollTop = maxScroll * withinPage;
       }
     }
     if (!isFinal && nowMs - lastTtsPinWriteRef.current < 700) return;
@@ -790,6 +786,7 @@ export const ReaderView: React.FC = () => {
       overallProgress,
       listeningProgress: overallProgress,
       currentPage: page - 1,
+      pageScrollProgress: withinPage,
       lastPositionAt: now,
       lastOpenedAt: now,
     });
@@ -1000,11 +997,66 @@ export const ReaderView: React.FC = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
 
+  const flushReaderTime = () => {
+    const pending = readerTimePendingRef.current;
+    if (!activeBookId || (pending.reading <= 0 && pending.listening <= 0)) return;
+    const date = readerDateKey();
+    const reading = Math.round(pending.reading);
+    const listening = Math.round(pending.listening);
+    readerTimePendingRef.current = { reading: 0, listening: 0 };
+    setBooks((previous) => previous.map((book) => {
+      if (book.id !== activeBookId) return book;
+      return {
+        ...book,
+        readingSecondsByDate: reading > 0
+          ? { ...book.readingSecondsByDate, [date]: (book.readingSecondsByDate?.[date] || 0) + reading }
+          : book.readingSecondsByDate,
+        listeningSecondsByDate: listening > 0
+          ? { ...book.listeningSecondsByDate, [date]: (book.listeningSecondsByDate?.[date] || 0) + listening }
+          : book.listeningSecondsByDate,
+        updatedAt: new Date().toISOString(),
+      };
+    }));
+  };
+
+  useEffect(() => {
+    if (!readingOpen || !activeBookId) return undefined;
+    let lastTick = Date.now();
+    readerActivityAtRef.current = lastTick;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const delta = clamp((now - lastTick) / 1000, 0, 6);
+      lastTick = now;
+      if (document.visibilityState !== 'visible') return;
+      if (ttsStatus === 'playing') {
+        readerTimePendingRef.current.listening += delta;
+      } else if (now - readerActivityAtRef.current <= 180_000) {
+        readerTimePendingRef.current.reading += delta;
+      }
+      if (readerTimePendingRef.current.reading + readerTimePendingRef.current.listening >= 30) flushReaderTime();
+    }, 5000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushReaderTime();
+      else {
+        lastTick = Date.now();
+        readerActivityAtRef.current = Date.now();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flushReaderTime();
+    };
+  }, [readingOpen, activeBookId, ttsStatus]);
+
   const openBook = (id: string) => {
     stopSpeech();
+    readerActivityAtRef.current = Date.now();
     setActiveBookId(id);
     setReadingOpen(true);
-    setControlsVisible(true);
+    setControlsVisible(false);
     setSettingsOpen(false);
     setTocOpen(false);
     setTtsOpen(false);
@@ -1133,18 +1185,12 @@ export const ReaderView: React.FC = () => {
   const getScrollMetrics = () => {
     const element = readingScrollRef.current;
     if (!element) return null;
-    const viewportHeight = Math.max(1, element.clientHeight);
-    const maxScroll = Math.max(0, element.scrollHeight - viewportHeight);
-    const ratio = maxScroll <= 0 ? 0 : clamp(element.scrollTop / maxScroll, 0, 1);
-    const pageElements = Array.from(element.querySelectorAll<HTMLElement>('[data-reader-page]'));
-    const pageCount = Math.max(1, pageElements.length || readerPages.length);
-    const focusLine = element.scrollTop + viewportHeight * 0.45;
-    let pageIndex = 0;
-    pageElements.forEach((page, index) => {
-      if (page.offsetTop <= focusLine) pageIndex = index;
-    });
-    const page = Math.min(pageCount, Math.max(1, pageIndex + 1));
-    return { ratio, page, pageCount };
+    const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
+    const withinPage = maxScroll <= 0 ? 0 : clamp(element.scrollTop / maxScroll, 0, 1);
+    const pageCount = Math.max(1, readerPages.length);
+    const page = clamp(visualPage, 1, pageCount);
+    const chapterRatio = clamp(((page - 1) + withinPage) / pageCount, 0, 1);
+    return { withinPage, chapterRatio, page, pageCount };
   };
 
   const persistCurrentReadingPosition = (pageOverride?: number) => {
@@ -1157,16 +1203,17 @@ export const ReaderView: React.FC = () => {
         activeBook.format,
         chapterIndex,
         epubChapters.length || activeBook.chapterCount,
-        metrics.ratio,
+        metrics.chapterRatio,
       );
       const now = new Date().toISOString();
-      setLiveScrollProgress(metrics.ratio);
+      setLiveScrollProgress(metrics.chapterRatio);
       setVisualPageCount(metrics.pageCount);
       setVisualPage(metrics.page);
       setLastPinnedAt(now);
       updateBook(activeBook.id, {
         currentPage: metrics.page - 1,
-        scrollProgress: metrics.ratio,
+        pageScrollProgress: metrics.withinPage,
+        scrollProgress: metrics.chapterRatio,
         overallProgress,
         lastPositionAt: now,
         lastOpenedAt: now,
@@ -1201,7 +1248,8 @@ export const ReaderView: React.FC = () => {
     if (!activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return;
     const metrics = getScrollMetrics();
     if (!metrics) return;
-    setLiveScrollProgress(metrics.ratio);
+    readerActivityAtRef.current = Date.now();
+    setLiveScrollProgress(metrics.chapterRatio);
     setVisualPageCount(metrics.pageCount);
     setVisualPage(metrics.page);
 
@@ -1211,13 +1259,14 @@ export const ReaderView: React.FC = () => {
         activeBook.format,
         chapterIndex,
         epubChapters.length || activeBook.chapterCount,
-        metrics.ratio,
+        metrics.chapterRatio,
       );
       const now = new Date().toISOString();
       setLastPinnedAt(now);
       updateBook(activeBook.id, {
         currentPage: metrics.page - 1,
-        scrollProgress: metrics.ratio,
+        pageScrollProgress: metrics.withinPage,
+        scrollProgress: metrics.chapterRatio,
         overallProgress,
         lastPositionAt: now,
         lastOpenedAt: now,
@@ -1243,14 +1292,20 @@ export const ReaderView: React.FC = () => {
     if (!activeBook || activeBook.format !== 'epub' || epubChapters.length === 0) return;
     const target = clamp(nextIndex, 0, epubChapters.length - 1);
     stopSpeech();
+    readerActivityAtRef.current = Date.now();
     const ratio = edge === 'end' ? 1 : 0;
+    const targetPageCount = Math.max(1, epubPageCounts[target] || 1);
+    const targetPage = edge === 'end' ? targetPageCount : 1;
+    pendingPageScrollRef.current = edge === 'end' ? 1 : 0;
     setLiveScrollProgress(ratio);
-    setVisualPage(edge === 'end' ? Math.max(1, visualPageCount) : 1);
+    setVisualPage(targetPage);
+    setVisualPageCount(targetPageCount);
     const now = new Date().toISOString();
     setLastPinnedAt(now);
     updateBook(activeBook.id, {
       currentChapter: target,
-      currentPage: 0,
+      currentPage: targetPage - 1,
+      pageScrollProgress: edge === 'end' ? 1 : 0,
       scrollProgress: ratio,
       overallProgress: calculateReaderProgress('epub', target, epubChapters.length, ratio),
       chapterCount: epubChapters.length,
@@ -1259,7 +1314,7 @@ export const ReaderView: React.FC = () => {
     });
     setTocOpen(false);
     setTtsOpen(false);
-    setControlsVisible(true);
+    setControlsVisible(false);
   };
 
   const commitPage = (page: number) => {
@@ -1268,6 +1323,53 @@ export const ReaderView: React.FC = () => {
     setVisualPageCount(count);
     setVisualPage(nextPage);
     persistCurrentReadingPosition(nextPage);
+  };
+
+  const stepScrollPage = (direction: -1 | 1) => {
+    if (!activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return;
+    const count = Math.max(1, readerPages.length);
+    const target = visualPage + direction;
+    readerActivityAtRef.current = Date.now();
+
+    if (target >= 1 && target <= count) {
+      const edgeScroll = direction > 0 ? 0 : 1;
+      const chapterRatio = clamp(((target - 1) + edgeScroll) / count, 0, 1);
+      pendingPageScrollRef.current = edgeScroll;
+      setVisualPage(target);
+      setVisualPageCount(count);
+      setLiveScrollProgress(chapterRatio);
+      const now = new Date().toISOString();
+      setLastPinnedAt(now);
+      updateBook(activeBook.id, {
+        currentPage: target - 1,
+        pageScrollProgress: edgeScroll,
+        scrollProgress: chapterRatio,
+        overallProgress: calculateReaderProgress(
+          activeBook.format,
+          chapterIndex,
+          epubChapters.length || activeBook.chapterCount,
+          chapterRatio,
+        ),
+        lastPositionAt: now,
+        lastOpenedAt: now,
+      });
+      setPageTurnFx(direction > 0 ? 'next' : 'prev');
+      if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
+      return;
+    }
+
+    if (direction > 0 && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
+      setPageTurnFx('next');
+      if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
+      changeChapter(chapterIndex + 1, 'start');
+    } else if (direction < 0 && activeBook.format === 'epub' && chapterIndex > 0) {
+      setPageTurnFx('prev');
+      if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+      pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
+      changeChapter(chapterIndex - 1, 'end');
+    }
   };
 
   const stepViewport = (direction: -1 | 1) => {
@@ -1296,18 +1398,10 @@ export const ReaderView: React.FC = () => {
   };
 
   const handlePageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    readerActivityAtRef.current = Date.now();
     const touch = event.touches[0];
     touchStartXRef.current = touch?.clientX ?? null;
     touchStartYRef.current = touch?.clientY ?? null;
-    scrollTouchEdgeRef.current = null;
-
-    if (readingMode === 'scroll') {
-      const element = readingScrollRef.current;
-      if (!element) return;
-      const atTop = element.scrollTop <= 4;
-      const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 4;
-      scrollTouchEdgeRef.current = atTop ? 'top' : atBottom ? 'bottom' : null;
-    }
   };
 
   const handlePageTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
@@ -1315,55 +1409,13 @@ export const ReaderView: React.FC = () => {
     const touch = event.changedTouches[0];
     const dx = (touch?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
     const dy = (touch?.clientY ?? touchStartYRef.current) - touchStartYRef.current;
-    const startEdge = scrollTouchEdgeRef.current;
     touchStartXRef.current = null;
     touchStartYRef.current = null;
-    scrollTouchEdgeRef.current = null;
+    readerActivityAtRef.current = Date.now();
 
-    if (readingMode === 'scroll') {
-      if (Math.abs(dy) < 48 || Math.abs(dy) < Math.abs(dx) * 1.15) return;
-      if (startEdge === 'bottom' && dy < 0 && activeBook?.format === 'epub' && chapterIndex < epubChapters.length - 1) {
-        changeChapter(chapterIndex + 1, 'start');
-      } else if (startEdge === 'top' && dy > 0 && activeBook?.format === 'epub' && chapterIndex > 0) {
-        changeChapter(chapterIndex - 1, 'end');
-      }
-      return;
-    }
-
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.15) return;
-    stepViewport(dx < 0 ? 1 : -1);
-  };
-
-  const handleReadingWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (readingMode !== 'scroll' || !activeBook || activeBook.format !== 'epub' || Math.abs(event.deltaY) < 20) return;
-    const element = readingScrollRef.current;
-    if (!element) return;
-    const now = Date.now();
-    if (now - chapterEdgeWheelAtRef.current < 600) return;
-    const atTop = element.scrollTop <= 2;
-    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 2;
-    if (event.deltaY > 0 && atBottom && chapterIndex < epubChapters.length - 1) {
-      chapterEdgeWheelAtRef.current = now;
-      changeChapter(chapterIndex + 1, 'start');
-    } else if (event.deltaY < 0 && atTop && chapterIndex > 0) {
-      chapterEdgeWheelAtRef.current = now;
-      changeChapter(chapterIndex - 1, 'end');
-    }
-  };
-
-  const handleReadingSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    if (target.closest('button, input, select, textarea, a')) return;
-    if (!activeBook || activeBook.format === 'pdf') return;
-    if (readingMode === 'scroll') {
-      setControlsVisible((value) => !value);
-      return;
-    }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / Math.max(1, rect.width);
-    if (ratio < 0.18) stepViewport(-1);
-    else if (ratio > 0.82) stepViewport(1);
-    else setControlsVisible((value) => !value);
+    if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    if (readingMode === 'scroll') stepScrollPage(dx < 0 ? 1 : -1);
+    else stepViewport(dx < 0 ? 1 : -1);
   };
 
   const toggleBrowserFullscreen = async () => {
@@ -1395,6 +1447,7 @@ export const ReaderView: React.FC = () => {
       pageTurnTimerRef.current = null;
     }
     persistCurrentReadingPosition();
+    flushReaderTime();
     stopSpeech();
     setReadingOpen(false);
     setSettingsOpen(false);
@@ -1407,7 +1460,7 @@ export const ReaderView: React.FC = () => {
     <div className={`fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden ${themeStyles[activeBook.theme].shell}`}>
       <div
         className="relative flex min-h-0 flex-1 overflow-hidden"
-        onClick={handleReadingSurfaceClick}
+        onPointerDown={() => { readerActivityAtRef.current = Date.now(); }}
       >
         {binaryLoading ? (
           <div className="grid flex-1 place-items-center">
@@ -1435,66 +1488,41 @@ export const ReaderView: React.FC = () => {
           <div
             ref={readingScrollRef}
             onScroll={handleReadingScroll}
-            onWheel={handleReadingWheel}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
             className={`relative h-full w-full ${readingMode === 'scroll' ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden'}`}
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {readingMode === 'scroll' ? (
-              <div className="mx-auto w-full">
-                {readerPages.map((pageText, pageIndex) => {
-                  const paragraphs = pageText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
-                  const globalPage = Math.min(bookPageCount, bookPageOffset + pageIndex + 1);
-                  const isLastPage = pageIndex === readerPages.length - 1;
-                  return (
-                    <section
-                      key={`${activeBook.id}-${chapterIndex}-scroll-${pageIndex}-${pageCharLimit}`}
-                      data-reader-page={pageIndex + 1}
-                      className={`reader-scroll-page mx-auto box-border flex w-full flex-col border-b border-current/10 px-7 pb-20 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]}`}
+              <article
+                key={`${activeBook.id}-${chapterIndex}-hybrid-${visualPage}-${pageCharLimit}`}
+                className={`reader-page mx-auto min-h-full px-7 pb-20 pt-20 sm:px-10 ${widthClasses[activeBook.contentWidth]} ${pageTurnFx === 'next' ? 'reader-page-slide-next' : pageTurnFx === 'prev' ? 'reader-page-slide-prev' : ''}`}
+                style={{
+                  fontFamily: fontFamilies[activeBook.fontFamily],
+                  fontSize: `${activeBook.fontSize}px`,
+                  lineHeight: activeBook.lineHeight,
+                }}
+              >
+                {activeBook.format === 'epub' && activeChapter?.title && visualPage === 1 ? (
+                  <h1 className="mb-7 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
+                ) : null}
+                <div lang="vi" className="[text-wrap:pretty]">
+                  {visiblePageParagraphs.map((paragraph, index) => (
+                    <p
+                      key={`${visualPage}-${index}-${paragraph.slice(0, 18)}`}
+                      className="mb-[0.95em] last:mb-0"
                       style={{
-                        minHeight: `${Math.max(520, readerViewport.height)}px`,
-                        fontFamily: fontFamilies[activeBook.fontFamily],
-                        fontSize: `${activeBook.fontSize}px`,
-                        lineHeight: activeBook.lineHeight,
+                        textAlign: activeBook.textAlign,
+                        textJustify: 'inter-word',
+                        hyphens: 'auto',
+                        wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
                       }}
                     >
-                      {activeBook.format === 'epub' && activeChapter?.title && pageIndex === 0 ? (
-                        <h1 className="mb-7 text-[1.45em] font-bold leading-tight tracking-[-0.02em]">{activeChapter.title}</h1>
-                      ) : null}
-                      <div lang="vi" className="flex-1 [text-wrap:pretty]">
-                        {paragraphs.map((paragraph, index) => (
-                          <p
-                            key={`${pageIndex}-${index}-${paragraph.slice(0, 18)}`}
-                            className="mb-[0.95em] last:mb-0"
-                            style={{
-                              textAlign: activeBook.textAlign,
-                              textJustify: 'inter-word',
-                              hyphens: 'auto',
-                              wordSpacing: activeBook.textAlign === 'justify' ? '0.015em' : undefined,
-                            }}
-                          >
-                            {paragraph}
-                          </p>
-                        ))}
-                      </div>
-                      <div className={`pointer-events-none mt-8 flex items-end justify-between gap-3 pb-2 text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
-                        <span>
-                          {activeBook.format === 'epub'
-                            ? `Chương ${chapterIndex + 1}/${Math.max(1, epubChapters.length)}`
-                            : 'Sách'}
-                        </span>
-                        <span>Trang {globalPage}/{bookPageCount}</span>
-                      </div>
-                      {isLastPage && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1 ? (
-                        <p className={`pointer-events-none mt-2 text-center text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
-                          Hết chương · vuốt tiếp để sang chương {chapterIndex + 2}
-                        </p>
-                      ) : null}
-                    </section>
-                  );
-                })}
-              </div>
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </article>
             ) : (
               <>
                 <article
@@ -1528,10 +1556,6 @@ export const ReaderView: React.FC = () => {
                         </p>
                       ))}
                     </div>
-                  </div>
-                  <div className={`pointer-events-none mt-3 flex items-center justify-between text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
-                    <span>{activeBook.format === 'epub' ? `Chương ${chapterIndex + 1}` : 'Sách'}</span>
-                    <span>{bookVisualPage}/{bookPageCount}</span>
                   </div>
                 </article>
                 <div className="pointer-events-none absolute inset-y-20 left-0 w-5 bg-gradient-to-r from-black/[0.035] to-transparent" />
@@ -1661,14 +1685,20 @@ export const ReaderView: React.FC = () => {
           </>
         )}
 
-        {!controlsVisible && activeBook.format !== 'pdf' && (
+        {!controlsVisible && (
           <>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1 bg-black/5 dark:bg-white/5">
-              <div className="h-full bg-indigo-500/80" style={{ width: `${progress}%` }} />
-            </div>
-            <div className={`pointer-events-none absolute bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 rounded-full border px-3 py-1.5 text-[10px] font-bold shadow-sm backdrop-blur-md ${themeStyles[activeBook.theme].panel}`}>
-              Trang {bookVisualPage}/{bookPageCount} · {progress}%
-            </div>
+            <button
+              type="button"
+              aria-label="Mở thanh công cụ phía trên"
+              onClick={() => { readerActivityAtRef.current = Date.now(); setControlsVisible(true); }}
+              className="absolute inset-x-0 top-0 z-20 h-[max(54px,env(safe-area-inset-top))] bg-transparent"
+            />
+            <button
+              type="button"
+              aria-label="Mở thanh công cụ phía dưới"
+              onClick={() => { readerActivityAtRef.current = Date.now(); setControlsVisible(true); }}
+              className="absolute inset-x-0 bottom-0 z-20 h-[max(62px,env(safe-area-inset-bottom))] bg-transparent"
+            />
           </>
         )}
 
@@ -1691,7 +1721,7 @@ export const ReaderView: React.FC = () => {
                   <div>
                     <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Cách đọc</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {([['scroll', 'Cuộn theo trang'], ['paged', 'Lật ngang']] as Array<[ReaderReadingMode, string]>).map(([id, label]) => (
+                      {([['scroll', 'Cuộn trong trang'], ['paged', 'Lật ngang']] as Array<[ReaderReadingMode, string]>).map(([id, label]) => (
                         <button
                           key={id}
                           type="button"
@@ -1702,7 +1732,7 @@ export const ReaderView: React.FC = () => {
                         </button>
                       ))}
                     </div>
-                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Cuộn theo trang: vẫn có Trang x/y, vuốt lên/xuống qua từng trang; tới cuối chương, vuốt tiếp để sang chương mới. Lật ngang dùng trái/phải.</p>
+                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Cuộn trong trang: vuốt lên/xuống chỉ trong trang hiện tại; muốn sang trang thì vuốt ngang trái/phải. Khi thanh công cụ ẩn, màn hình chỉ còn nội dung sách.</p>
                   </div>
 
                   <div>

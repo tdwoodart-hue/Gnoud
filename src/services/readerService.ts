@@ -20,6 +20,7 @@ export interface ReaderBook {
   fileSize?: number;
   currentChapter: number;
   currentPage: number;
+  pageScrollProgress: number;
   scrollProgress: number;
   overallProgress: number;
   chapterCount?: number;
@@ -38,6 +39,8 @@ export interface ReaderBook {
   ttsOnlineVoiceId?: string;
   ttsOnlineProvider?: ReaderTtsProvider;
   listeningProgress: number;
+  readingSecondsByDate: Record<string, number>;
+  listeningSecondsByDate: Record<string, number>;
   cloudFilePath?: string;
   cloudCoverPath?: string;
   cloudSyncedAt?: string;
@@ -194,6 +197,7 @@ export function createReaderBook(input: {
     fileSize: input.fileSize,
     currentChapter: 0,
     currentPage: 0,
+    pageScrollProgress: 0,
     scrollProgress: 0,
     overallProgress: 0,
     chapterCount: undefined,
@@ -212,12 +216,26 @@ export function createReaderBook(input: {
     ttsOnlineVoiceId: 'vi-VN-HoaiMyNeural',
     ttsOnlineProvider: 'azure',
     listeningProgress: 0,
+    readingSecondsByDate: {},
+    listeningSecondsByDate: {},
     lastPositionAt: undefined,
     theme: 'paper',
     addedAt: now,
     updatedAt: now,
     lastOpenedAt: now,
   };
+}
+
+function normalizeSecondsByDate(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, number> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([date, seconds]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const numeric = Number(seconds);
+    if (!Number.isFinite(numeric) || numeric <= 0) return;
+    result[date] = Math.round(numeric);
+  });
+  return result;
 }
 
 export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
@@ -248,6 +266,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           fileSize: typeof book.fileSize === 'number' ? book.fileSize : undefined,
           currentChapter: Math.max(0, Number(book.currentChapter) || 0),
           currentPage: Math.max(0, Number(book.currentPage) || 0),
+          pageScrollProgress: Math.min(1, Math.max(0, Number(book.pageScrollProgress) || 0)),
           scrollProgress: Math.min(1, Math.max(0, Number(book.scrollProgress) || 0)),
           overallProgress: Math.min(1, Math.max(0, Number(book.overallProgress) || 0)),
           chapterCount: typeof book.chapterCount === 'number' && book.chapterCount > 0 ? Math.round(book.chapterCount) : undefined,
@@ -266,6 +285,8 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           ttsOnlineVoiceId: typeof book.ttsOnlineVoiceId === 'string' ? book.ttsOnlineVoiceId : 'vi-VN-HoaiMyNeural',
           ttsOnlineProvider: book.ttsOnlineProvider === 'google' ? 'google' : 'azure',
           listeningProgress: Math.min(1, Math.max(0, Number(book.listeningProgress) || 0)),
+          readingSecondsByDate: normalizeSecondsByDate(book.readingSecondsByDate),
+          listeningSecondsByDate: normalizeSecondsByDate(book.listeningSecondsByDate),
           cloudFilePath: typeof book.cloudFilePath === 'string' ? book.cloudFilePath : undefined,
           cloudCoverPath: typeof book.cloudCoverPath === 'string' ? book.cloudCoverPath : undefined,
           cloudSyncedAt: typeof book.cloudSyncedAt === 'string' ? book.cloudSyncedAt : undefined,

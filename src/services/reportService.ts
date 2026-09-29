@@ -1,5 +1,6 @@
 import type { Project, Task } from '../types';
 import type { NutritionState } from './nutritionService';
+import type { ReaderBook } from './readerService';
 
 export type ReportRange = '7d' | '30d' | 'all';
 
@@ -49,6 +50,14 @@ export interface NutritionReport {
   stepLoggedDays: number;
   latestWeightKg: number | null;
   weightChangeKg: number | null;
+}
+
+export interface ReadingReport {
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  activeDays: number;
+  booksTouched: number;
 }
 
 export function formatLocalDate(date: Date): string {
@@ -217,5 +226,43 @@ export function buildNutritionReport(nutrition: NutritionState, range: ReportRan
     stepLoggedDays: stepMetrics.length,
     latestWeightKg,
     weightChangeKg,
+  };
+}
+
+export function buildReadingReport(books: ReaderBook[], range: ReportRange, today: string): ReadingReport {
+  const start = getReportStart(range, today);
+  const inRange = (date: string) => (!start || date >= start) && date <= today;
+  const activeDates = new Set<string>();
+  let readingSeconds = 0;
+  let listeningSeconds = 0;
+  let booksTouched = 0;
+
+  books.forEach((book) => {
+    let bookSeconds = 0;
+    Object.entries(book.readingSecondsByDate || {}).forEach(([date, seconds]) => {
+      if (!inRange(date)) return;
+      const value = Math.max(0, Number(seconds) || 0);
+      readingSeconds += value;
+      bookSeconds += value;
+      if (value > 0) activeDates.add(date);
+    });
+    Object.entries(book.listeningSecondsByDate || {}).forEach(([date, seconds]) => {
+      if (!inRange(date)) return;
+      const value = Math.max(0, Number(seconds) || 0);
+      listeningSeconds += value;
+      bookSeconds += value;
+      if (value > 0) activeDates.add(date);
+    });
+    if (bookSeconds > 0) booksTouched += 1;
+  });
+
+  readingSeconds = Math.round(readingSeconds);
+  listeningSeconds = Math.round(listeningSeconds);
+  return {
+    readingSeconds,
+    listeningSeconds,
+    totalSeconds: readingSeconds + listeningSeconds,
+    activeDays: activeDates.size,
+    booksTouched,
   };
 }

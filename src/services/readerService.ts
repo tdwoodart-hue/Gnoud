@@ -4,6 +4,7 @@ export type ReaderFont = 'book' | 'serif' | 'sans';
 export type ReaderWidth = 'narrow' | 'medium' | 'wide';
 export type ReaderTextAlign = 'left' | 'justify';
 export type ReaderPageTransition = 'none' | 'slide';
+export type ReaderReadingMode = 'scroll' | 'paged';
 export type ReaderTtsMode = 'online' | 'device';
 export type ReaderTtsProvider = 'azure' | 'google';
 
@@ -28,6 +29,7 @@ export interface ReaderBook {
   contentWidth: ReaderWidth;
   textAlign: ReaderTextAlign;
   pageTransition: ReaderPageTransition;
+  readingMode: ReaderReadingMode;
   ttsRate: number;
   ttsPitch: number;
   ttsCleanText: boolean;
@@ -201,6 +203,7 @@ export function createReaderBook(input: {
     contentWidth: 'medium',
     textAlign: 'justify',
     pageTransition: 'none',
+    readingMode: 'scroll',
     ttsRate: 0.95,
     ttsPitch: 1,
     ttsCleanText: true,
@@ -232,6 +235,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
         const contentWidth: ReaderWidth = book.contentWidth === 'narrow' || book.contentWidth === 'wide' ? book.contentWidth : 'medium';
         const textAlign: ReaderTextAlign = book.textAlign === 'left' ? 'left' : 'justify';
         const pageTransition: ReaderPageTransition = book.pageTransition === 'slide' ? 'slide' : 'none';
+        const readingMode: ReaderReadingMode = book.readingMode === 'paged' ? 'paged' : 'scroll';
         return {
           id: book.id as string,
           title: typeof book.title === 'string' ? book.title : 'Sách chưa đặt tên',
@@ -253,6 +257,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           contentWidth,
           textAlign,
           pageTransition,
+          readingMode,
           ttsRate: Math.min(2, Math.max(0.6, Number(book.ttsRate) || 0.95)),
           ttsPitch: Math.min(1.4, Math.max(0.7, Number(book.ttsPitch) || 1)),
           ttsCleanText: book.ttsCleanText !== false,

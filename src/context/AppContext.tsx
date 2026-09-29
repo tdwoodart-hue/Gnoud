@@ -50,6 +50,8 @@ interface AppContextType {
   setActiveTab: (tab: NavTab) => void;
   isCommandMenuOpen: boolean;
   setIsCommandMenuOpen: (open: boolean) => void;
+  isAssistantOpen: boolean;
+  setIsAssistantOpen: (open: boolean) => void;
   isMorningPlanningOpen: boolean;
   setIsMorningPlanningOpen: (open: boolean) => void;
   isEveningReviewOpen: boolean;
@@ -213,6 +215,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [currentView, setCurrentView] = useState<string>('today');
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isMorningPlanningOpen, setIsMorningPlanningOpen] = useState(false);
   const [isEveningReviewOpen, setIsEveningReviewOpen] = useState(false);
 
@@ -948,6 +951,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab: changeCurrentView as (tab: NavTab) => void,
         isCommandMenuOpen,
         setIsCommandMenuOpen,
+        isAssistantOpen,
+        setIsAssistantOpen,
         isMorningPlanningOpen,
         setIsMorningPlanningOpen,
         isEveningReviewOpen,

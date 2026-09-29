@@ -1,6 +1,8 @@
 export type NutritionSex = 'male' | 'female';
 export type NutritionGoal = 'recomp' | 'cut' | 'maintain' | 'gain';
 export type NutritionActivityLevel = 'sedentary' | 'desk_training' | 'moderate' | 'active';
+import type { QuickNutritionAction } from './quickActionService';
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface NutritionProfile {
@@ -34,6 +36,8 @@ export interface NutritionEntry {
   foodId?: string;
   variantId?: string;
   portionId?: string;
+  batchId?: string;
+  source?: 'manual' | 'quick' | 'assistant';
 }
 
 export interface DailyMetric {
@@ -144,6 +148,45 @@ export function getTotals(entries: NutritionEntry[]): NutritionTotals {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   );
+}
+
+export function applyQuickNutritionAction(
+  state: NutritionState,
+  action: QuickNutritionAction,
+  fallbackDate: string,
+): { state: NutritionState; batchId: string; addedIds: string[] } {
+  const batchId = `nutrition-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const date = action.date || fallbackDate;
+  const stamp = Date.now();
+  const added = action.items.map((item, index): NutritionEntry => ({
+    id: `${batchId}-${index}`,
+    date,
+    name: item.name,
+    meal: action.meal,
+    calories: item.calories,
+    protein: item.protein,
+    carbs: item.carbs,
+    fat: item.fat,
+    createdAt: new Date(stamp + index).toISOString(),
+    ...(item.amount !== undefined ? { amount: item.amount } : {}),
+    ...(item.unit ? { unit: item.unit } : {}),
+    ...(item.servingLabel ? { servingLabel: item.servingLabel } : {}),
+    batchId,
+    source: action.source,
+  }));
+
+  return {
+    state: { ...state, entries: [...state.entries, ...added] },
+    batchId,
+    addedIds: added.map((entry) => entry.id),
+  };
+}
+
+export function removeNutritionBatch(state: NutritionState, batchId: string): NutritionState {
+  return {
+    ...state,
+    entries: state.entries.filter((entry) => entry.batchId !== batchId),
+  };
 }
 
 export function getEntriesForDate(entries: NutritionEntry[], date: string): NutritionEntry[] {

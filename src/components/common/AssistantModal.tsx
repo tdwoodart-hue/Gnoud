@@ -86,6 +86,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
   const today = getFormattedToday(0);
   const panelRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
 
   const [input, setInput] = useState(() => loadAssistantDraft());
   const [meal, setMeal] = useState<MealType>('dinner');
@@ -363,91 +364,202 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     onClose();
   };
 
+  const stopActiveDrag = () => {
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = null;
+    dragRef.current = null;
+    setDragging(false);
+  };
+
   const startDrag = (event: React.PointerEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
     const panel = panelRef.current;
     if (!panel) return;
 
+    stopActiveDrag();
+
     const rect = panel.getBoundingClientRect();
-    const currentPosition = {
-      x: clamp(rect.left, 12, Math.max(12, window.innerWidth - rect.width - 12)),
-      y: clamp(rect.top, 12, Math.max(12, window.innerHeight - rect.height - 12)),
-    };
+    const mobile = window.innerWidth < 640;
+    const targetWidth = mobile
+      ? Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.82)))
+      : rect.width;
+    const targetHeight = mobile
+      ? Math.min(rect.height, Math.round(window.innerHeight * 0.68))
+      : rect.height;
+
+    const initialX = position?.x ?? (
+      mobile
+        ? clamp(event.clientX - targetWidth / 2, 12, Math.max(12, window.innerWidth - targetWidth - 12))
+        : clamp(rect.left, 12, Math.max(12, window.innerWidth - targetWidth - 12))
+    );
+    const initialY = position?.y ?? clamp(
+      rect.top,
+      12,
+      Math.max(12, window.innerHeight - targetHeight - 12),
+    );
+    const initialPosition = { x: initialX, y: initialY };
 
     dragRef.current = {
       pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
+      offsetX: event.clientX - initialX,
+      offsetY: event.clientY - initialY,
     };
-    setPosition(currentPosition);
-    saveAssistantPosition(currentPosition);
+    setPosition(initialPosition);
+    saveAssistantPosition(initialPosition);
     setDragging(true);
     event.preventDefault();
-  };
 
-  const resetPosition = () => {
-    clearAssistantPosition();
-    setPosition(null);
-  };
-
-  useEffect(() => {
-    if (!dragging) return undefined;
-
-    const handlePointerMove = (event: PointerEvent) => {
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
       const drag = dragRef.current;
-      const panel = panelRef.current;
-      if (!drag || drag.pointerId !== event.pointerId || !panel) return;
+      const activePanel = panelRef.current;
+      if (!drag || drag.pointerId !== pointerEvent.pointerId || !activePanel) return;
+      pointerEvent.preventDefault();
 
       const x = clamp(
-        event.clientX - drag.offsetX,
+        pointerEvent.clientX - drag.offsetX,
         12,
-        Math.max(12, window.innerWidth - panel.offsetWidth - 12),
+        Math.max(12, window.innerWidth - activePanel.offsetWidth - 12),
       );
       const y = clamp(
-        event.clientY - drag.offsetY,
+        pointerEvent.clientY - drag.offsetY,
         12,
-        Math.max(12, window.innerHeight - panel.offsetHeight - 12),
+        Math.max(12, window.innerHeight - activePanel.offsetHeight - 12),
       );
       const next = { x, y };
       setPosition(next);
       saveAssistantPosition(next);
     };
 
-    const handlePointerUp = (event: PointerEvent) => {
+    const finishPointerDrag = (pointerEvent: PointerEvent) => {
       const drag = dragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId) return;
-      dragRef.current = null;
-      setDragging(false);
+      if (!drag || drag.pointerId !== pointerEvent.pointerId) return;
+      stopActiveDrag();
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-    return () => {
+    window.addEventListener('pointerup', finishPointerDrag);
+    window.addEventListener('pointercancel', finishPointerDrag);
+
+    dragCleanupRef.current = () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('pointerup', finishPointerDrag);
+      window.removeEventListener('pointercancel', finishPointerDrag);
     };
-  }, [dragging]);
+  };
+
+  const startTouchDrag = (event: React.TouchEvent<HTMLElement>) => {
+    if (dragRef.current || (event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
+    const panel = panelRef.current;
+    const touch = event.touches[0];
+    if (!panel || !touch) return;
+
+    stopActiveDrag();
+
+    const rect = panel.getBoundingClientRect();
+    const targetWidth = Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.82)));
+    const targetHeight = Math.min(rect.height, Math.round(window.innerHeight * 0.68));
+    const initialX = position?.x ?? clamp(
+      touch.clientX - targetWidth / 2,
+      12,
+      Math.max(12, window.innerWidth - targetWidth - 12),
+    );
+    const initialY = position?.y ?? clamp(
+      rect.top,
+      12,
+      Math.max(12, window.innerHeight - targetHeight - 12),
+    );
+    const initialPosition = { x: initialX, y: initialY };
+
+    dragRef.current = {
+      pointerId: touch.identifier,
+      offsetX: touch.clientX - initialX,
+      offsetY: touch.clientY - initialY,
+    };
+    setPosition(initialPosition);
+    saveAssistantPosition(initialPosition);
+    setDragging(true);
+
+    const handleTouchMove = (touchEvent: TouchEvent) => {
+      const drag = dragRef.current;
+      const activePanel = panelRef.current;
+      if (!drag || !activePanel) return;
+      const activeTouch = Array.from(touchEvent.touches).find((item) => item.identifier === drag.pointerId);
+      if (!activeTouch) return;
+      if (touchEvent.cancelable) touchEvent.preventDefault();
+
+      const x = clamp(
+        activeTouch.clientX - drag.offsetX,
+        12,
+        Math.max(12, window.innerWidth - activePanel.offsetWidth - 12),
+      );
+      const y = clamp(
+        activeTouch.clientY - drag.offsetY,
+        12,
+        Math.max(12, window.innerHeight - activePanel.offsetHeight - 12),
+      );
+      const next = { x, y };
+      setPosition(next);
+      saveAssistantPosition(next);
+    };
+
+    const finishTouchDrag = (touchEvent: TouchEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const ended = Array.from(touchEvent.changedTouches).some((item) => item.identifier === drag.pointerId);
+      if (ended) stopActiveDrag();
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', finishTouchDrag);
+    window.addEventListener('touchcancel', finishTouchDrag);
+
+    dragCleanupRef.current = () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', finishTouchDrag);
+      window.removeEventListener('touchcancel', finishTouchDrag);
+    };
+  };
+
+  const resetPosition = () => {
+    stopActiveDrag();
+    clearAssistantPosition();
+    setPosition(null);
+  };
+
+  useEffect(() => () => {
+    dragCleanupRef.current?.();
+  }, []);
 
   if (!isOpen) return null;
 
-  const windowStyle: React.CSSProperties | undefined =
-    position ? { left: position.x, top: position.y } : undefined;
   const floating = Boolean(position);
+  const floatingPositionStyle: React.CSSProperties | undefined =
+    position ? { left: position.x, top: position.y } : undefined;
+  const mobileFloatingWidth = !desktop && floating
+    ? Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.82)))
+    : undefined;
+  const panelWindowStyle: React.CSSProperties | undefined =
+    position
+      ? {
+          left: position.x,
+          top: position.y,
+          ...(mobileFloatingWidth ? { width: `${mobileFloatingWidth}px` } : {}),
+        }
+      : undefined;
 
   if (minimized) {
     return (
       <div className="pointer-events-none fixed inset-0 z-[220]">
         <section
           ref={panelRef}
-          style={windowStyle}
+          style={floatingPositionStyle}
           className={`pointer-events-auto fixed flex h-10 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-lg shadow-slate-900/10 ${
             floating ? 'left-0 top-0' : 'bottom-[calc(82px+env(safe-area-inset-bottom))] right-3'
           }`}
         >
           <div
             onPointerDown={startDrag}
+            onTouchStart={startTouchDrag}
             style={{ touchAction: 'none' }}
             className="cursor-grab select-none px-2 text-[11px] font-bold text-slate-700 active:cursor-grabbing"
           >
@@ -465,7 +577,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
             onClick={closeAssistant}
             className="h-7 rounded-full px-2 text-[10px] font-bold text-slate-400"
           >
-            Đóng
+            Ẩn
           </button>
         </section>
       </div>
@@ -477,7 +589,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
       {!floating ? (
         <button
           type="button"
-          aria-label="Ẩn trợ lý"
+          aria-label="Thu gọn trợ lý"
           onClick={() => setMinimized(true)}
           className="pointer-events-auto absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] sm:hidden"
         />
@@ -485,22 +597,24 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
 
       <section
         ref={panelRef}
-        style={windowStyle}
+        style={panelWindowStyle}
         className={`pointer-events-auto fixed flex flex-col overflow-hidden bg-white shadow-2xl ${
           floating
-            ? 'left-0 top-0 max-h-[72dvh] w-[calc(100vw-24px)] max-w-[520px] rounded-[24px] border border-slate-200 sm:max-h-[86dvh]'
+            ? 'left-0 top-0 max-h-[68dvh] rounded-[24px] border border-slate-200 sm:max-h-[86dvh] sm:w-[520px] sm:max-w-[calc(100vw-24px)]'
             : 'inset-x-0 bottom-0 max-h-[92dvh] w-full rounded-t-[28px] sm:inset-auto sm:right-6 sm:top-24 sm:w-[520px] sm:max-w-[calc(100vw-24px)] sm:rounded-[24px] sm:border sm:border-slate-200'
         }`}
       >
         <div
           onPointerDown={startDrag}
+          onTouchStart={startTouchDrag}
           style={{ touchAction: 'none' }}
-          className={`flex h-7 shrink-0 cursor-grab items-center justify-center select-none ${
+          className={`flex h-9 shrink-0 cursor-grab items-center justify-center select-none bg-slate-50/80 ${
             dragging ? 'cursor-grabbing' : ''
           }`}
           aria-label="Kéo để di chuyển trợ lý"
         >
-          <span className="h-1 w-10 rounded-full bg-slate-300" />
+          <span className="h-1.5 w-12 rounded-full bg-slate-400" />
+          <span className="ml-2 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400 sm:hidden">Kéo</span>
         </div>
         <header
           className="flex select-none items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3.5 sm:px-5"
@@ -508,7 +622,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Trợ lý</h2>
             <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
-              Kéo thanh phía trên để di chuyển · Ctrl/⌘ + Enter để xác nhận
+              {desktop ? 'Kéo thanh phía trên để di chuyển · Ctrl/⌘ + Enter để xác nhận' : 'Giữ thanh Kéo phía trên rồi rê cửa sổ tới vị trí muốn đặt'}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -533,14 +647,14 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
               onClick={() => setMinimized(true)}
               className="h-8 rounded-lg px-2 text-[10px] font-bold text-slate-500 hover:bg-slate-100"
             >
-              Ẩn
+              Thu gọn
             </button>
             <button
               type="button"
               onClick={closeAssistant}
               className="h-8 rounded-lg px-2 text-[10px] font-bold text-slate-400 hover:bg-slate-100"
             >
-              Đóng
+              Ẩn
             </button>
           </div>
         </header>
@@ -790,7 +904,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
               onClick={action || readIntent ? goToDomain : () => setMinimized(true)}
               className="h-11 rounded-2xl bg-slate-100 text-xs font-bold text-slate-600"
             >
-              {action || readIntent ? 'Mở dữ liệu' : 'Ẩn'}
+              {action || readIntent ? 'Mở dữ liệu' : 'Thu gọn'}
             </button>
             <button
               type="button"
@@ -806,7 +920,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
               className="h-11 rounded-2xl bg-indigo-600 text-xs font-bold text-white shadow-xs disabled:bg-slate-200 disabled:text-slate-400"
             >
               {readIntent
-                ? 'Ẩn'
+                ? 'Xong'
                 : busy
                   ? 'Đang lưu…'
                   : action?.type === 'workout'

@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.1';
-export const APP_UPDATED_AT = '2026-09-29T13:00:00+07:00';
+export const APP_VERSION = '0.9.2';
+export const APP_UPDATED_AT = '2026-09-29T13:15:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.2',
+    updatedAt: '2026-09-29T13:15:00+07:00',
+    title: 'Dọn giao diện nhập nhanh và Trợ lý',
+    changes: [
+      'Xóa nút Điền mẫu text khỏi Nhập nhanh.',
+      'Xóa phần Câu test nhanh khỏi Trợ lý.',
+      'Xóa mẫu JSON kỹ thuật khỏi giao diện; parser và Action Engine vẫn giữ nguyên bên dưới.',
+      'Ô nhập chỉ còn placeholder ngắn, không nhồi ví dụ vào màn hình.',
+    ],
+  },
   {
     version: '0.9.1',
     updatedAt: '2026-09-29T13:00:00+07:00',

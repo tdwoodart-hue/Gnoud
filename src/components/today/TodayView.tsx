@@ -667,6 +667,7 @@ export const TodayView: React.FC = () => {
       }
 
       const oldLabels = referenceLines.map((reference) => reference.label);
+      const oldExerciseKeys = new Set(oldLabels.map(getExerciseProgressKey));
       updateTask(selectedTask.id, {
         description: replaceManualReferenceList(selectedTask.description, cleaned),
       });
@@ -678,7 +679,8 @@ export const TodayView: React.FC = () => {
           if (!newLabel) return;
           const oldKey = getExerciseProgressKey(oldLabel);
           const newKey = getExerciseProgressKey(newLabel);
-          if (oldKey !== newKey && current[oldKey] && !next[newKey]) next[newKey] = current[oldKey];
+          const isRename = oldKey !== newKey && !oldExerciseKeys.has(newKey);
+          if (isRename && current[oldKey] && !next[newKey]) next[newKey] = current[oldKey];
         });
         persistExerciseProgress(next);
         return next;
@@ -686,7 +688,11 @@ export const TodayView: React.FC = () => {
 
       const imageCopies = oldLabels.flatMap((oldLabel, index) => {
         const newLabel = cleaned[index];
-        if (!newLabel || getExerciseProgressKey(oldLabel) === getExerciseProgressKey(newLabel)) return [];
+        if (!newLabel) return [];
+        const oldKey = getExerciseProgressKey(oldLabel);
+        const newKey = getExerciseProgressKey(newLabel);
+        const isRename = oldKey !== newKey && !oldExerciseKeys.has(newKey);
+        if (!isRename) return [];
         const image = getReferenceLibraryItem(referenceLibrary, oldLabel);
         if (!image || getReferenceLibraryItem(referenceLibrary, newLabel)) return [];
         const copied = image.source === 'url'

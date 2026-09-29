@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.8.7';
+export const APP_VERSION = '0.9.0';
 export const APP_UPDATED_AT = '2026-09-29T12:38:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.0',
+    updatedAt: '2026-09-29T12:38:00+07:00',
+    title: 'Nhập nhanh chung cho dinh dưỡng và buổi tập',
+    changes: [
+      'Thêm Action Engine chung để đọc và kiểm tra form JSON trước khi ghi dữ liệu.',
+      'Dinh dưỡng có Nhập nhanh: dán cả bữa, xem preview, lưu một lần và có Hoàn tác.',
+      'Buổi tập có Nhập nhanh: tự khớp bài cũ, thêm bài thiếu, lưu kg/reps và có Hoàn tác.',
+      'Tách logic nhận diện/lịch sử bài tập ra service dùng chung và tự migrate key dữ liệu gym cũ.',
+      'Dữ liệu nhập nhanh dinh dưỡng tiếp tục đi qua cơ chế sync tài khoản hiện tại.',
+    ],
+  },
   {
     version: '0.8.7',
     updatedAt: '2026-09-29T12:38:00+07:00',

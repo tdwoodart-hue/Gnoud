@@ -26,7 +26,7 @@ const icons: Record<NavTab, React.FC<{ className?: string }>> = {
 };
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeTab, setActiveTab, setIsCommandMenuOpen } = useApp();
+  const { activeTab, setActiveTab, setIsCommandMenuOpen, setIsAssistantOpen } = useApp();
   const { pinEnabled, lockApp } = useSecurity();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -78,12 +78,19 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => setIsAssistantOpen(true)}
+                className="flex h-8 flex-1 items-center justify-center rounded-xl border border-slate-200/60 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Trợ lý
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsCommandMenuOpen(true)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200/60 bg-slate-50/70 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-slate-200/60 bg-slate-50/70 text-slate-500 transition hover:bg-slate-100"
                 title="Mở menu lệnh (⌘K)"
+                aria-label="Tìm kiếm"
               >
                 <Command className="h-3.5 w-3.5 text-slate-400" />
-                <span>Tìm kiếm</span>
               </button>
 
               {pinEnabled && (
@@ -115,6 +122,14 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           {children}
         </main>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setIsAssistantOpen(true)}
+        className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-3 z-40 h-9 rounded-full border border-slate-200 bg-white/95 px-4 text-[11px] font-bold text-slate-700 shadow-sm backdrop-blur-md md:hidden"
+      >
+        Trợ lý
+      </button>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
         {PRIMARY_NAV_ITEMS.map((item) => {

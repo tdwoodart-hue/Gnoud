@@ -252,6 +252,7 @@ export const ReaderView: React.FC = () => {
   const lastTtsPinWriteRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const lastHorizontalSwipeAtRef = useRef(0);
   const pendingPageScrollRef = useRef<number | null>(null);
   const pageTurnTimerRef = useRef<number | null>(null);
   const cloudMetadataTimerRef = useRef<number | null>(null);
@@ -1414,8 +1415,28 @@ export const ReaderView: React.FC = () => {
     readerActivityAtRef.current = Date.now();
 
     if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    lastHorizontalSwipeAtRef.current = Date.now();
     if (readingMode === 'scroll') stepScrollPage(dx < 0 ? 1 : -1);
     else stepViewport(dx < 0 ? 1 : -1);
+  };
+
+  const handleReaderEdgeClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!activeBook || activeBook.format === 'pdf') return;
+    if (Date.now() - lastHorizontalSwipeAtRef.current < 450) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, a')) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const xRatio = (event.clientX - rect.left) / Math.max(1, rect.width);
+    readerActivityAtRef.current = Date.now();
+
+    if (xRatio <= 0.16) {
+      if (readingMode === 'scroll') stepScrollPage(-1);
+      else stepViewport(-1);
+    } else if (xRatio >= 0.84) {
+      if (readingMode === 'scroll') stepScrollPage(1);
+      else stepViewport(1);
+    }
   };
 
   const toggleBrowserFullscreen = async () => {
@@ -1488,6 +1509,7 @@ export const ReaderView: React.FC = () => {
           <div
             ref={readingScrollRef}
             onScroll={handleReadingScroll}
+            onClick={handleReaderEdgeClick}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
             className={`relative h-full w-full ${readingMode === 'scroll' ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden'}`}

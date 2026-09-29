@@ -14,6 +14,7 @@ import {
   Link2,
   ListChecks,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getFormattedToday } from '../../data/mockData';
 import { Task } from '../../types';
 import { PageHeader } from '../common/PageHeader';
+import { QuickActionModal } from '../common/QuickActionModal';
 import { DailyHourlyNotesSection } from './DailyHourlyNotesSection';
 import { fileToCompactDataUrl } from '../../services/imageAttachmentService';
 import {
@@ -49,6 +51,15 @@ import {
   shouldStartTaskSwipe,
   type TaskSwipeReleaseAction,
 } from '../../services/taskSwipe';
+import {
+  applyWorkoutQuickAction,
+  exerciseKey,
+  loadExerciseProgress,
+  persistExerciseProgress,
+  updateExerciseProgress,
+  type ExerciseProgressStore,
+} from '../../services/exerciseService';
+import type { QuickAction } from '../../services/quickActionService';
 
 const SWIPE_ACTION_WIDTH = TASK_SWIPE_ACTION_WIDTH;
 const SWIPE_MAX_DISTANCE = TASK_SWIPE_MAX_DISTANCE;
@@ -68,19 +79,6 @@ export const getVisibleTaskNotes = (notes?: string): string =>
     .join('\n')
     .trim();
 
-type ExerciseLogEntry = {
-  date: string;
-  weight: string;
-  reps: string;
-};
-
-type ExerciseProgress = {
-  latest?: ExerciseLogEntry;
-  previous?: ExerciseLogEntry;
-};
-
-type ExerciseProgressStore = Record<string, ExerciseProgress>;
-
 type ExerciseDraftItem = {
   id: string;
   label: string;
@@ -99,15 +97,6 @@ type ExercisePickerState =
   | { mode: 'add' }
   | null;
 
-const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
-
-const getExerciseProgressKey = (label: string): string =>
-  label
-    .trim()
-    .toLocaleLowerCase('vi-VN')
-    .replace(/\s+\d+\s*[x×]\s*\d+(?:\s*[-–]\s*\d+)?\s*$/, '')
-    .trim();
-
 const normalizeExerciseSearch = (value: string): string =>
   value
     .normalize('NFD')
@@ -115,25 +104,6 @@ const normalizeExerciseSearch = (value: string): string =>
     .toLocaleLowerCase('vi')
     .replace(/\s+/g, ' ')
     .trim();
-
-const loadExerciseProgress = (): ExerciseProgressStore => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ExerciseProgressStore) : {};
-  } catch {
-    return {};
-  }
-};
-
-const persistExerciseProgress = (progress: ExerciseProgressStore) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(EXERCISE_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-  } catch {
-    // Không chặn thao tác nếu trình duyệt từ chối lưu localStorage.
-  }
-};
 
 const SwipeTodayTaskRow: React.FC<{
   task: Task;
@@ -558,6 +528,7 @@ export const TodayView: React.FC = () => {
   const [newExerciseName, setNewExerciseName] = useState('');
   const [exercisePicker, setExercisePicker] = useState<ExercisePickerState>(null);
   const [exercisePickerQuery, setExercisePickerQuery] = useState('');
+  const [quickWorkoutOpen, setQuickWorkoutOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -596,27 +567,13 @@ export const TodayView: React.FC = () => {
   const today = getFormattedToday(0);
 
   const updateExerciseLog = (label: string, field: 'weight' | 'reps', value: string) => {
-    const key = getExerciseProgressKey(label);
-
     setExerciseProgress((current) => {
-      const existing = current[key] || {};
-      const latest = existing.latest;
-      const editingToday = latest?.date === today;
-      const nextLatest: ExerciseLogEntry = {
-        date: today,
-        weight: editingToday ? latest?.weight || '' : '',
-        reps: editingToday ? latest?.reps || '' : '',
-      };
-      nextLatest[field] = value;
-
-      const next: ExerciseProgressStore = {
-        ...current,
-        [key]: {
-          latest: nextLatest,
-          previous: editingToday ? existing.previous : latest || existing.previous,
-        },
-      };
-
+      const next = updateExerciseProgress(
+        current,
+        label,
+        today,
+        field === 'weight' ? { weight: value } : { reps: value },
+      );
       persistExerciseProgress(next);
       return next;
     });
@@ -644,7 +601,7 @@ export const TodayView: React.FC = () => {
 
     recentTasks.forEach((task) => {
       parseManualReferenceList(task.description).forEach((reference) => {
-        const key = getExerciseProgressKey(reference.label);
+        const key = exerciseKey(reference.label);
         if (!key || byKey.has(key)) return;
         byKey.set(key, {
           key,
@@ -656,7 +613,7 @@ export const TodayView: React.FC = () => {
     });
 
     referenceLibrary.forEach((item) => {
-      const key = getExerciseProgressKey(item.label);
+      const key = exerciseKey(item.label);
       if (!key || byKey.has(key)) return;
       byKey.set(key, { key, label: item.label });
     });
@@ -696,7 +653,7 @@ export const TodayView: React.FC = () => {
       setExerciseDraft(referenceLines.map((reference, index) => ({
         id: `${reference.id}-${index}`,
         label: reference.label,
-        originalKey: getExerciseProgressKey(reference.label),
+        originalKey: exerciseKey(reference.label),
       })));
       setNewExerciseName('');
       setExercisePicker(null);
@@ -750,7 +707,7 @@ export const TodayView: React.FC = () => {
         const next = { ...current };
         cleanedItems.forEach((item) => {
           if (!item.originalKey) return;
-          const newKey = getExerciseProgressKey(item.label);
+          const newKey = exerciseKey(item.label);
           const isManualRename = item.originalKey !== newKey && !knownExerciseKeys.has(newKey);
           if (isManualRename && current[item.originalKey] && !next[newKey]) {
             next[newKey] = current[item.originalKey];
@@ -762,10 +719,10 @@ export const TodayView: React.FC = () => {
 
       const imageCopies = cleanedItems.flatMap((item) => {
         if (!item.originalKey) return [];
-        const newKey = getExerciseProgressKey(item.label);
+        const newKey = exerciseKey(item.label);
         const isManualRename = item.originalKey !== newKey && !knownExerciseKeys.has(newKey);
         if (!isManualRename) return [];
-        const oldLabel = referenceLines.find((reference) => getExerciseProgressKey(reference.label) === item.originalKey)?.label;
+        const oldLabel = referenceLines.find((reference) => exerciseKey(reference.label) === item.originalKey)?.label;
         if (!oldLabel) return [];
         const image = getReferenceLibraryItem(referenceLibrary, oldLabel);
         if (!image || getReferenceLibraryItem(referenceLibrary, item.label)) return [];
@@ -801,7 +758,7 @@ export const TodayView: React.FC = () => {
     const blockedExerciseKeys = new Set(
       exerciseDraft
         .filter((item) => item.id !== pickerTargetId)
-        .map((item) => getExerciseProgressKey(item.label))
+        .map((item) => exerciseKey(item.label))
         .filter(Boolean),
     );
     const pickerQuery = normalizeExerciseSearch(exercisePickerQuery);
@@ -827,6 +784,37 @@ export const TodayView: React.FC = () => {
       }
       setExercisePicker(null);
       setExercisePickerQuery('');
+    };
+
+    const applyQuickWorkout = (action: QuickAction) => {
+      if (action.type !== 'workout') return;
+      const previousDescription = selectedTask.description;
+      const previousProgress = exerciseProgress;
+      const result = applyWorkoutQuickAction(
+        selectedTask.description,
+        exerciseProgress,
+        action,
+        today,
+      );
+
+      updateTask(selectedTask.id, { description: result.description });
+      setExerciseProgress(result.progress);
+      persistExerciseProgress(result.progress);
+
+      const changed = result.updatedExercises.length + result.addedExercises.length;
+      addToast(
+        `Đã lưu nhanh ${changed} bài tập`,
+        'success',
+        {
+          label: 'Hoàn tác',
+          onClick: () => {
+            updateTask(selectedTask.id, { description: previousDescription });
+            setExerciseProgress(previousProgress);
+            persistExerciseProgress(previousProgress);
+            addToast('Đã hoàn tác lần nhập buổi tập', 'info');
+          },
+        },
+      );
     };
 
     const visibleNotes = getVisibleTaskNotes(selectedTask.notes);
@@ -1013,13 +1001,22 @@ export const TodayView: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={beginExerciseEdit}
-                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" /> Sửa bài
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWorkoutOpen(true)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" /> Nhập nhanh
+                        </button>
+                        <button
+                          type="button"
+                          onClick={beginExerciseEdit}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" /> Sửa bài
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1122,7 +1119,7 @@ export const TodayView: React.FC = () => {
                     <div className="space-y-2.5">
                       {referenceLines.map((reference, index) => {
                         const image = getReferenceLibraryItem(referenceLibrary, reference.label);
-                        const progress = exerciseProgress[getExerciseProgressKey(reference.label)];
+                        const progress = exerciseProgress[exerciseKey(reference.label)];
                         const currentEntry = progress?.latest?.date === today ? progress.latest : undefined;
                         const previousEntry = progress?.latest?.date === today ? progress.previous : progress?.latest;
                         const hasPrevious = Boolean(previousEntry?.weight || previousEntry?.reps);
@@ -1406,6 +1403,15 @@ export const TodayView: React.FC = () => {
               </button>
             </div>
           </section>
+        {quickWorkoutOpen ? (
+          <QuickActionModal
+            domain="workout"
+            date={today}
+            onClose={() => setQuickWorkoutOpen(false)}
+            onApply={applyQuickWorkout}
+          />
+        ) : null}
+
         {exercisePicker ? (
           <div
             className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-950/35 backdrop-blur-xs sm:items-center sm:p-4"

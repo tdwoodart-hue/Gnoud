@@ -81,6 +81,24 @@ type ExerciseProgress = {
 
 type ExerciseProgressStore = Record<string, ExerciseProgress>;
 
+type ExerciseDraftItem = {
+  id: string;
+  label: string;
+  originalKey?: string;
+};
+
+type ExerciseLibraryOption = {
+  key: string;
+  label: string;
+  taskTitle?: string;
+  lastUsed?: string;
+};
+
+type ExercisePickerState =
+  | { mode: 'replace'; draftId: string }
+  | { mode: 'add' }
+  | null;
+
 const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
 
 const getExerciseProgressKey = (label: string): string =>
@@ -88,6 +106,14 @@ const getExerciseProgressKey = (label: string): string =>
     .trim()
     .toLocaleLowerCase('vi-VN')
     .replace(/\s+\d+\s*[x×]\s*\d+(?:\s*[-–]\s*\d+)?\s*$/, '')
+    .trim();
+
+const normalizeExerciseSearch = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('vi')
+    .replace(/\s+/g, ' ')
     .trim();
 
 const loadExerciseProgress = (): ExerciseProgressStore => {
@@ -528,8 +554,10 @@ export const TodayView: React.FC = () => {
   const [reflectionDrafts, setReflectionDrafts] = useState<Record<string, string>>({});
   const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress());
   const [exerciseEditingTaskId, setExerciseEditingTaskId] = useState<string | null>(null);
-  const [exerciseDraft, setExerciseDraft] = useState<string[]>([]);
+  const [exerciseDraft, setExerciseDraft] = useState<ExerciseDraftItem[]>([]);
   const [newExerciseName, setNewExerciseName] = useState('');
+  const [exercisePicker, setExercisePicker] = useState<ExercisePickerState>(null);
+  const [exercisePickerQuery, setExercisePickerQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -606,6 +634,39 @@ export const TodayView: React.FC = () => {
   );
   const todayTasks = useMemo(() => allTodayTasks.filter((task) => task.status !== 'done'), [allTodayTasks]);
 
+  const exerciseLibrary = useMemo<ExerciseLibraryOption[]>(() => {
+    const byKey = new Map<string, ExerciseLibraryOption>();
+    const recentTasks = [...tasks].sort((a, b) => {
+      const aDate = a.plannedDate || a.createdAt || '';
+      const bDate = b.plannedDate || b.createdAt || '';
+      return bDate.localeCompare(aDate);
+    });
+
+    recentTasks.forEach((task) => {
+      parseManualReferenceList(task.description).forEach((reference) => {
+        const key = getExerciseProgressKey(reference.label);
+        if (!key || byKey.has(key)) return;
+        byKey.set(key, {
+          key,
+          label: reference.label,
+          taskTitle: task.title,
+          lastUsed: task.plannedDate || task.createdAt?.slice(0, 10),
+        });
+      });
+    });
+
+    referenceLibrary.forEach((item) => {
+      const key = getExerciseProgressKey(item.label);
+      if (!key || byKey.has(key)) return;
+      byKey.set(key, { key, label: item.label });
+    });
+
+    return [...byKey.values()].sort((a, b) => {
+      const byDate = (b.lastUsed || '').localeCompare(a.lastUsed || '');
+      return byDate || a.label.localeCompare(b.label, 'vi');
+    });
+  }, [tasks, referenceLibrary]);
+
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
 
   const closeDetail = () => {
@@ -632,20 +693,31 @@ export const TodayView: React.FC = () => {
 
     const beginExerciseEdit = () => {
       setExerciseEditingTaskId(selectedTask.id);
-      setExerciseDraft(referenceLines.map((reference) => reference.label));
+      setExerciseDraft(referenceLines.map((reference, index) => ({
+        id: `${reference.id}-${index}`,
+        label: reference.label,
+        originalKey: getExerciseProgressKey(reference.label),
+      })));
       setNewExerciseName('');
+      setExercisePicker(null);
+      setExercisePickerQuery('');
     };
 
     const cancelExerciseEdit = () => {
       setExerciseEditingTaskId(null);
       setExerciseDraft([]);
       setNewExerciseName('');
+      setExercisePicker(null);
+      setExercisePickerQuery('');
     };
 
     const addExerciseDraft = () => {
       const next = newExerciseName.trim();
       if (!next) return;
-      setExerciseDraft((current) => [...current, next]);
+      setExerciseDraft((current) => [
+        ...current,
+        { id: `exercise-${Date.now()}-${current.length}`, label: next },
+      ]);
       setNewExerciseName('');
     };
 
@@ -660,44 +732,46 @@ export const TodayView: React.FC = () => {
     };
 
     const saveExercisePlan = async () => {
-      const cleaned = exerciseDraft.map((item) => item.trim()).filter(Boolean);
+      const cleanedItems = exerciseDraft
+        .map((item) => ({ ...item, label: item.label.trim() }))
+        .filter((item) => Boolean(item.label));
+      const cleaned = cleanedItems.map((item) => item.label);
       if (cleaned.length === 0) {
         addToast('Buổi tập cần ít nhất một bài.', 'warning');
         return;
       }
 
-      const oldLabels = referenceLines.map((reference) => reference.label);
-      const oldExerciseKeys = new Set(oldLabels.map(getExerciseProgressKey));
+      const knownExerciseKeys = new Set(exerciseLibrary.map((item) => item.key));
       updateTask(selectedTask.id, {
         description: replaceManualReferenceList(selectedTask.description, cleaned),
       });
 
       setExerciseProgress((current) => {
         const next = { ...current };
-        oldLabels.forEach((oldLabel, index) => {
-          const newLabel = cleaned[index];
-          if (!newLabel) return;
-          const oldKey = getExerciseProgressKey(oldLabel);
-          const newKey = getExerciseProgressKey(newLabel);
-          const isRename = oldKey !== newKey && !oldExerciseKeys.has(newKey);
-          if (isRename && current[oldKey] && !next[newKey]) next[newKey] = current[oldKey];
+        cleanedItems.forEach((item) => {
+          if (!item.originalKey) return;
+          const newKey = getExerciseProgressKey(item.label);
+          const isManualRename = item.originalKey !== newKey && !knownExerciseKeys.has(newKey);
+          if (isManualRename && current[item.originalKey] && !next[newKey]) {
+            next[newKey] = current[item.originalKey];
+          }
         });
         persistExerciseProgress(next);
         return next;
       });
 
-      const imageCopies = oldLabels.flatMap((oldLabel, index) => {
-        const newLabel = cleaned[index];
-        if (!newLabel) return [];
-        const oldKey = getExerciseProgressKey(oldLabel);
-        const newKey = getExerciseProgressKey(newLabel);
-        const isRename = oldKey !== newKey && !oldExerciseKeys.has(newKey);
-        if (!isRename) return [];
+      const imageCopies = cleanedItems.flatMap((item) => {
+        if (!item.originalKey) return [];
+        const newKey = getExerciseProgressKey(item.label);
+        const isManualRename = item.originalKey !== newKey && !knownExerciseKeys.has(newKey);
+        if (!isManualRename) return [];
+        const oldLabel = referenceLines.find((reference) => getExerciseProgressKey(reference.label) === item.originalKey)?.label;
+        if (!oldLabel) return [];
         const image = getReferenceLibraryItem(referenceLibrary, oldLabel);
-        if (!image || getReferenceLibraryItem(referenceLibrary, newLabel)) return [];
+        if (!image || getReferenceLibraryItem(referenceLibrary, item.label)) return [];
         const copied = image.source === 'url'
-          ? makeReferenceLibraryItemFromUrl(newLabel, image.dataUrl)
-          : makeReferenceLibraryItem(newLabel, image.dataUrl, image.fileName);
+          ? makeReferenceLibraryItemFromUrl(item.label, image.dataUrl)
+          : makeReferenceLibraryItem(item.label, image.dataUrl, image.fileName);
         setReferenceLibrary((current) => {
           const next = upsertReferenceLibraryItem(current, copied);
           saveReferenceLibraryCache(next);
@@ -718,7 +792,41 @@ export const TodayView: React.FC = () => {
       setExerciseEditingTaskId(null);
       setExerciseDraft([]);
       setNewExerciseName('');
+      setExercisePicker(null);
+      setExercisePickerQuery('');
       addToast('Đã cập nhật các bài trong buổi tập', 'success');
+    };
+
+    const pickerTargetId = exercisePicker?.mode === 'replace' ? exercisePicker.draftId : null;
+    const blockedExerciseKeys = new Set(
+      exerciseDraft
+        .filter((item) => item.id !== pickerTargetId)
+        .map((item) => getExerciseProgressKey(item.label))
+        .filter(Boolean),
+    );
+    const pickerQuery = normalizeExerciseSearch(exercisePickerQuery);
+    const exercisePickerOptions = exerciseLibrary
+      .filter((option) => !blockedExerciseKeys.has(option.key))
+      .filter((option) => {
+        if (!pickerQuery) return true;
+        return normalizeExerciseSearch(`${option.label} ${option.taskTitle || ''}`).includes(pickerQuery);
+      })
+      .slice(0, 30);
+
+    const chooseExistingExercise = (option: ExerciseLibraryOption) => {
+      if (!exercisePicker) return;
+      if (exercisePicker.mode === 'replace') {
+        setExerciseDraft((current) => current.map((item) => (
+          item.id === exercisePicker.draftId ? { ...item, label: option.label } : item
+        )));
+      } else {
+        setExerciseDraft((current) => [
+          ...current,
+          { id: `exercise-existing-${Date.now()}-${current.length}`, label: option.label },
+        ]);
+      }
+      setExercisePicker(null);
+      setExercisePickerQuery('');
     };
 
     const visibleNotes = getVisibleTaskNotes(selectedTask.notes);
@@ -884,7 +992,7 @@ export const TodayView: React.FC = () => {
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Bài tập trong buổi</p>
                       <p className="mt-0.5 text-[10px] text-slate-400">
-                        {editingExercises ? 'Đổi tên, thứ tự, thêm hoặc xóa ngay tại đây.' : 'Kg và reps lưu riêng theo từng ngày tập.'}
+                        {editingExercises ? 'Đổi tên, thay bài, đổi thứ tự, thêm hoặc xóa ngay tại đây.' : 'Kg và reps lưu riêng theo từng ngày tập.'}
                       </p>
                     </div>
                     {editingExercises ? (
@@ -917,20 +1025,34 @@ export const TodayView: React.FC = () => {
 
                   {editingExercises ? (
                     <div className="space-y-2.5">
-                      {exerciseDraft.map((label, index) => (
-                        <div key={`${selectedTask.id}-exercise-edit-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5">
-                          <span className="w-6 shrink-0 text-center text-[10px] font-bold tabular-nums text-slate-400">
-                            {String(index + 1).padStart(2, '0')}
-                          </span>
-                          <input
-                            value={label}
-                            onChange={(event) =>
-                              setExerciseDraft((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))
-                            }
-                            placeholder="Tên bài tập, ví dụ Bench press 3x10"
-                            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                          />
-                          <div className="flex shrink-0 items-center gap-1">
+                      {exerciseDraft.map((item, index) => (
+                        <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 shrink-0 text-center text-[10px] font-bold tabular-nums text-slate-400">
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                            <input
+                              value={item.label}
+                              onChange={(event) =>
+                                setExerciseDraft((current) => current.map((draft) => (
+                                  draft.id === item.id ? { ...draft, label: event.target.value } : draft
+                                )))
+                              }
+                              placeholder="Tên bài tập, ví dụ Bench press 3x10"
+                              className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExercisePicker({ mode: 'replace', draftId: item.id });
+                                setExercisePickerQuery('');
+                              }}
+                              className="h-8 shrink-0 rounded-lg bg-indigo-50 px-2.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100"
+                            >
+                              Thay
+                            </button>
+                          </div>
+                          <div className="mt-2 flex items-center justify-end gap-1">
                             <button
                               type="button"
                               disabled={index === 0}
@@ -951,7 +1073,7 @@ export const TodayView: React.FC = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setExerciseDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                              onClick={() => setExerciseDraft((current) => current.filter((draft) => draft.id !== item.id))}
                               className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-400 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-500"
                               aria-label="Xóa bài tập"
                             >
@@ -983,6 +1105,18 @@ export const TodayView: React.FC = () => {
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
+                      {exerciseLibrary.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExercisePicker({ mode: 'add' });
+                            setExercisePickerQuery('');
+                          }}
+                          className="h-10 w-full rounded-xl border border-indigo-100 bg-indigo-50/70 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"
+                        >
+                          + Chọn bài đã có
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="space-y-2.5">
@@ -1272,6 +1406,89 @@ export const TodayView: React.FC = () => {
               </button>
             </div>
           </section>
+        {exercisePicker ? (
+          <div
+            className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-950/35 backdrop-blur-xs sm:items-center sm:p-4"
+            onClick={() => { setExercisePicker(null); setExercisePickerQuery(''); }}
+          >
+            <section
+              className="flex max-h-[78dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-bold text-slate-900">
+                    {exercisePicker.mode === 'replace' ? 'Thay bằng bài đã có' : 'Thêm bài đã có'}
+                  </h2>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Dùng lại ảnh tham khảo và lịch sử kg/reps của đúng bài đó.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setExercisePicker(null); setExercisePickerQuery(''); }}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500"
+                  aria-label="Đóng danh sách bài tập"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="border-b border-slate-100 p-3">
+                <input
+                  autoFocus
+                  value={exercisePickerQuery}
+                  onChange={(event) => setExercisePickerQuery(event.target.value)}
+                  placeholder="Tìm bài tập đã từng dùng…"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                />
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[max(18px,env(safe-area-inset-bottom))]">
+                {exercisePickerOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    {exercisePickerOptions.map((option) => {
+                      const image = getReferenceLibraryItem(referenceLibrary, option.label);
+                      const progress = exerciseProgress[option.key];
+                      const latest = progress?.latest;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => chooseExistingExercise(option)}
+                          className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50/30"
+                        >
+                          <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-100 text-xs font-bold text-slate-400">
+                            {image ? <img src={image.dataUrl} alt="" className="h-full w-full object-cover" /> : 'GYM'}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words text-sm font-bold text-slate-800">{option.label}</span>
+                            <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">
+                              {latest?.weight || latest?.reps
+                                ? `Gần nhất: ${latest.weight || '—'}kg × ${latest.reps || '—'} reps`
+                                : option.taskTitle
+                                  ? `Đã dùng trong “${option.taskTitle}”`
+                                  : 'Đã có trong thư viện bài tập'}
+                            </span>
+                          </span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-5 py-10 text-center">
+                    <p className="text-sm font-bold text-slate-700">Không tìm thấy bài phù hợp</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      Có thể đóng danh sách và nhập tên bài mới ở màn sửa.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
         </main>
       </div>
     );

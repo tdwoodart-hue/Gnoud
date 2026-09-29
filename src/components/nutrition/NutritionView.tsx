@@ -13,13 +13,17 @@ import {
   Scale,
   Search,
   Settings2,
+  Sparkles,
   Trash2,
   UtensilsCrossed,
   Wheat,
   X,
 } from 'lucide-react';
 import { PageHeader } from '../common/PageHeader';
+import { QuickActionModal } from '../common/QuickActionModal';
+import { useApp } from '../../context/AppContext';
 import {
+  applyQuickNutritionAction,
   calculateBmr,
   calculateTdee,
   fromLocalIso,
@@ -35,6 +39,7 @@ import {
   NutritionEntry,
   NutritionProfile,
   recommendedTargets,
+  removeNutritionBatch,
   saveNutritionState,
   toLocalIso,
   upsertDailyMetric,
@@ -60,6 +65,7 @@ import {
   scaleFoodPortion,
   scaleFoodVariant,
 } from '../../services/foodLibraryService';
+import type { QuickAction } from '../../services/quickActionService';
 
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -1491,6 +1497,7 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, foods, onClose, 
 };
 
 export const NutritionView: React.FC = () => {
+  const { addToast } = useApp();
   const [nutrition, setNutrition] = useState(() => loadNutritionState());
   const [foods, setFoods] = useState(() => loadFoodLibrary());
   const [mode, setMode] = useState<'day' | 'week'>('day');
@@ -1498,6 +1505,7 @@ export const NutritionView: React.FC = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [foodLibraryOpen, setFoodLibraryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickInputOpen, setQuickInputOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<NutritionEntry | null>(null);
 
   useEffect(() => {
@@ -1650,6 +1658,29 @@ export const NutritionView: React.FC = () => {
         })),
       ],
     }));
+  };
+
+  const applyQuickNutrition = (action: QuickAction) => {
+    if (action.type !== 'nutrition') return;
+    const batchId = `nutrition-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const itemCount = action.items.length;
+    const targetDate = action.date || selectedDate;
+
+    setNutrition((current) => applyQuickNutritionAction(current, action, selectedDate, batchId).state);
+    if (targetDate !== selectedDate) setSelectedDate(targetDate);
+    setMode('day');
+
+    addToast(
+      `Đã lưu nhanh ${itemCount} món vào ${mealLabels[action.meal].toLowerCase()}`,
+      'success',
+      {
+        label: 'Hoàn tác',
+        onClick: () => {
+          setNutrition((current) => removeNutritionBatch(current, batchId));
+          addToast('Đã hoàn tác lần nhập nhanh', 'info');
+        },
+      },
+    );
   };
 
   const removeEntry = (id: string) => {
@@ -1824,8 +1855,16 @@ export const NutritionView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => setQuickInputOpen(true)}
+                  className="flex h-9 items-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Nhập nhanh
+                </button>
+                <button
+                  type="button"
                   onClick={() => setFoodLibraryOpen(true)}
-                  className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+                  className="hidden h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 sm:flex"
                 >
                   <Database className="h-3.5 w-3.5" />
                   Kho món
@@ -1851,7 +1890,7 @@ export const NutritionView: React.FC = () => {
                   <UtensilsCrossed className="h-4.5 w-4.5" />
                 </span>
                 <span className="text-xs font-bold text-slate-600">Chưa ghi bữa ăn nào</span>
-                <span className="mt-1 text-[11px] text-slate-400">Thêm calories và macro để bắt đầu theo dõi.</span>
+                <span className="mt-1 text-[11px] text-slate-400">Thêm thủ công hoặc dùng Nhập nhanh để lưu cả bữa một lần.</span>
               </button>
             ) : (
               <div className="space-y-3">
@@ -2108,6 +2147,14 @@ export const NutritionView: React.FC = () => {
           }}
           onSaveCustomFood={handleSaveCustomFood}
           onAdd={addEntries}
+        />
+      )}
+      {quickInputOpen && (
+        <QuickActionModal
+          domain="nutrition"
+          date={selectedDate}
+          onClose={() => setQuickInputOpen(false)}
+          onApply={applyQuickNutrition}
         />
       )}
       {editingEntry && (

@@ -96,6 +96,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
   const [position, setPosition] = useState<AssistantWindowPosition | null>(() => loadAssistantPosition());
   const [history, setHistory] = useState<AssistantHistoryItem[]>(() => loadAssistantHistory());
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const readIntent = useMemo(
     () => input.trim() ? parseAssistantReadIntent(input) : null,
@@ -368,48 +369,68 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
     if (!desktop || (event.target as HTMLElement).closest('button, input, textarea, select, a')) return;
     const panel = panelRef.current;
     if (!panel) return;
+
     const rect = panel.getBoundingClientRect();
+    const currentPosition = {
+      x: clamp(rect.left, 12, Math.max(12, window.innerWidth - rect.width - 12)),
+      y: clamp(rect.top, 12, Math.max(12, window.innerHeight - rect.height - 12)),
+    };
+
     dragRef.current = {
       pointerId: event.pointerId,
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    const panel = panelRef.current;
-    if (!desktop || !drag || drag.pointerId !== event.pointerId || !panel) return;
-    const x = clamp(
-      event.clientX - drag.offsetX,
-      12,
-      Math.max(12, window.innerWidth - panel.offsetWidth - 12),
-    );
-    const y = clamp(
-      event.clientY - drag.offsetY,
-      12,
-      Math.max(12, window.innerHeight - panel.offsetHeight - 12),
-    );
-    const next = { x, y };
-    setPosition(next);
-    saveAssistantPosition(next);
-  };
-
-  const endDrag = (event: React.PointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    if (position) saveAssistantPosition(position);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
+    setPosition(currentPosition);
+    saveAssistantPosition(currentPosition);
+    setDragging(true);
+    event.preventDefault();
   };
 
   const resetPosition = () => {
     clearAssistantPosition();
     setPosition(null);
   };
+
+  useEffect(() => {
+    if (!dragging) return undefined;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const drag = dragRef.current;
+      const panel = panelRef.current;
+      if (!drag || drag.pointerId !== event.pointerId || !panel) return;
+
+      const x = clamp(
+        event.clientX - drag.offsetX,
+        12,
+        Math.max(12, window.innerWidth - panel.offsetWidth - 12),
+      );
+      const y = clamp(
+        event.clientY - drag.offsetY,
+        12,
+        Math.max(12, window.innerHeight - panel.offsetHeight - 12),
+      );
+      const next = { x, y };
+      setPosition(next);
+      saveAssistantPosition(next);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      dragRef.current = null;
+      setDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [dragging]);
 
   if (!isOpen) return null;
 
@@ -426,10 +447,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
         >
           <div
             onPointerDown={startDrag}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            className="cursor-move select-none px-2 text-[11px] font-bold text-slate-700"
+            className="cursor-grab select-none px-2 text-[11px] font-bold text-slate-700 active:cursor-grabbing"
           >
             Trợ lý
           </div>
@@ -468,15 +486,15 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({ isOpen, onClose 
       >
         <header
           onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          className="flex cursor-default select-none items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:cursor-move sm:px-5"
+          style={{ touchAction: 'none' }}
+          className={`flex cursor-default select-none items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5 ${
+            dragging ? 'sm:cursor-grabbing' : 'sm:cursor-grab'
+          }`}
         >
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Trợ lý</h2>
             <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
-              Kéo thanh này để di chuyển · Ctrl/⌘ + Enter để xác nhận
+              Giữ và kéo thanh này để di chuyển · Ctrl/⌘ + Enter để xác nhận
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">

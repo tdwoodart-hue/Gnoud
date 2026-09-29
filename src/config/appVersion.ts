@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.2';
-export const APP_UPDATED_AT = '2026-09-29T13:15:00+07:00';
+export const APP_VERSION = '0.9.3';
+export const APP_UPDATED_AT = '2026-09-29T13:50:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.3',
+    updatedAt: '2026-09-29T13:50:00+07:00',
+    title: 'Trợ lý dạng cửa sổ kéo được + lệnh chỉ đọc',
+    changes: [
+      'Desktop: Trợ lý trở thành cửa sổ nổi không khóa app, kéo được và nhớ vị trí.',
+      'Có Ẩn/thu gọn, mở lại mà không mất nội dung đang nhập; draft tự lưu.',
+      'Thêm lịch sử lệnh gần đây, xóa nhanh nội dung và phím tắt Ctrl/⌘ + Shift + A.',
+      'Ctrl/⌘ + Enter xác nhận thao tác ghi dữ liệu; Escape thu gọn cửa sổ.',
+      'Trợ lý có thể trả lời nhanh dinh dưỡng hôm nay, việc hôm nay và buổi tập hôm nay mà không ghi dữ liệu.',
+    ],
+  },
   {
     version: '0.9.2',
     updatedAt: '2026-09-29T13:15:00+07:00',

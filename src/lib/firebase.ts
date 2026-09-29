@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -17,6 +18,9 @@ export const db = initializeFirestore(
     ? firebaseConfig.firestoreDatabaseId
     : undefined
 );
+
+// Reader files (PDF/EPUB/TXT) are stored per user in Firebase Storage.
+export const storage = getStorage(app);
 
 // Connection check
 export async function testFirebaseConnection() {

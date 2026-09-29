@@ -50,8 +50,21 @@ import {
   type ReaderFormat,
   type ReaderTheme,
   type ReaderWidth,
+  type ReaderPageTransition,
   type ReaderTtsProvider,
 } from '../../services/readerService';
+import {
+  cacheCloudCoverLocally,
+  cacheCloudPayloadLocally,
+  deleteCloudReaderBook,
+  mergeReaderLibraries,
+  migrateLocalReaderLibraryToCloud,
+  saveCloudReaderMetadata,
+  subscribeCloudReaderBooks,
+  uploadReaderBookPayload,
+  uploadReaderCover,
+  type ReaderCloudStatus,
+} from '../../services/readerCloudService';
 import { EmptyState } from '../common/EmptyState';
 import { PageHeader } from '../common/PageHeader';
 
@@ -215,6 +228,8 @@ export const ReaderView: React.FC = () => {
   const [lastPinnedAt, setLastPinnedAt] = useState<string | null>(null);
   const [readerViewport, setReaderViewport] = useState({ width: 390, height: 640 });
   const [pageTurnFx, setPageTurnFx] = useState<'next' | 'prev' | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<ReaderCloudStatus>('idle');
+  const [cloudError, setCloudError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const epubCacheRef = useRef(new Map<string, EpubChapter[]>());
@@ -230,6 +245,7 @@ export const ReaderView: React.FC = () => {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const pageTurnTimerRef = useRef<number | null>(null);
+  const cloudMetadataTimerRef = useRef<number | null>(null);
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -248,20 +264,82 @@ export const ReaderView: React.FC = () => {
   }, [books, loadedFor, storageIdentity, user?.uid]);
 
   useEffect(() => {
+    if (!user?.uid || loadedFor !== storageIdentity) {
+      setCloudStatus('idle');
+      setCloudError('');
+      return undefined;
+    }
+
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    const userId = user.uid;
+    setCloudStatus('syncing');
+    setCloudError('');
+
+    const bootstrap = async () => {
+      try {
+        // Lần đầu sau khi cập nhật: đẩy sách đang có trên thiết bị lên tài khoản.
+        const localSnapshot = loadReaderLibrary(userId);
+        const migrated = await migrateLocalReaderLibraryToCloud(userId, localSnapshot);
+        if (disposed) return;
+        setBooks((current) => mergeReaderLibraries(current, migrated));
+        setActiveBookId((currentId) => {
+          const merged = mergeReaderLibraries(loadReaderLibrary(userId), migrated);
+          return currentId && merged.some((book) => book.id === currentId) ? currentId : (merged[0]?.id || null);
+        });
+        setCloudStatus('synced');
+
+        unsubscribe = subscribeCloudReaderBooks(
+          userId,
+          (remoteBooks) => {
+            if (disposed) return;
+            setBooks((current) => {
+              const remoteIds = new Set(remoteBooks.map((book) => book.id));
+              // Cloud là nguồn chuẩn cho sách đã sync; sách local đang upload vẫn được giữ.
+              const keepLocal = current.filter((book) => remoteIds.has(book.id) || !book.cloudFilePath);
+              const merged = mergeReaderLibraries(keepLocal, remoteBooks);
+              setActiveBookId((currentId) => currentId && merged.some((book) => book.id === currentId) ? currentId : (merged[0]?.id || null));
+              return merged;
+            });
+            setCloudStatus('synced');
+            setCloudError('');
+          },
+          (error) => {
+            if (disposed) return;
+            setCloudStatus('error');
+            setCloudError(error instanceof Error ? error.message : 'Không đồng bộ được thư viện.');
+          },
+        );
+      } catch (error) {
+        if (disposed) return;
+        setCloudStatus('error');
+        setCloudError(error instanceof Error ? error.message : 'Không đồng bộ được thư viện.');
+      }
+    };
+
+    void bootstrap();
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [user?.uid, loadedFor, storageIdentity]);
+
+  useEffect(() => {
     let disposed = false;
     const createdUrls: string[] = [];
     const loadCovers = async () => {
       const next: Record<string, string> = {};
       await Promise.all(books.map(async (book) => {
-        if (!book.coverKey) return;
+        if (!book.coverKey && !book.cloudCoverPath) return;
         try {
-          const blob = await loadReaderBinary(book.coverKey);
+          let blob = book.coverKey ? await loadReaderBinary(book.coverKey) : null;
+          if (!blob && book.cloudCoverPath) blob = await cacheCloudCoverLocally(book);
           if (!blob || disposed) return;
           const url = URL.createObjectURL(blob);
           createdUrls.push(url);
           next[book.id] = url;
         } catch {
-          // Bìa là dữ liệu phụ; không chặn thư viện nếu đọc bìa lỗi.
+          // Bìa là dữ liệu phụ; không chặn thư viện nếu tải bìa lỗi.
         }
       }));
       if (!disposed) setCoverUrls(next);
@@ -271,7 +349,7 @@ export const ReaderView: React.FC = () => {
       disposed = true;
       createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [books.map((book) => `${book.id}:${book.coverKey || ''}`).join('|')]);
+  }, [books.map((book) => `${book.id}:${book.coverKey || ''}:${book.cloudCoverPath || ''}`).join('|')]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
@@ -320,6 +398,48 @@ export const ReaderView: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!user?.uid || !activeBook || loadedFor !== storageIdentity) return undefined;
+    if (cloudMetadataTimerRef.current) window.clearTimeout(cloudMetadataTimerRef.current);
+    cloudMetadataTimerRef.current = window.setTimeout(() => {
+      void saveCloudReaderMetadata(user.uid, activeBook)
+        .then(() => {
+          const syncedAt = new Date().toISOString();
+          setBooks((current) => current.map((book) => book.id === activeBook.id ? { ...book, cloudSyncedAt: syncedAt } : book));
+          setCloudStatus('synced');
+          setCloudError('');
+        })
+        .catch((error) => {
+          console.warn('Could not sync reader progress:', error);
+          setCloudStatus('error');
+          setCloudError('Tiến độ vẫn lưu trên máy nhưng chưa đồng bộ được.');
+        });
+    }, 900);
+    return () => {
+      if (cloudMetadataTimerRef.current) window.clearTimeout(cloudMetadataTimerRef.current);
+    };
+  }, [user?.uid, activeBook?.id, activeBook?.updatedAt, loadedFor, storageIdentity]);
+
+  const syncNewBookToCloud = async (book: ReaderBook, payload: Blob, cover?: Blob) => {
+    if (!user?.uid) return;
+    setCloudStatus('syncing');
+    try {
+      const cloudFilePath = await uploadReaderBookPayload(user.uid, book, payload);
+      const cloudCoverPath = cover ? await uploadReaderCover(user.uid, book, cover) : book.cloudCoverPath;
+      const cloudSyncedAt = new Date().toISOString();
+      const syncedBook = { ...book, cloudFilePath, cloudCoverPath, cloudSyncedAt };
+      await saveCloudReaderMetadata(user.uid, syncedBook);
+      setBooks((current) => current.map((item) => item.id === book.id ? { ...item, cloudFilePath, cloudCoverPath, cloudSyncedAt } : item));
+      setCloudStatus('synced');
+      setCloudError('');
+    } catch (error) {
+      console.warn('Could not upload reader book:', error);
+      setCloudStatus('error');
+      setCloudError('Sách đang chỉ có trên thiết bị này.');
+      addToast('Đã thêm sách trên thiết bị, nhưng chưa đồng bộ lên tài khoản.', 'warning');
+    }
+  };
+
+  useEffect(() => {
     let disposed = false;
     let objectUrl: string | null = null;
     setPdfUrl(null);
@@ -327,9 +447,26 @@ export const ReaderView: React.FC = () => {
     setBinaryError('');
     setBinaryLoading(false);
 
-    if (!activeBook || activeBook.format === 'text' || !activeBook.binaryKey) return undefined;
+    if (!activeBook) return undefined;
 
     const load = async () => {
+      if (activeBook.format === 'text') {
+        if (activeBook.content || !activeBook.cloudFilePath) return;
+        setBinaryLoading(true);
+        try {
+          const blob = await cacheCloudPayloadLocally(activeBook);
+          if (!blob) throw new Error('Không tải được nội dung sách từ tài khoản.');
+          const content = await blob.text();
+          if (!disposed) updateBook(activeBook.id, { content, binaryKey: activeBook.binaryKey || `reader-file:${activeBook.id}` });
+        } catch (error) {
+          if (!disposed) setBinaryError(error instanceof Error ? error.message : 'Không mở được sách.');
+        } finally {
+          if (!disposed) setBinaryLoading(false);
+        }
+        return;
+      }
+
+      if (!activeBook.binaryKey && !activeBook.cloudFilePath) return;
       setBinaryLoading(true);
       try {
         if (activeBook.format === 'epub') {
@@ -339,8 +476,11 @@ export const ReaderView: React.FC = () => {
             return;
           }
         }
-        const blob = await loadReaderBinary(activeBook.binaryKey as string);
-        if (!blob) throw new Error('Không tìm thấy file gốc trên thiết bị này.');
+        let blob = activeBook.binaryKey ? await loadReaderBinary(activeBook.binaryKey) : null;
+        if (!blob && activeBook.cloudFilePath) blob = await cacheCloudPayloadLocally(activeBook);
+        if (!blob) throw new Error('Không tìm thấy file sách trên thiết bị hoặc tài khoản.');
+        if (!activeBook.binaryKey) updateBook(activeBook.id, { binaryKey: `reader-file:${activeBook.id}` });
+
         if (activeBook.format === 'pdf') {
           objectUrl = URL.createObjectURL(blob);
           if (!disposed) setPdfUrl(objectUrl);
@@ -384,7 +524,7 @@ export const ReaderView: React.FC = () => {
       disposed = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [activeBook?.id, activeBook?.binaryKey, activeBook?.format]);
+  }, [activeBook?.id, activeBook?.binaryKey, activeBook?.cloudFilePath, activeBook?.format]);
 
   const chapterIndex = activeBook?.format === 'epub'
     ? Math.min(activeBook.currentChapter || 0, Math.max(0, epubChapters.length - 1))
@@ -833,13 +973,17 @@ export const ReaderView: React.FC = () => {
         const content = await file.text();
         if (!content.trim()) throw new Error('File không có nội dung để đọc.');
         if (content.length > READER_MAX_BOOK_CHARS) throw new Error('File văn bản quá lớn để lưu trực tiếp.');
-        addBook(createReaderBook({
+        const book = createReaderBook({
           title: formatFileTitle(file.name),
           content,
           format,
           fileName: file.name,
           fileSize: file.size,
-        }));
+        });
+        book.binaryKey = `reader-file:${book.id}`;
+        await saveReaderBinary(book.binaryKey, new Blob([content], { type: file.type || 'text/plain;charset=utf-8' }));
+        addBook(book);
+        void syncNewBookToCloud(book, file);
         return;
       }
 
@@ -870,6 +1014,7 @@ export const ReaderView: React.FC = () => {
         epubCacheRef.current.set(book.id, parsedEpub.chapters);
       }
       addBook(book);
+      void syncNewBookToCloud(book, file, parsedEpub?.cover);
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'Không thể thêm file sách.', 'error');
     } finally {
@@ -892,7 +1037,11 @@ export const ReaderView: React.FC = () => {
       addToast('Nội dung quá lớn để lưu trực tiếp.', 'warning');
       return;
     }
-    addBook(createReaderBook({ title: draftTitle, author: draftAuthor, content, format: 'text' }));
+    const book = createReaderBook({ title: draftTitle, author: draftAuthor, content, format: 'text' });
+    book.binaryKey = `reader-file:${book.id}`;
+    void saveReaderBinary(book.binaryKey, new Blob([content], { type: 'text/plain;charset=utf-8' }));
+    addBook(book);
+    void syncNewBookToCloud(book, new Blob([content], { type: 'text/plain;charset=utf-8' }));
     setDraftTitle('');
     setDraftAuthor('');
     setDraftContent('');
@@ -911,6 +1060,7 @@ export const ReaderView: React.FC = () => {
     epubCacheRef.current.delete(book.id);
     if (book.binaryKey) void deleteReaderBinary(book.binaryKey).catch(() => undefined);
     if (book.coverKey) void deleteReaderBinary(book.coverKey).catch(() => undefined);
+    if (user?.uid) void deleteCloudReaderBook(user.uid, book).catch(() => undefined);
     addToast(`Đã xóa “${book.title}” khỏi thư viện`, 'info');
   };
 
@@ -985,22 +1135,28 @@ export const ReaderView: React.FC = () => {
   };
 
   const stepViewport = (direction: -1 | 1) => {
-    if (!activeBook || activeBook.format === 'pdf' || pageTurnFx) return;
+    if (!activeBook || activeBook.format === 'pdf') return;
     const count = Math.max(1, readerPages.length);
     const target = visualPage + direction;
 
-    setPageTurnFx(direction > 0 ? 'next' : 'prev');
-    if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
-    pageTurnTimerRef.current = window.setTimeout(() => {
-      if (target >= 1 && target <= count) {
-        commitPage(target);
-      } else if (direction > 0 && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
-        changeChapter(chapterIndex + 1, 'start');
-      } else if (direction < 0 && activeBook.format === 'epub' && chapterIndex > 0) {
-        changeChapter(chapterIndex - 1, 'end');
+    if (target >= 1 && target <= count) {
+      commitPage(target);
+      if (activeBook.pageTransition === 'slide') {
+        setPageTurnFx(direction > 0 ? 'next' : 'prev');
+        if (pageTurnTimerRef.current) window.clearTimeout(pageTurnTimerRef.current);
+        pageTurnTimerRef.current = window.setTimeout(() => setPageTurnFx(null), 110);
+      } else {
+        setPageTurnFx(null);
       }
-      setPageTurnFx(null);
-    }, 150);
+      return;
+    }
+
+    setPageTurnFx(null);
+    if (direction > 0 && activeBook.format === 'epub' && chapterIndex < epubChapters.length - 1) {
+      changeChapter(chapterIndex + 1, 'start');
+    } else if (direction < 0 && activeBook.format === 'epub' && chapterIndex > 0) {
+      changeChapter(chapterIndex - 1, 'end');
+    }
   };
 
   const handlePageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
@@ -1101,12 +1257,12 @@ export const ReaderView: React.FC = () => {
             ref={readingScrollRef}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
-            className="relative h-full w-full overflow-hidden [perspective:1400px]"
+            className="relative h-full w-full overflow-hidden"
           >
             <article
               key={`${activeBook.id}-${chapterIndex}-${visualPage}-${pageCharLimit}`}
               className={`reader-page mx-auto flex h-full flex-col px-7 pb-24 pt-24 sm:px-10 ${widthClasses[activeBook.contentWidth]} ${
-                pageTurnFx === 'next' ? 'reader-page-turn-next' : pageTurnFx === 'prev' ? 'reader-page-turn-prev' : ''
+                activeBook.pageTransition === 'slide' && pageTurnFx === 'next' ? 'reader-page-slide-next' : activeBook.pageTransition === 'slide' && pageTurnFx === 'prev' ? 'reader-page-slide-prev' : ''
               }`}
               style={{
                 fontFamily: fontFamilies[activeBook.fontFamily],
@@ -1351,6 +1507,16 @@ export const ReaderView: React.FC = () => {
                         <button key={id} type="button" onClick={() => updateBook(activeBook.id, { contentWidth: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.contentWidth === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}>{label}</button>
                       ))}
                     </div>
+                  </div>
+
+                  <div>
+                    <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Chuyển trang</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([['none', 'Không hiệu ứng'], ['slide', 'Trượt nhẹ']] as Array<[ReaderPageTransition, string]>).map(([id, label]) => (
+                        <button key={id} type="button" onClick={() => updateBook(activeBook.id, { pageTransition: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.pageTransition === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}>{label}</button>
+                      ))}
+                    </div>
+                    <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Mặc định không hiệu ứng. Vuốt trái/phải vẫn lật trang bình thường.</p>
                   </div>
 
                   <div>
@@ -1640,7 +1806,12 @@ export const ReaderView: React.FC = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Library className="h-4 w-4 text-slate-400" /> Thư viện</h2>
-            <p className="mt-0.5 text-[10px] font-medium text-slate-400">{books.length}/{READER_MAX_BOOKS} sách · PDF/EPUB lưu trên thiết bị này</p>
+            <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+              {books.length}/{READER_MAX_BOOKS} sách · {user ? (
+                cloudStatus === 'syncing' ? 'đang đồng bộ tài khoản…' : cloudStatus === 'error' ? 'một số sách chỉ có trên thiết bị' : 'đồng bộ theo tài khoản'
+              ) : 'chỉ lưu trên thiết bị · đăng nhập để đồng bộ'}
+            </p>
+            {cloudError ? <p className="mt-0.5 text-[9px] font-medium text-amber-600">{cloudError}</p> : null}
           </div>
           <button
             type="button"
@@ -1675,7 +1846,7 @@ export const ReaderView: React.FC = () => {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-slate-900">{book.title}</span>
                     <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">
-                      {book.author || formatLabels[book.format]}{book.fileSize ? ` · ${formatFileSize(book.fileSize)}` : ''}
+                      {book.author || formatLabels[book.format]}{book.fileSize ? ` · ${formatFileSize(book.fileSize)}` : ''}{user && book.cloudFilePath ? ' · đã sync' : ''}
                     </span>
                     {book.format !== 'pdf' ? <span className="mt-1 block text-[9px] font-bold text-indigo-500">{readingLabel(book)}</span> : null}
                   </span>

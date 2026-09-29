@@ -3,6 +3,7 @@ export type ReaderFormat = 'text' | 'pdf' | 'epub';
 export type ReaderFont = 'book' | 'serif' | 'sans';
 export type ReaderWidth = 'narrow' | 'medium' | 'wide';
 export type ReaderTextAlign = 'left' | 'justify';
+export type ReaderPageTransition = 'none' | 'slide';
 export type ReaderTtsMode = 'online' | 'device';
 export type ReaderTtsProvider = 'azure' | 'google';
 
@@ -26,6 +27,7 @@ export interface ReaderBook {
   fontFamily: ReaderFont;
   contentWidth: ReaderWidth;
   textAlign: ReaderTextAlign;
+  pageTransition: ReaderPageTransition;
   ttsRate: number;
   ttsPitch: number;
   ttsCleanText: boolean;
@@ -34,6 +36,9 @@ export interface ReaderBook {
   ttsOnlineVoiceId?: string;
   ttsOnlineProvider?: ReaderTtsProvider;
   listeningProgress: number;
+  cloudFilePath?: string;
+  cloudCoverPath?: string;
+  cloudSyncedAt?: string;
   lastPositionAt?: string;
   theme: ReaderTheme;
   addedAt: string;
@@ -195,6 +200,7 @@ export function createReaderBook(input: {
     fontFamily: 'book',
     contentWidth: 'medium',
     textAlign: 'justify',
+    pageTransition: 'none',
     ttsRate: 0.95,
     ttsPitch: 1,
     ttsCleanText: true,
@@ -225,6 +231,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
         const fontFamily: ReaderFont = book.fontFamily === 'serif' || book.fontFamily === 'sans' ? book.fontFamily : 'book';
         const contentWidth: ReaderWidth = book.contentWidth === 'narrow' || book.contentWidth === 'wide' ? book.contentWidth : 'medium';
         const textAlign: ReaderTextAlign = book.textAlign === 'left' ? 'left' : 'justify';
+        const pageTransition: ReaderPageTransition = book.pageTransition === 'slide' ? 'slide' : 'none';
         return {
           id: book.id as string,
           title: typeof book.title === 'string' ? book.title : 'Sách chưa đặt tên',
@@ -245,6 +252,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           fontFamily,
           contentWidth,
           textAlign,
+          pageTransition,
           ttsRate: Math.min(2, Math.max(0.6, Number(book.ttsRate) || 0.95)),
           ttsPitch: Math.min(1.4, Math.max(0.7, Number(book.ttsPitch) || 1)),
           ttsCleanText: book.ttsCleanText !== false,
@@ -253,6 +261,9 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           ttsOnlineVoiceId: typeof book.ttsOnlineVoiceId === 'string' ? book.ttsOnlineVoiceId : 'vi-VN-HoaiMyNeural',
           ttsOnlineProvider: book.ttsOnlineProvider === 'google' ? 'google' : 'azure',
           listeningProgress: Math.min(1, Math.max(0, Number(book.listeningProgress) || 0)),
+          cloudFilePath: typeof book.cloudFilePath === 'string' ? book.cloudFilePath : undefined,
+          cloudCoverPath: typeof book.cloudCoverPath === 'string' ? book.cloudCoverPath : undefined,
+          cloudSyncedAt: typeof book.cloudSyncedAt === 'string' ? book.cloudSyncedAt : undefined,
           lastPositionAt: typeof book.lastPositionAt === 'string' ? book.lastPositionAt : undefined,
           theme,
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),

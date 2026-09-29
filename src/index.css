@@ -44,50 +44,30 @@ body {
 }
 
 .reader-page {
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
 
-.reader-page-turn-next {
-  transform-origin: left center;
-  animation: reader-page-turn-next 150ms cubic-bezier(0.22, 0.72, 0.26, 1) both;
+.reader-page-slide-next {
+  animation: reader-page-slide-next 110ms ease-out both;
 }
 
-.reader-page-turn-prev {
-  transform-origin: right center;
-  animation: reader-page-turn-prev 150ms cubic-bezier(0.22, 0.72, 0.26, 1) both;
+.reader-page-slide-prev {
+  animation: reader-page-slide-prev 110ms ease-out both;
 }
 
-@keyframes reader-page-turn-next {
-  0% {
-    transform: perspective(1200px) rotateY(0deg) translateX(0);
-    opacity: 1;
-    filter: brightness(1);
-  }
-  100% {
-    transform: perspective(1200px) rotateY(-13deg) translateX(-7%);
-    opacity: 0.22;
-    filter: brightness(0.93);
-  }
+@keyframes reader-page-slide-next {
+  from { transform: translateX(10px); opacity: 0.92; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
-@keyframes reader-page-turn-prev {
-  0% {
-    transform: perspective(1200px) rotateY(0deg) translateX(0);
-    opacity: 1;
-    filter: brightness(1);
-  }
-  100% {
-    transform: perspective(1200px) rotateY(13deg) translateX(7%);
-    opacity: 0.22;
-    filter: brightness(0.93);
-  }
+@keyframes reader-page-slide-prev {
+  from { transform: translateX(-10px); opacity: 0.92; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reader-page-turn-next,
-  .reader-page-turn-prev {
+  .reader-page-slide-next,
+  .reader-page-slide-prev {
     animation-duration: 1ms;
   }
 }

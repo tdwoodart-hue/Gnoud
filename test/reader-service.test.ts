@@ -32,6 +32,7 @@ test('new reader book starts at first chapter and page with compact defaults', (
   assert.equal(book.fontFamily, 'book');
   assert.equal(book.contentWidth, 'medium');
   assert.equal(book.textAlign, 'justify');
+  assert.equal(book.pageTransition, 'none');
   assert.equal(book.ttsRate, 0.95);
   assert.equal(book.ttsPitch, 1);
   assert.equal(book.ttsCleanText, true);

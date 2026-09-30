@@ -5,10 +5,23 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.17';
-export const APP_UPDATED_AT = '2026-09-30T23:35:00+07:00';
+export const APP_VERSION = '0.9.18';
+export const APP_UPDATED_AT = '2026-09-30T23:58:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.18',
+    updatedAt: '2026-09-30T23:58:00+07:00',
+    title: 'Làm mới tab Sách + tự sửa kết nối thông báo',
+    changes: [
+      'Tab Đọc sách có hero Đọc tiếp, progress rõ hơn và giao diện ấm kiểu bookshelf thay vì danh sách trắng.',
+      'Thêm Nhịp đọc: phút hôm nay, chuỗi ngày đọc liên tiếp và số cuốn đã hoàn thành.',
+      'Thư viện chuyển sang lưới bìa sách 2–4 cột, giữ thêm/xóa/đồng bộ và progress từng cuốn.',
+      'Thông báo tự đăng ký lại subscription hiện có vào server khi Firestore mất device record.',
+      'Tự thay subscription nếu VAPID public key đã đổi và retry sync khi server báo Device is not subscribed.',
+      'Service worker chờ trạng thái ready trước khi subscribe để ổn định hơn trên iPhone PWA.',
+    ],
+  },
   {
     version: '0.9.17',
     updatedAt: '2026-09-30T23:35:00+07:00',

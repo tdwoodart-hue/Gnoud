@@ -5,12 +5,14 @@ import {
   AlignLeft,
   BookmarkCheck,
   BookOpen,
+  Clock3,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Cloud,
   ExternalLink,
   FilePlus2,
+  Flame,
   Headphones,
   Library,
   List,
@@ -20,6 +22,7 @@ import {
   Moon,
   Pause,
   Play,
+  Plus,
   Settings2,
   Square,
   Smartphone,
@@ -431,6 +434,37 @@ export const ReaderView: React.FC = () => {
   }, [loadOnlineVoices]);
 
   const activeBook = books.find((book) => book.id === activeBookId) || null;
+
+  const readerHomeStats = useMemo(() => {
+    const today = readerDateKey();
+    let todaySeconds = 0;
+    const activeDates = new Set<string>();
+
+    books.forEach((book) => {
+      todaySeconds += (book.readingSecondsByDate?.[today] || 0) + (book.listeningSecondsByDate?.[today] || 0);
+
+      Object.entries(book.readingSecondsByDate || {}).forEach(([date, seconds]) => {
+        if (seconds > 0) activeDates.add(date);
+      });
+      Object.entries(book.listeningSecondsByDate || {}).forEach(([date, seconds]) => {
+        if (seconds > 0) activeDates.add(date);
+      });
+    });
+
+    let streak = 0;
+    const cursor = new Date();
+    for (let index = 0; index < 366; index += 1) {
+      if (!activeDates.has(readerDateKey(cursor))) break;
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    const finished = books.filter((book) => (book.overallProgress || 0) >= 0.995).length;
+    const todayMinutes = todaySeconds > 0 ? Math.max(1, Math.round(todaySeconds / 60)) : 0;
+
+    return { todayMinutes, streak, finished };
+  }, [books]);
+
   const readingMode: ReaderReadingMode = activeBook?.readingMode === 'paged' ? 'paged' : 'scroll';
 
   const updateBook = (id: string, updates: Partial<ReaderBook>) => {
@@ -2320,116 +2354,276 @@ export const ReaderView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
-      <PageHeader title="Sách" />
+      <div>
+        <PageHeader title="Đọc sách" />
+        <p className="-mt-2 text-xs font-medium text-slate-400">Một chút mỗi ngày. Mở sách lên là đủ.</p>
+      </div>
 
-      {activeBook && (
-        <button
-          type="button"
-          onClick={() => openBook(activeBook.id)}
-          className="group w-full overflow-hidden rounded-[24px] border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 text-left shadow-xs transition hover:border-indigo-200 hover:shadow-sm"
-        >
-          <div className="flex items-center gap-4">
-            <span className="grid h-[76px] w-[54px] shrink-0 place-items-center overflow-hidden rounded-xl bg-indigo-600 text-white shadow-sm">
-              {coverUrls[activeBook.id] ? (
-                <img src={coverUrls[activeBook.id]} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <BookOpen className="h-6 w-6" />
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-500">{activeBook.overallProgress > 0 ? 'Đọc tiếp' : 'Bắt đầu đọc'}</p>
-              <h2 className="mt-1 truncate text-base font-bold text-slate-900">{activeBook.title}</h2>
-              <p className="mt-1 truncate text-[11px] font-medium text-slate-400">
-                {activeBook.author ? `${activeBook.author} · ` : ''}{readingLabel(activeBook)}
-              </p>
+      <input
+        ref={fileInputRef}
+        className="hidden"
+        type="file"
+        accept=".pdf,.epub,.txt,.md,.markdown,application/pdf,application/epub+zip,text/plain,text/markdown"
+        onChange={(event) => void handleFile(event.target.files?.[0])}
+      />
+
+      {activeBook ? (
+        <>
+          <section className="relative overflow-hidden rounded-[28px] bg-[#eee8dc] p-5 shadow-[0_14px_40px_rgba(71,55,35,0.08)] sm:p-6">
+            <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-white/35" />
+            <div className="pointer-events-none absolute -bottom-20 right-20 h-36 w-36 rounded-full bg-[#dfd3bf]/45" />
+
+            <div className="relative flex items-center gap-4 sm:gap-5">
+              <button
+                type="button"
+                onClick={() => openBook(activeBook.id)}
+                className="grid h-[118px] w-[82px] shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#3c4659] text-white shadow-[0_12px_28px_rgba(44,49,58,0.22)] transition active:scale-[0.98]"
+                aria-label={`Mở ${activeBook.title}`}
+              >
+                {coverUrls[activeBook.id] ? (
+                  <img src={coverUrls[activeBook.id]} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <BookOpen className="h-7 w-7" />
+                )}
+              </button>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-500">
+                  {(activeBook.overallProgress || 0) > 0 ? 'Đang đọc' : 'Cuốn tiếp theo'}
+                </p>
+                <h2 className="mt-1.5 line-clamp-2 text-[18px] font-bold leading-6 tracking-tight text-stone-950 sm:text-xl">
+                  {activeBook.title}
+                </h2>
+                <p className="mt-1 truncate text-xs font-medium text-stone-500">
+                  {activeBook.author || formatLabels[activeBook.format]}
+                </p>
+
+                {activeBook.format !== 'pdf' ? (
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-semibold text-stone-500">{readingLabel(activeBook)}</span>
+                      <span className="text-[10px] font-bold text-stone-600">
+                        {Math.round(clamp(activeBook.overallProgress || 0, 0, 1) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
+                      <div
+                        className="h-full rounded-full bg-stone-700 transition-[width] duration-300"
+                        style={{ width: `${Math.round(clamp(activeBook.overallProgress || 0, 0, 1) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-[10px] font-semibold text-stone-500">PDF · vị trí đọc được lưu trên thiết bị</p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => openBook(activeBook.id)}
+                  className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-xs font-bold text-white shadow-sm transition active:scale-[0.98]"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  {(activeBook.overallProgress || 0) > 0 ? 'Đọc tiếp' : 'Bắt đầu đọc'}
+                </button>
+              </div>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-indigo-400 transition group-hover:translate-x-0.5" />
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between px-0.5">
+              <h2 className="text-sm font-bold text-slate-900">Nhịp đọc</h2>
+              <span className="text-[10px] font-medium text-slate-400">Tự tính từ thời gian đọc/nghe</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="rounded-[18px] bg-white p-3.5 shadow-xs ring-1 ring-slate-200/60">
+                <Clock3 className="h-4 w-4 text-slate-400" />
+                <p className="mt-3 text-lg font-bold tracking-tight text-slate-900">{readerHomeStats.todayMinutes}</p>
+                <p className="text-[10px] font-semibold text-slate-400">phút hôm nay</p>
+              </div>
+              <div className="rounded-[18px] bg-white p-3.5 shadow-xs ring-1 ring-slate-200/60">
+                <Flame className="h-4 w-4 text-slate-400" />
+                <p className="mt-3 text-lg font-bold tracking-tight text-slate-900">{readerHomeStats.streak}</p>
+                <p className="text-[10px] font-semibold text-slate-400">ngày liên tiếp</p>
+              </div>
+              <div className="rounded-[18px] bg-white p-3.5 shadow-xs ring-1 ring-slate-200/60">
+                <BookOpen className="h-4 w-4 text-slate-400" />
+                <p className="mt-3 text-lg font-bold tracking-tight text-slate-900">{readerHomeStats.finished}</p>
+                <p className="text-[10px] font-semibold text-slate-400">cuốn đã xong</p>
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="relative overflow-hidden rounded-[28px] bg-[#eee8dc] px-5 py-8 text-center shadow-[0_14px_40px_rgba(71,55,35,0.08)]">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-white/35" />
+          <span className="relative mx-auto grid h-16 w-12 place-items-center rounded-[14px] bg-stone-800 text-white shadow-lg">
+            <BookOpen className="h-5 w-5" />
+          </span>
+          <h2 className="relative mt-5 text-lg font-bold tracking-tight text-stone-950">Tạo một góc đọc của riêng mày</h2>
+          <p className="relative mx-auto mt-2 max-w-sm text-xs leading-5 text-stone-500">
+            Thêm một cuốn trước. Không cần đặt mục tiêu lớn — chỉ cần mở lại mỗi ngày vài phút.
+          </p>
+          <div className="relative mt-5 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              disabled={fileBusy}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {fileBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Thêm sách
+            </button>
+            <button
+              type="button"
+              onClick={() => setPasteOpen(true)}
+              className="h-10 rounded-xl bg-white/70 px-4 text-xs font-bold text-stone-700"
+            >
+              Dán văn bản
+            </button>
           </div>
-        </button>
+        </section>
       )}
 
       <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Library className="h-4 w-4 text-slate-400" /> Thư viện</h2>
-            <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Library className="h-4 w-4 text-slate-400" />
+              Thư viện
+            </h2>
+            <p className="mt-0.5 truncate text-[10px] font-medium text-slate-400">
               {books.length}/{READER_MAX_BOOKS} sách · {user ? (
-                cloudStatus === 'syncing' ? 'đang đồng bộ tài khoản…' : cloudStatus === 'error' ? 'một số sách chỉ có trên thiết bị' : 'đồng bộ theo tài khoản'
-              ) : 'chỉ lưu trên thiết bị · đăng nhập để đồng bộ'}
+                cloudStatus === 'syncing' ? 'đang đồng bộ…' : cloudStatus === 'error' ? 'một số sách chỉ có trên máy' : 'đã đồng bộ theo tài khoản'
+              ) : 'đang lưu trên thiết bị'}
             </p>
             {cloudError ? <p className="mt-0.5 text-[9px] font-medium text-amber-600">{cloudError}</p> : null}
           </div>
+
           <button
             type="button"
             disabled={fileBusy}
             onClick={() => fileInputRef.current?.click()}
-            className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-3.5 text-[11px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-[11px] font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
           >
-            {fileBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FilePlus2 className="h-4 w-4" />}
-            {fileBusy ? 'Đang đọc…' : 'Thêm sách'}
+            {fileBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Thêm
           </button>
-          <input
-            ref={fileInputRef}
-            className="hidden"
-            type="file"
-            accept=".pdf,.epub,.txt,.md,.markdown,application/pdf,application/epub+zip,text/plain,text/markdown"
-            onChange={(event) => void handleFile(event.target.files?.[0])}
-          />
         </div>
 
         {books.length > 0 ? (
-          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">
-            {books.map((book, index) => (
-              <div key={book.id} className={`flex items-center gap-3 px-3 py-3 ${index > 0 ? 'border-t border-slate-100' : ''}`}>
-                <button type="button" onClick={() => openBook(book.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <span className={`grid h-14 w-10 shrink-0 place-items-center overflow-hidden rounded-lg ${book.format === 'epub' ? 'bg-indigo-50 text-indigo-600' : book.format === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
-                    {coverUrls[book.id] ? (
-                      <img src={coverUrls[book.id]} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <BookOpen className="h-5 w-5" />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-slate-900">{book.title}</span>
-                    <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">
-                      {book.author || formatLabels[book.format]}{book.fileSize ? ` · ${formatFileSize(book.fileSize)}` : ''}{user && book.cloudFilePath ? ' · đã sync' : ''}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {books.map((book) => {
+              const progressValue = Math.round(clamp(book.overallProgress || 0, 0, 1) * 100);
+              const coverTone = book.format === 'epub'
+                ? 'bg-[#e9e4d8] text-stone-700'
+                : book.format === 'pdf'
+                  ? 'bg-[#e8e8e6] text-slate-600'
+                  : 'bg-[#e7ebef] text-slate-600';
+
+              return (
+                <article key={book.id} className="group relative overflow-hidden rounded-[20px] bg-white p-2.5 shadow-xs ring-1 ring-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={() => openBook(book.id)}
+                    className="block w-full text-left"
+                  >
+                    <span className={`relative grid aspect-[3/4] w-full place-items-center overflow-hidden rounded-[14px] ${coverTone}`}>
+                      {coverUrls[book.id] ? (
+                        <img src={coverUrls[book.id]} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+                      ) : (
+                        <>
+                          <BookOpen className="h-7 w-7" />
+                          <span className="absolute bottom-2 left-2 rounded-md bg-white/75 px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-slate-500">
+                            {formatLabels[book.format]}
+                          </span>
+                        </>
+                      )}
                     </span>
-                    {book.format !== 'pdf' ? <span className="mt-1 block text-[9px] font-bold text-indigo-500">{readingLabel(book)}</span> : null}
-                  </span>
-                </button>
-                <button type="button" onClick={() => removeBook(book)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-300 transition hover:bg-rose-50 hover:text-rose-500" title="Xóa sách" aria-label="Xóa sách"><Trash2 className="h-4 w-4" /></button>
-              </div>
-            ))}
+
+                    <span className="mt-2.5 block truncate text-[13px] font-bold text-slate-900">{book.title}</span>
+                    <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">
+                      {book.author || formatLabels[book.format]}
+                    </span>
+
+                    {book.format !== 'pdf' ? (
+                      <span className="mt-2 block">
+                        <span className="mb-1 flex items-center justify-between gap-2 text-[9px] font-semibold text-slate-400">
+                          <span>{progressValue > 0 ? `${progressValue}%` : 'Chưa đọc'}</span>
+                          {progressValue >= 100 ? <span>Đã xong</span> : null}
+                        </span>
+                        <span className="block h-1 overflow-hidden rounded-full bg-slate-100">
+                          <span className="block h-full rounded-full bg-slate-700" style={{ width: `${progressValue}%` }} />
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="mt-2 block text-[9px] font-semibold text-slate-400">PDF</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => removeBook(book)}
+                    className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-slate-400 shadow-sm backdrop-blur transition active:bg-rose-50 active:text-rose-500"
+                    title="Xóa sách"
+                    aria-label={`Xóa ${book.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </article>
+              );
+            })}
           </div>
-        ) : (
-          <div className="rounded-2xl border border-slate-200/70 bg-white py-8 shadow-xs">
-            <EmptyState title="Chưa có sách" description="Thêm PDF hoặc EPUB để bắt đầu đọc." />
-          </div>
-        )}
+        ) : null}
       </section>
 
-      <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
-        <button type="button" onClick={() => setPasteOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+      <section className="overflow-hidden rounded-[20px] bg-white shadow-xs ring-1 ring-slate-200/60">
+        <button
+          type="button"
+          onClick={() => setPasteOpen((value) => !value)}
+          className="flex min-h-[58px] w-full items-center justify-between gap-3 px-4 text-left active:bg-slate-50"
+        >
           <div>
-            <p className="text-xs font-bold text-slate-800">Văn bản thủ công</p>
+            <p className="text-[13px] font-semibold text-slate-800">Thêm bằng văn bản</p>
             <p className="mt-0.5 text-[10px] font-medium text-slate-400">TXT · MD · hoặc dán nội dung trực tiếp</p>
           </div>
           <ChevronDown className={`h-4 w-4 text-slate-400 transition ${pasteOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {pasteOpen && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
+        {pasteOpen ? (
+          <div className="border-t border-slate-100 p-4">
             <div className="grid gap-2 sm:grid-cols-2">
-              <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Tên sách" className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" />
-              <input value={draftAuthor} onChange={(event) => setDraftAuthor(event.target.value)} placeholder="Tác giả (không bắt buộc)" className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" />
+              <input
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                placeholder="Tên sách"
+                className="h-10 rounded-xl bg-slate-50 px-3 text-sm outline-none ring-1 ring-slate-200 focus:bg-white focus:ring-indigo-300"
+              />
+              <input
+                value={draftAuthor}
+                onChange={(event) => setDraftAuthor(event.target.value)}
+                placeholder="Tác giả (không bắt buộc)"
+                className="h-10 rounded-xl bg-slate-50 px-3 text-sm outline-none ring-1 ring-slate-200 focus:bg-white focus:ring-indigo-300"
+              />
             </div>
-            <textarea value={draftContent} onChange={(event) => setDraftContent(event.target.value)} placeholder="Dán nội dung sách vào đây…" rows={6} className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 outline-none focus:border-indigo-300 focus:bg-white" />
+            <textarea
+              value={draftContent}
+              onChange={(event) => setDraftContent(event.target.value)}
+              placeholder="Dán nội dung sách vào đây…"
+              rows={6}
+              className="mt-2 w-full resize-y rounded-xl bg-slate-50 p-3 text-sm leading-6 outline-none ring-1 ring-slate-200 focus:bg-white focus:ring-indigo-300"
+            />
             <div className="mt-2 flex items-center justify-between gap-3">
               <span className="text-[9px] font-medium text-slate-400">{draftContent.length.toLocaleString('vi-VN')} ký tự</span>
-              <button type="button" onClick={handlePasteSubmit} className="rounded-xl bg-slate-900 px-4 py-2 text-[11px] font-bold text-white hover:bg-slate-800">Thêm vào thư viện</button>
+              <button
+                type="button"
+                onClick={handlePasteSubmit}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-[11px] font-bold text-white active:bg-slate-800"
+              >
+                Thêm vào thư viện
+              </button>
             </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       {typeof document !== 'undefined' && readingOverlay ? createPortal(readingOverlay, document.body) : null}

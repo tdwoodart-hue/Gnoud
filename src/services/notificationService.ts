@@ -30,8 +30,71 @@ export function supportsPushNotifications(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+type NotificationServerConfig = {
+  publicKey: string;
+  schedulerReady: boolean;
+  schedulerError?: string | null;
+};
+
+async function getNotificationServerConfig(): Promise<NotificationServerConfig | null> {
+  try {
+    const response = await fetch('/api/notifications/public-key', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    if (!payload?.publicKey) return null;
+    return {
+      publicKey: String(payload.publicKey),
+      schedulerReady: payload.schedulerReady !== false,
+      schedulerError: payload.schedulerError || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function applicationServerKeyMatches(subscription: PushSubscription, publicKey: string): boolean {
+  const currentKey = subscription.options?.applicationServerKey;
+  if (!currentKey) return true;
+  const actual = new Uint8Array(currentKey);
+  const expected = urlBase64ToUint8Array(publicKey);
+  if (actual.length !== expected.length) return false;
+  return actual.every((value, index) => value === expected[index]);
+}
+
+async function persistSubscription(subscription: PushSubscription): Promise<boolean> {
+  try {
+    const response = await fetch('/api/notifications/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: getDeviceId(), subscription }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureCurrentSubscription(
+  registration: ServiceWorkerRegistration,
+  publicKey: string,
+): Promise<PushSubscription> {
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription && !applicationServerKeyMatches(subscription, publicKey)) {
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+    });
+  }
+  return subscription;
+}
+
 async function serverIsReady(): Promise<boolean> {
-  try { return (await fetch('/api/notifications/public-key')).ok; } catch { return false; }
+  const config = await getNotificationServerConfig();
+  return Boolean(config?.schedulerReady);
 }
 
 export async function getNotificationSchedulerReady(): Promise<boolean> {
@@ -46,9 +109,20 @@ export async function getNotificationState(): Promise<NotificationState> {
   if (!supportsPushNotifications()) return 'unsupported';
   if (!isInstalledPwa() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) return 'needs_install';
   if (Notification.permission !== 'granted') return Notification.permission;
+
+  const config = await getNotificationServerConfig();
+  if (!config?.schedulerReady) return 'server_unavailable';
+
   const registration = await navigator.serviceWorker.getRegistration();
-  const subscription = await registration?.pushManager.getSubscription();
-  return resolveNotificationState(Notification.permission, Boolean(subscription), await serverIsReady());
+  if (!registration) return 'needs_registration';
+
+  try {
+    const subscription = await ensureCurrentSubscription(registration, config.publicKey);
+    const persisted = await persistSubscription(subscription);
+    return resolveNotificationState(Notification.permission, persisted, true);
+  } catch {
+    return 'needs_registration';
+  }
 }
 
 async function registerPushNotifications(dispatchEnabledEvent: boolean): Promise<void> {
@@ -61,14 +135,18 @@ async function registerPushNotifications(dispatchEnabledEvent: boolean): Promise
     : await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Bạn chưa cho phép gửi thông báo.');
 
-  const registration = await navigator.serviceWorker.register('/sw.js');
-  const response = await fetch('/api/notifications/public-key');
+  await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+  const registration = await navigator.serviceWorker.ready;
+
+  const response = await fetch('/api/notifications/public-key', { cache: 'no-store' });
   if (!response.ok) throw new Error(await notificationErrorMessage(response));
-  const { publicKey } = await response.json();
-  const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-  });
+  const config = await response.json() as NotificationServerConfig;
+  if (!config.publicKey) throw new Error('Server chưa cung cấp khóa thông báo.');
+  if (config.schedulerReady === false) {
+    throw new Error(config.schedulerError || 'Lịch nhắc tự động chưa sẵn sàng.');
+  }
+
+  const subscription = await ensureCurrentSubscription(registration, config.publicKey);
   const registerResponse = await fetch('/api/notifications/subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -131,13 +209,27 @@ function buildScheduledTasks(
     .filter((task) => task.policy.leadMinutes.length > 0);
 }
 
-async function postNotificationSchedule(tasks: ScheduledNotificationTask[]): Promise<void> {
+async function postNotificationSchedule(
+  tasks: ScheduledNotificationTask[],
+  retryRegistration = true,
+): Promise<void> {
   const response = await fetch('/api/notifications/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: getDeviceId(), tasks }),
   });
-  if (!response.ok) throw new Error(await notificationErrorMessage(response));
+  if (response.ok) return;
+
+  const copy = response.clone();
+  let serverError = '';
+  try { serverError = (await copy.json())?.error || ''; } catch { /* response is not JSON */ }
+
+  if (retryRegistration && response.status === 400 && serverError === 'Device is not subscribed') {
+    await registerPushNotifications(false);
+    return postNotificationSchedule(tasks, false);
+  }
+
+  throw new Error(await notificationErrorMessage(response));
 }
 
 export async function syncNotificationTasks(

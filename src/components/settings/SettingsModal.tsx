@@ -118,8 +118,8 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
 
   const stateText: Record<NotificationState, string> = {
     active: 'Đang bật',
-    needs_registration: 'Cần bật lại',
-    server_unavailable: 'Chưa sẵn sàng',
+    needs_registration: 'Cần kết nối lại',
+    server_unavailable: 'Server thông báo chưa sẵn sàng',
     needs_install: 'Cần cài app lên màn hình chính',
     denied: 'Đã bị chặn trong hệ thống',
     unsupported: 'Thiết bị không hỗ trợ',
@@ -218,6 +218,9 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold text-slate-900">Thông báo công việc</p>
             <p className={'mt-0.5 text-[13px] ' + (state === 'denied' || state === 'server_unavailable' ? 'text-rose-500' : 'text-slate-400')}>{stateText[state]}</p>
+            {state === 'needs_registration' ? (
+              <p className="mt-1 text-[11px] leading-4 text-slate-400">Máy đã cấp quyền nhưng server chưa lưu thiết bị. Bật lại để Gnoud tự nối lại.</p>
+            ) : null}
           </div>
           <button
             type="button"

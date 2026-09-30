@@ -1,0 +1,35 @@
+name: Diagnose production Reader TTS
+
+on:
+  push:
+    branches:
+      - diagnostic/reader-tts-prod
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe GET status
+        shell: bash
+        run: |
+          set +e
+          echo "=== GET /api/reader/tts ==="
+          curl -sS -D /tmp/get-headers.txt -o /tmp/get-body.txt -w "HTTP=%{http_code}\n" https://gnoud.vercel.app/api/reader/tts
+          cat /tmp/get-headers.txt
+          echo "--- body ---"
+          cat /tmp/get-body.txt
+          echo
+
+      - name: Probe POST synth
+        shell: bash
+        run: |
+          set +e
+          echo "=== POST /api/reader/tts ==="
+          curl -sS -D /tmp/post-headers.txt -o /tmp/post-body.bin -w "HTTP=%{http_code}\n" \
+            -H 'Content-Type: application/json' \
+            --data '{"text":"Xin chào, đây là kiểm tra giọng đọc.","provider":"google","voice":"vi-VN-Neural2-A","rate":0.95,"pitch":1}' \
+            https://gnoud.vercel.app/api/reader/tts
+          cat /tmp/post-headers.txt
+          echo "--- body prefix ---"
+          head -c 800 /tmp/post-body.bin || true
+          echo

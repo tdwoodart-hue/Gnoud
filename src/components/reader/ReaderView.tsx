@@ -52,6 +52,7 @@ import {
   type ReaderWidth,
   type ReaderPageTransition,
   type ReaderReadingMode,
+  type ReaderTtsMode,
   type ReaderTtsProvider,
 } from '../../services/readerService';
 import {
@@ -208,6 +209,8 @@ function formatVoiceName(voice: SpeechSynthesisVoice): string {
   const language = voice.lang.toLowerCase().startsWith('vi') ? 'Tiếng Việt' : voice.lang;
   return `${voice.name} · ${language}${voice.localService ? ' · trên máy' : ''}`;
 }
+
+const SILENT_AUDIO_DATA_URL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==';
 
 export const ReaderView: React.FC = () => {
   const { user, addToast } = useApp();
@@ -763,7 +766,7 @@ export const ReaderView: React.FC = () => {
 
   const ttsPlaybackMode: ReaderTtsMode = activeBook?.ttsMode === 'online' && selectedOnlineVoice ? 'online' : 'device';
 
-  const cleanupOnlineAudio = () => {
+  const cleanupOnlineAudio = (releaseElement = false) => {
     ttsAbortRef.current?.abort();
     ttsAbortRef.current = null;
     const audio = onlineAudioRef.current;
@@ -772,11 +775,37 @@ export const ReaderView: React.FC = () => {
       audio.onerror = null;
       audio.ontimeupdate = null;
       audio.pause();
-      audio.src = '';
+      audio.removeAttribute('src');
+      audio.load();
     }
-    onlineAudioRef.current = null;
+    if (releaseElement) {
+      onlineAudioRef.current = null;
+      onlineAudioUnlockedRef.current = false;
+    }
     if (onlineAudioUrlRef.current) URL.revokeObjectURL(onlineAudioUrlRef.current);
     onlineAudioUrlRef.current = null;
+  };
+
+  const unlockOnlineAudio = async () => {
+    if (onlineAudioUnlockedRef.current) return;
+    if (typeof Audio === 'undefined') throw new Error('Thiết bị này không hỗ trợ phát audio online.');
+
+    const audio = onlineAudioRef.current || new Audio();
+    onlineAudioRef.current = audio;
+    audio.preload = 'auto';
+    audio.src = SILENT_AUDIO_DATA_URL;
+
+    try {
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+      onlineAudioUnlockedRef.current = true;
+    } catch {
+      throw new Error('Trình duyệt đang chặn phát âm thanh. Hãy chạm lại nút Phát một lần.');
+    } finally {
+      audio.removeAttribute('src');
+      audio.load();
+    }
   };
 
   const pinListeningPosition = (chunkIndex: number, chunkCount: number) => {
@@ -868,6 +897,7 @@ export const ReaderView: React.FC = () => {
     const response = await fetch('/api/reader/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       signal: controller.signal,
       body: JSON.stringify({
         text,
@@ -879,9 +909,38 @@ export const ReaderView: React.FC = () => {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as { error?: string };
-      throw new Error(payload.error || 'Không tạo được giọng đọc online.');
+      throw new Error(payload.error || `API giọng online trả lỗi ${response.status}.`);
     }
     return response.blob();
+  };
+
+  const playOnlineBlob = async (
+    blob: Blob,
+    onTimeUpdate?: (audio: HTMLAudioElement) => void,
+    onEnded?: () => void,
+  ) => {
+    const audio = onlineAudioRef.current || new Audio();
+    onlineAudioRef.current = audio;
+
+    if (onlineAudioUrlRef.current) URL.revokeObjectURL(onlineAudioUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    onlineAudioUrlRef.current = url;
+
+    audio.onended = onEnded || null;
+    audio.onerror = null;
+    audio.ontimeupdate = onTimeUpdate ? () => onTimeUpdate(audio) : null;
+    audio.src = url;
+    audio.preload = 'auto';
+
+    try {
+      await audio.play();
+    } catch (error) {
+      if ((error as Error)?.name === 'NotAllowedError') {
+        onlineAudioUnlockedRef.current = false;
+        throw new Error('Trình duyệt chặn phát âm thanh online. Hãy chạm nút Phát lại.');
+      }
+      throw error;
+    }
   };
 
   const speakOnlineChunk = async (index: number) => {
@@ -892,41 +951,44 @@ export const ReaderView: React.FC = () => {
       setTtsStatus('idle');
       return;
     }
+
     speechIndexRef.current = index;
     pinListeningPosition(index, chunks.length);
+
     try {
       cleanupOnlineAudio();
       const blob = await requestOnlineAudio(chunks[index]);
       if (speechStoppedRef.current) return;
-      const url = URL.createObjectURL(blob);
-      onlineAudioUrlRef.current = url;
-      const audio = new Audio(url);
-      onlineAudioRef.current = audio;
-      audio.ontimeupdate = () => {
-        if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
-        const local = clamp(audio.currentTime / audio.duration, 0, 1);
-        pinListeningPosition(index + local, chunks.length);
-      };
-      audio.onended = () => {
-        cleanupOnlineAudio();
-        if (!speechStoppedRef.current) void speakOnlineChunk(index + 1);
-      };
-      audio.onerror = () => {
-        cleanupOnlineAudio();
-        setTtsStatus('idle');
-        addToast('Giọng online bị lỗi khi phát. Thử đổi giọng hoặc chuyển sang giọng trên máy.', 'warning');
-      };
-      await audio.play();
+
+      await playOnlineBlob(
+        blob,
+        (audio) => {
+          if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+          const local = clamp(audio.currentTime / audio.duration, 0, 1);
+          pinListeningPosition(index + local, chunks.length);
+        },
+        () => {
+          cleanupOnlineAudio();
+          if (!speechStoppedRef.current) void speakOnlineChunk(index + 1);
+        },
+      );
       setTtsStatus('playing');
     } catch (error) {
       if ((error as Error)?.name === 'AbortError' || speechStoppedRef.current) return;
       cleanupOnlineAudio();
+      if (supportsDeviceTts) {
+        updateBook(activeBook.id, { ttsMode: 'device' });
+        addToast(`${error instanceof Error ? error.message : 'Giọng online bị lỗi.'} Đã chuyển sang giọng trên máy.`, 'warning');
+        speechStoppedRef.current = false;
+        speakDeviceChunk(index);
+        return;
+      }
       setTtsStatus('idle');
       addToast(error instanceof Error ? error.message : 'Không tạo được giọng đọc online.', 'warning');
     }
   };
 
-  const startSpeech = () => {
+  const startSpeech = async () => {
     if (!activeBook || activeBook.format === 'pdf') return;
     const speechSource = activeBook.ttsCleanText ? sanitizeSpeechText(readerText) : readerText;
     const chunks = splitSpeechText(speechSource);
@@ -934,14 +996,30 @@ export const ReaderView: React.FC = () => {
       addToast('Chương này không có nội dung để đọc.', 'warning');
       return;
     }
+
     stopSpeech();
     speechStoppedRef.current = false;
     speechChunksRef.current = chunks;
     const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
+
     if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
-      void speakOnlineChunk(startIndex);
+      try {
+        await unlockOnlineAudio();
+        await speakOnlineChunk(startIndex);
+      } catch (error) {
+        if (supportsDeviceTts) {
+          updateBook(activeBook.id, { ttsMode: 'device' });
+          addToast(`${error instanceof Error ? error.message : 'Không mở được âm thanh online.'} Đã chuyển sang giọng trên máy.`, 'warning');
+          speechStoppedRef.current = false;
+          speakDeviceChunk(startIndex);
+        } else {
+          setTtsStatus('idle');
+          addToast(error instanceof Error ? error.message : 'Không mở được âm thanh online.', 'warning');
+        }
+      }
       return;
     }
+
     if (!supportsDeviceTts) {
       addToast('Không có giọng online và trình duyệt cũng không hỗ trợ giọng trên máy.', 'warning');
       return;
@@ -954,16 +1032,17 @@ export const ReaderView: React.FC = () => {
     const sample = 'Đây là giọng đọc thử tiếng Việt. Hãy chọn giọng bạn thấy dễ nghe nhất để nghe sách.';
     stopSpeech();
     speechStoppedRef.current = false;
+
     if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
       try {
+        await unlockOnlineAudio();
         const blob = await requestOnlineAudio(sample);
         if (speechStoppedRef.current) return;
-        const url = URL.createObjectURL(blob);
-        onlineAudioUrlRef.current = url;
-        const audio = new Audio(url);
-        onlineAudioRef.current = audio;
-        audio.onended = () => { cleanupOnlineAudio(); setTtsStatus('idle'); };
-        await audio.play();
+        cleanupOnlineAudio();
+        await playOnlineBlob(blob, undefined, () => {
+          cleanupOnlineAudio();
+          setTtsStatus('idle');
+        });
         setTtsStatus('playing');
       } catch (error) {
         cleanupOnlineAudio();
@@ -972,6 +1051,7 @@ export const ReaderView: React.FC = () => {
       }
       return;
     }
+
     if (!supportsDeviceTts) {
       addToast('Trình duyệt này chưa có giọng đọc trên máy.', 'warning');
       return;
@@ -1000,7 +1080,7 @@ export const ReaderView: React.FC = () => {
         void onlineAudioRef.current.play();
         setTtsStatus('playing');
       } else {
-        startSpeech();
+        void startSpeech();
       }
       return;
     }
@@ -1012,7 +1092,7 @@ export const ReaderView: React.FC = () => {
         window.speechSynthesis.resume();
         setTtsStatus('playing');
       } else {
-        startSpeech();
+        void startSpeech();
       }
       return;
     }
@@ -1021,7 +1101,7 @@ export const ReaderView: React.FC = () => {
 
   useEffect(() => () => {
     speechStoppedRef.current = true;
-    cleanupOnlineAudio();
+    cleanupOnlineAudio(true);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
 

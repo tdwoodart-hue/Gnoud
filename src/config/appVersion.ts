@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.13';
-export const APP_UPDATED_AT = '2026-09-30T16:55:00+07:00';
+export const APP_VERSION = '0.9.14';
+export const APP_UPDATED_AT = '2026-09-30T17:08:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.14',
+    updatedAt: '2026-09-30T17:08:00+07:00',
+    title: 'Gọn bottom navigation trên điện thoại',
+    changes: [
+      'Bottom navigation mobile giảm từ 6 xuống còn 5 mục: Hôm nay, Công việc, Dinh dưỡng, Đọc sách và Thêm.',
+      'Cá nhân, Báo cáo và Cài đặt được gom vào sheet Thêm để thanh điều hướng bớt chật.',
+      'Tăng kích thước label và icon mobile, giảm cảm giác chữ quá nhỏ trên iPhone.',
+      'Mục Thêm giữ trạng thái active khi đang ở Cá nhân hoặc Báo cáo.',
+      'Desktop navigation giữ nguyên để không thay đổi thói quen sử dụng trên màn hình lớn.',
+    ],
+  },
   {
     version: '0.9.13',
     updatedAt: '2026-09-30T16:55:00+07:00',

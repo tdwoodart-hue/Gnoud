@@ -8,6 +8,8 @@ import {
   LogIn,
   LogOut,
   RotateCcw,
+  Sun,
+  Moon,
   Trash2,
   X,
 } from 'lucide-react';
@@ -23,6 +25,7 @@ import { getNotificationPreferences, saveNotificationPreferences } from '../../s
 import { formatDisplayDate } from '../../data/mockData';
 import { SecuritySettingsSection } from '../security/SecuritySettingsSection';
 import { APP_UPDATED_AT, APP_VERSION } from '../../config/appVersion';
+import { getStoredAppTheme, saveAppTheme, type AppTheme } from '../../services/themeService';
 
 type SettingsPage = 'root' | 'account' | 'notifications' | 'app' | 'data';
 
@@ -52,6 +55,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const [busy, setBusy] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [pendingPermanentDeleteId, setPendingPermanentDeleteId] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AppTheme>(() => getStoredAppTheme());
 
   const refresh = async () => {
     setState(await getNotificationState());
@@ -61,6 +65,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     if (!isOpen) return;
     setPage('root');
     setShowTrash(false);
+    setTheme(getStoredAppTheme());
     setReminderPreferences(getNotificationPreferences());
     void refresh();
   }, [isOpen]);
@@ -112,6 +117,11 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     URL.revokeObjectURL(url);
   };
 
+  const updateTheme = (nextTheme: AppTheme) => {
+    setTheme(nextTheme);
+    saveAppTheme(nextTheme);
+  };
+
   const active = state === 'active';
   const toggleBlocked =
     busy || state === 'denied' || state === 'unsupported' || state === 'server_unavailable';
@@ -156,6 +166,38 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
             <span className="text-[13px] text-slate-400">{stateText[state]}</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
           </button>
+
+          <div className="flex min-h-[58px] items-center gap-3 border-t border-slate-100 px-4">
+            <span className="flex-1 text-[14px] font-medium text-slate-800">Giao diện</span>
+            <div className="flex rounded-xl bg-slate-100 p-0.5" role="group" aria-label="Chọn giao diện">
+              <button
+                type="button"
+                onClick={() => updateTheme('light')}
+                aria-pressed={theme === 'light'}
+                className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
+                  theme === 'light'
+                    ? 'bg-white text-slate-800 shadow-xs'
+                    : 'text-slate-400'
+                )}
+              >
+                <Sun className="h-3.5 w-3.5" />
+                Sáng
+              </button>
+              <button
+                type="button"
+                onClick={() => updateTheme('dark')}
+                aria-pressed={theme === 'dark'}
+                className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
+                  theme === 'dark'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-400'
+                )}
+              >
+                <Moon className="h-3.5 w-3.5" />
+                Tối
+              </button>
+            </div>
+          </div>
 
           <button
             type="button"
@@ -294,7 +336,35 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const appPage = (
     <section>
       <div className="overflow-hidden rounded-[18px] bg-white">
-        <div className="flex min-h-[58px] items-center px-4">
+        <div className="flex min-h-[62px] items-center gap-3 px-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium text-slate-800">Giao diện</p>
+            <p className="mt-0.5 text-[12px] text-slate-400">Được lưu lại trên thiết bị này</p>
+          </div>
+          <div className="flex rounded-xl bg-slate-100 p-0.5" role="group" aria-label="Chọn giao diện ứng dụng">
+            <button
+              type="button"
+              onClick={() => updateTheme('light')}
+              aria-pressed={theme === 'light'}
+              className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
+                theme === 'light' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-400'
+              )}
+            >
+              <Sun className="h-3.5 w-3.5" /> Sáng
+            </button>
+            <button
+              type="button"
+              onClick={() => updateTheme('dark')}
+              aria-pressed={theme === 'dark'}
+              className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
+                theme === 'dark' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-400'
+              )}
+            >
+              <Moon className="h-3.5 w-3.5" /> Tối
+            </button>
+          </div>
+        </div>
+        <div className="flex min-h-[58px] items-center border-t border-slate-100 px-4">
           <span className="flex-1 text-[14px] font-medium text-slate-800">Phiên bản hiện tại</span>
           <span className="text-[14px] font-semibold text-slate-500">{APP_VERSION}</span>
         </div>

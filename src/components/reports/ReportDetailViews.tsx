@@ -21,12 +21,10 @@ import { EmptyState } from '../common/EmptyState';
 import type {
   DailyTaskActivity,
   ExerciseDeepReport,
-  NutritionDayReport,
   NutritionDeepReport,
   ProjectDeepReport,
   ProjectReportRow,
   ReadingBookReport,
-  ReadingDayReport,
   ReadingDeepReport,
   ReportComparison,
   ReportRange,

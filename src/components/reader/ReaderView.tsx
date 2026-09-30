@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlignJustify,
@@ -80,6 +80,11 @@ type OnlineTtsVoice = {
   quality: 'standard' | 'neural' | 'hd';
   available: boolean;
   note?: string;
+};
+
+type OnlineTtsConfig = {
+  google?: { configured?: boolean; authMode?: 'service-account' | 'api-key' | 'none' };
+  azure?: { configured?: boolean };
 };
 
 const formatLabels: Record<ReaderFormat, string> = {
@@ -231,6 +236,7 @@ export const ReaderView: React.FC = () => {
   const [onlineVoices, setOnlineVoices] = useState<OnlineTtsVoice[]>([]);
   const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
   const [onlineTtsError, setOnlineTtsError] = useState('');
+  const [onlineTtsConfig, setOnlineTtsConfig] = useState<OnlineTtsConfig>({});
   const [visualPage, setVisualPage] = useState(1);
   const [visualPageCount, setVisualPageCount] = useState(1);
   const [lastPinnedAt, setLastPinnedAt] = useState<string | null>(null);
@@ -248,6 +254,7 @@ export const ReaderView: React.FC = () => {
   const speechStoppedRef = useRef(false);
   const onlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const onlineAudioUrlRef = useRef<string | null>(null);
+  const onlineAudioUnlockedRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const lastTtsPinWriteRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
@@ -366,38 +373,58 @@ export const ReaderView: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
     const refresh = () => setTtsVoices(window.speechSynthesis.getVoices());
-    refresh();
+    const first = window.setTimeout(refresh, 0);
+    const second = window.setTimeout(refresh, 350);
+    const third = window.setTimeout(refresh, 1200);
     window.speechSynthesis.addEventListener?.('voiceschanged', refresh);
-    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', refresh);
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+      window.clearTimeout(third);
+      window.speechSynthesis.removeEventListener?.('voiceschanged', refresh);
+    };
   }, []);
-
 
   useEffect(() => {
-    let disposed = false;
+    if (!ttsOpen || typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
+    const refresh = () => setTtsVoices(window.speechSynthesis.getVoices());
+    refresh();
+    const timer = window.setTimeout(refresh, 300);
+    return () => window.clearTimeout(timer);
+  }, [ttsOpen]);
+
+  const loadOnlineVoices = useCallback(async () => {
     setOnlineVoicesLoading(true);
     setOnlineTtsError('');
-    void fetch('/api/reader/tts')
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`API giọng online trả lỗi ${response.status}.`);
-        return response.json() as Promise<{ voices?: OnlineTtsVoice[] }>;
-      })
-      .then((payload) => {
-        if (disposed) return;
-        const voices = Array.isArray(payload.voices) ? payload.voices.filter((voice) => voice.available) : [];
-        setOnlineVoices(voices);
-        if (!voices.length) setOnlineTtsError('Chưa có provider giọng online khả dụng trên server hiện tại.');
-      })
-      .catch(() => {
-        if (!disposed) {
-          setOnlineVoices([]);
-          setOnlineTtsError('Bản Preview hiện tại không kết nối được API giọng online.');
+    try {
+      const response = await fetch('/api/reader/tts', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API giọng online trả lỗi ${response.status}.`);
+      const payload = await response.json() as { voices?: OnlineTtsVoice[]; config?: OnlineTtsConfig };
+      const voices = Array.isArray(payload.voices) ? payload.voices : [];
+      const config = payload.config || {};
+      setOnlineVoices(voices);
+      setOnlineTtsConfig(config);
+      if (!voices.some((voice) => voice.available)) {
+        const googleMode = config.google?.authMode || 'none';
+        const azureReady = Boolean(config.azure?.configured);
+        if (googleMode === 'none' && !azureReady) {
+          setOnlineTtsError('Server chưa có thông tin xác thực cho Google Cloud TTS hoặc Azure Speech.');
+        } else {
+          setOnlineTtsError('Server đã có cấu hình nhưng chưa có giọng online khả dụng.');
         }
-      })
-      .finally(() => {
-        if (!disposed) setOnlineVoicesLoading(false);
-      });
-    return () => { disposed = true; };
+      }
+    } catch (error) {
+      setOnlineVoices([]);
+      setOnlineTtsConfig({});
+      setOnlineTtsError(error instanceof Error ? error.message : 'Không kết nối được API giọng online.');
+    } finally {
+      setOnlineVoicesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadOnlineVoices();
+  }, [loadOnlineVoices]);
 
   const activeBook = books.find((book) => book.id === activeBookId) || null;
   const readingMode: ReaderReadingMode = activeBook?.readingMode === 'paged' ? 'paged' : 'scroll';

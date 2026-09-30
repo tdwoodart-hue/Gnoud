@@ -2021,9 +2021,26 @@ export const ReaderView: React.FC = () => {
                 </div>
 
                 {!onlineVoicesLoading && availableOnlineVoices.length === 0 && onlineTtsError ? (
-                  <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-3 text-[10px] font-semibold leading-5 text-amber-800">
-                    {onlineTtsError} Reader đã tự chuyển sang giọng trên máy; khi API online hoạt động, tab Online neural sẽ tự xuất hiện lại.
+                  <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-3 text-amber-800">
+                    <p className="text-[10px] font-semibold leading-5">
+                      {onlineTtsError} Reader đang dùng giọng trên máy để không chặn việc nghe sách.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void loadOnlineVoices()}
+                      className="mt-2 h-8 rounded-lg border border-amber-300/70 bg-white/70 px-3 text-[10px] font-bold"
+                    >
+                      Thử kết nối lại
+                    </button>
                   </div>
+                ) : null}
+
+                {availableOnlineVoices.length > 0 ? (
+                  <p className={`mt-2 text-center text-[9px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
+                    Online đã kết nối
+                    {onlineTtsConfig.google?.authMode === 'service-account' ? ' · Google Cloud OAuth' : ''}
+                    {onlineTtsConfig.azure?.configured ? ' · Azure Speech' : ''}
+                  </p>
                 ) : null}
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">

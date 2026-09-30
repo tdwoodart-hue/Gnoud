@@ -5,29 +5,10 @@
 }
 
 html,
-body,
-#root {
-  min-height: 100%;
-}
-
-html,
 body {
-  margin: 0;
-  background: #f5f6f8;
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-::selection {
-  background: rgba(99, 102, 241, 0.16);
 }
 
 /* Khóa chống iOS Safari tự động zoom in khi chạm vào ô nhập liệu (input/select/textarea) */

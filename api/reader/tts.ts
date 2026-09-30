@@ -1,4 +1,4 @@
-import { getReaderOnlineVoices, getReaderTtsConfig, synthesizeReaderTts } from '../../readerTtsServer';
+import { getReaderOnlineVoices, getReaderTtsConfig, synthesizeReaderTts } from '../../readerTtsServer.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method === 'GET') {

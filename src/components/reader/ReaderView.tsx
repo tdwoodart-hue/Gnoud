@@ -210,7 +210,6 @@ function formatVoiceName(voice: SpeechSynthesisVoice): string {
   return `${voice.name} · ${language}${voice.localService ? ' · trên máy' : ''}`;
 }
 
-const SILENT_AUDIO_DATA_URL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==';
 
 export const ReaderView: React.FC = () => {
   const { user, addToast } = useApp();
@@ -240,6 +239,7 @@ export const ReaderView: React.FC = () => {
   const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
   const [onlineTtsError, setOnlineTtsError] = useState('');
   const [onlineTtsConfig, setOnlineTtsConfig] = useState<OnlineTtsConfig>({});
+  const [onlineAudioPreparing, setOnlineAudioPreparing] = useState(false);
   const [visualPage, setVisualPage] = useState(1);
   const [visualPageCount, setVisualPageCount] = useState(1);
   const [lastPinnedAt, setLastPinnedAt] = useState<string | null>(null);
@@ -257,7 +257,8 @@ export const ReaderView: React.FC = () => {
   const speechStoppedRef = useRef(false);
   const onlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const onlineAudioUrlRef = useRef<string | null>(null);
-  const onlineAudioUnlockedRef = useRef(false);
+  const onlinePrefetchRef = useRef<{ key: string; blob: Blob } | null>(null);
+  const onlinePrefetchAbortRef = useRef<AbortController | null>(null);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const lastTtsPinWriteRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
@@ -778,34 +779,9 @@ export const ReaderView: React.FC = () => {
       audio.removeAttribute('src');
       audio.load();
     }
-    if (releaseElement) {
-      onlineAudioRef.current = null;
-      onlineAudioUnlockedRef.current = false;
-    }
+    if (releaseElement) onlineAudioRef.current = null;
     if (onlineAudioUrlRef.current) URL.revokeObjectURL(onlineAudioUrlRef.current);
     onlineAudioUrlRef.current = null;
-  };
-
-  const unlockOnlineAudio = async () => {
-    if (onlineAudioUnlockedRef.current) return;
-    if (typeof Audio === 'undefined') throw new Error('Thiết bị này không hỗ trợ phát audio online.');
-
-    const audio = onlineAudioRef.current || new Audio();
-    onlineAudioRef.current = audio;
-    audio.preload = 'auto';
-    audio.src = SILENT_AUDIO_DATA_URL;
-
-    try {
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
-      onlineAudioUnlockedRef.current = true;
-    } catch {
-      throw new Error('Trình duyệt đang chặn phát âm thanh. Hãy chạm lại nút Phát một lần.');
-    } finally {
-      audio.removeAttribute('src');
-      audio.load();
-    }
   };
 
   const pinListeningPosition = (chunkIndex: number, chunkCount: number) => {
@@ -889,16 +865,24 @@ export const ReaderView: React.FC = () => {
     setTtsStatus('playing');
   };
 
-  const requestOnlineAudio = async (text: string): Promise<Blob> => {
+  const onlineAudioKey = useCallback((text: string) => {
+    if (!activeBook || !selectedOnlineVoice) return '';
+    return [
+      selectedOnlineVoice.provider,
+      selectedOnlineVoice.id,
+      activeBook.ttsRate,
+      activeBook.ttsPitch,
+      text,
+    ].join('|');
+  }, [activeBook?.ttsPitch, activeBook?.ttsRate, selectedOnlineVoice?.id, selectedOnlineVoice?.provider]);
+
+  const fetchOnlineAudio = useCallback(async (text: string, signal?: AbortSignal): Promise<Blob> => {
     if (!activeBook || !selectedOnlineVoice) throw new Error('Chưa có giọng online khả dụng.');
-    ttsAbortRef.current?.abort();
-    const controller = new AbortController();
-    ttsAbortRef.current = controller;
     const response = await fetch('/api/reader/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
-      signal: controller.signal,
+      signal,
       body: JSON.stringify({
         text,
         provider: selectedOnlineVoice.provider,
@@ -912,7 +896,82 @@ export const ReaderView: React.FC = () => {
       throw new Error(payload.error || `API giọng online trả lỗi ${response.status}.`);
     }
     return response.blob();
+  }, [activeBook?.ttsPitch, activeBook?.ttsRate, selectedOnlineVoice?.id, selectedOnlineVoice?.provider]);
+
+  const requestOnlineAudio = async (text: string): Promise<Blob> => {
+    ttsAbortRef.current?.abort();
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
+    return fetchOnlineAudio(text, controller.signal);
   };
+
+  useEffect(() => {
+    if (
+      !ttsOpen ||
+      ttsPlaybackMode !== 'online' ||
+      !activeBook ||
+      activeBook.format === 'pdf' ||
+      !selectedOnlineVoice
+    ) {
+      onlinePrefetchAbortRef.current?.abort();
+      onlinePrefetchAbortRef.current = null;
+      onlinePrefetchRef.current = null;
+      setOnlineAudioPreparing(false);
+      return undefined;
+    }
+
+    const speechSource = activeBook.ttsCleanText ? sanitizeSpeechText(readerText) : readerText;
+    const chunks = splitSpeechText(speechSource);
+    if (!chunks.length) {
+      setOnlineAudioPreparing(false);
+      return undefined;
+    }
+
+    const startIndex = clamp(
+      Math.floor(liveScrollProgress * chunks.length),
+      0,
+      Math.max(0, chunks.length - 1),
+    );
+    const text = chunks[startIndex];
+    const key = onlineAudioKey(text);
+    if (onlinePrefetchRef.current?.key === key) {
+      setOnlineAudioPreparing(false);
+      return undefined;
+    }
+
+    onlinePrefetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    onlinePrefetchAbortRef.current = controller;
+    setOnlineAudioPreparing(true);
+
+    void fetchOnlineAudio(text, controller.signal)
+      .then((blob) => {
+        if (controller.signal.aborted) return;
+        onlinePrefetchRef.current = { key, blob };
+        setOnlineAudioPreparing(false);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        onlinePrefetchRef.current = null;
+        setOnlineAudioPreparing(false);
+        if ((error as Error)?.name !== 'AbortError') {
+          setOnlineTtsError(error instanceof Error ? error.message : 'Không chuẩn bị được giọng online.');
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    activeBook?.format,
+    activeBook?.id,
+    activeBook?.ttsCleanText,
+    fetchOnlineAudio,
+    liveScrollProgress,
+    onlineAudioKey,
+    readerText,
+    selectedOnlineVoice?.id,
+    ttsOpen,
+    ttsPlaybackMode,
+  ]);
 
   const playOnlineBlob = async (
     blob: Blob,
@@ -936,8 +995,7 @@ export const ReaderView: React.FC = () => {
       await audio.play();
     } catch (error) {
       if ((error as Error)?.name === 'NotAllowedError') {
-        onlineAudioUnlockedRef.current = false;
-        throw new Error('Trình duyệt chặn phát âm thanh online. Hãy chạm nút Phát lại.');
+        throw new Error('Trình duyệt chưa cho phát audio ở lần chạm này.');
       }
       throw error;
     }
@@ -1003,19 +1061,59 @@ export const ReaderView: React.FC = () => {
     const startIndex = clamp(Math.floor(liveScrollProgress * chunks.length), 0, Math.max(0, chunks.length - 1));
 
     if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
+      const text = chunks[startIndex];
+      const key = onlineAudioKey(text);
+      const prefetched = onlinePrefetchRef.current?.key === key
+        ? onlinePrefetchRef.current.blob
+        : null;
+
+      if (prefetched) {
+        onlinePrefetchRef.current = null;
+        speechIndexRef.current = startIndex;
+        pinListeningPosition(startIndex, chunks.length);
+        cleanupOnlineAudio();
+        try {
+          await playOnlineBlob(
+            prefetched,
+            (audio) => {
+              if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+              const local = clamp(audio.currentTime / audio.duration, 0, 1);
+              pinListeningPosition(startIndex + local, chunks.length);
+            },
+            () => {
+              cleanupOnlineAudio();
+              if (!speechStoppedRef.current) void speakOnlineChunk(startIndex + 1);
+            },
+          );
+          setTtsStatus('playing');
+        } catch (error) {
+          setTtsStatus('idle');
+          addToast(
+            error instanceof Error ? error.message : 'Trình duyệt không cho phát audio online.',
+            'warning',
+          );
+        }
+        return;
+      }
+
+      setOnlineAudioPreparing(true);
       try {
-        await unlockOnlineAudio();
-        await speakOnlineChunk(startIndex);
+        const blob = await requestOnlineAudio(text);
+        if (speechStoppedRef.current) return;
+        onlinePrefetchRef.current = { key, blob };
+        addToast('Giọng đã chuẩn bị xong. Chạm Phát thêm một lần để bắt đầu.', 'info');
       } catch (error) {
+        if ((error as Error)?.name === 'AbortError' || speechStoppedRef.current) return;
         if (supportsDeviceTts) {
           updateBook(activeBook.id, { ttsMode: 'device' });
-          addToast(`${error instanceof Error ? error.message : 'Không mở được âm thanh online.'} Đã chuyển sang giọng trên máy.`, 'warning');
+          addToast(`${error instanceof Error ? error.message : 'Giọng online bị lỗi.'} Đã chuyển sang giọng trên máy.`, 'warning');
           speechStoppedRef.current = false;
           speakDeviceChunk(startIndex);
         } else {
-          setTtsStatus('idle');
-          addToast(error instanceof Error ? error.message : 'Không mở được âm thanh online.', 'warning');
+          addToast(error instanceof Error ? error.message : 'Không tạo được giọng đọc online.', 'warning');
         }
+      } finally {
+        setOnlineAudioPreparing(false);
       }
       return;
     }
@@ -1035,7 +1133,6 @@ export const ReaderView: React.FC = () => {
 
     if (ttsPlaybackMode === 'online' && selectedOnlineVoice) {
       try {
-        await unlockOnlineAudio();
         const blob = await requestOnlineAudio(sample);
         if (speechStoppedRef.current) return;
         cleanupOnlineAudio();
@@ -1077,8 +1174,9 @@ export const ReaderView: React.FC = () => {
         onlineAudioRef.current.pause();
         setTtsStatus('paused');
       } else if (ttsStatus === 'paused') {
-        void onlineAudioRef.current.play();
-        setTtsStatus('playing');
+        void onlineAudioRef.current.play()
+          .then(() => setTtsStatus('playing'))
+          .catch(() => addToast('Trình duyệt chưa cho tiếp tục phát. Hãy chạm Phát lại.', 'warning'));
       } else {
         void startSpeech();
       }
@@ -1101,6 +1199,9 @@ export const ReaderView: React.FC = () => {
 
   useEffect(() => () => {
     speechStoppedRef.current = true;
+    onlinePrefetchAbortRef.current?.abort();
+    onlinePrefetchAbortRef.current = null;
+    onlinePrefetchRef.current = null;
     cleanupOnlineAudio(true);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
@@ -1979,11 +2080,17 @@ export const ReaderView: React.FC = () => {
                   <button
                     type="button"
                     onClick={toggleSpeech}
-                    className="grid h-14 w-14 place-items-center rounded-full bg-indigo-500 text-white shadow-sm transition hover:bg-indigo-600"
-                    aria-label={ttsStatus === 'playing' ? 'Tạm dừng' : 'Phát'}
+                    disabled={ttsPlaybackMode === 'online' && onlineAudioPreparing && ttsStatus === 'idle'}
+                    className="grid h-14 w-14 place-items-center rounded-full bg-indigo-500 text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-wait disabled:opacity-55"
+                    aria-label={ttsStatus === 'playing' ? 'Tạm dừng' : onlineAudioPreparing ? 'Đang chuẩn bị giọng' : 'Phát'}
                   >
                     {ttsStatus === 'playing' ? <Pause className="h-6 w-6" /> : <Play className="ml-0.5 h-6 w-6" />}
                   </button>
+                  {ttsPlaybackMode === 'online' && onlineAudioPreparing && ttsStatus === 'idle' ? (
+                    <span className={`text-[10px] font-semibold ${themeStyles[activeBook.theme].muted}`}>
+                      Đang chuẩn bị giọng…
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={stopSpeech}

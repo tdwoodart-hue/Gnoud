@@ -71,3 +71,191 @@ body {
     animation-duration: 1ms;
   }
 }
+
+
+/* Dark mode toàn app: giữ nguyên layout hiện tại, chỉ đổi bảng màu. */
+html.dark,
+html.dark body {
+  background: #0b0d12;
+  color: #e5e7eb;
+}
+
+html.dark .bg-\[\#fafbfc\] {
+  background-color: #0b0d12 !important;
+}
+
+html.dark .bg-\[\#f4f5f7\] {
+  background-color: #0f131a !important;
+}
+
+html.dark .bg-white {
+  background-color: #151a23 !important;
+}
+
+html.dark .bg-white\/95 {
+  background-color: rgba(21, 26, 35, 0.96) !important;
+}
+
+html.dark .bg-white\/90 {
+  background-color: rgba(21, 26, 35, 0.92) !important;
+}
+
+html.dark .bg-white\/80,
+html.dark .bg-white\/70 {
+  background-color: rgba(21, 26, 35, 0.84) !important;
+}
+
+html.dark .bg-white\/60 {
+  background-color: rgba(21, 26, 35, 0.68) !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/60 {
+  background-color: #181e28 !important;
+}
+
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/90,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/70 {
+  background-color: #202733 !important;
+}
+
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/70 {
+  background-color: #303947 !important;
+}
+
+html.dark .text-slate-950,
+html.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-800 {
+  color: #e5e7eb !important;
+}
+
+html.dark .text-slate-700 {
+  color: #d2d9e3 !important;
+}
+
+html.dark .text-slate-600 {
+  color: #bac4d1 !important;
+}
+
+html.dark .text-slate-500 {
+  color: #9aa7b8 !important;
+}
+
+html.dark .text-slate-400 {
+  color: #7f8da1 !important;
+}
+
+html.dark .text-slate-300 {
+  color: #66758a !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-100\/90,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/90,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-200\/60 {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/80,
+html.dark .bg-indigo-50\/70 {
+  background-color: rgba(79, 70, 229, 0.16) !important;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+html.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.14) !important;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+
+html.dark .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.14) !important;
+}
+
+html.dark .bg-violet-50 {
+  background-color: rgba(139, 92, 246, 0.14) !important;
+}
+
+html.dark .border-indigo-100,
+html.dark .border-indigo-200\/70,
+html.dark .border-emerald-200\/70,
+html.dark .border-rose-200\/70,
+html.dark .border-amber-200\/70,
+html.dark .border-sky-200\/70,
+html.dark .border-violet-200\/70 {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html.dark .text-indigo-700,
+html.dark .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+
+html.dark .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html.dark .text-rose-600,
+html.dark .text-rose-500 {
+  color: #fda4af !important;
+}
+
+html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-sky-700 {
+  color: #7dd3fc !important;
+}
+
+html.dark .text-violet-700 {
+  color: #c4b5fd !important;
+}
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  color: #e5e7eb;
+  caret-color: #c7d2fe;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #526075 !important;
+}
+
+html.dark .hover\:bg-slate-50:hover,
+html.dark .active\:bg-slate-50:active {
+  background-color: #1b222d !important;
+}
+
+html.dark .hover\:bg-slate-100:hover,
+html.dark .active\:bg-slate-100:active {
+  background-color: #252d3a !important;
+}
+
+html.dark .active\:bg-slate-200:active {
+  background-color: #313b4a !important;
+}
+
+html.dark .hover\:text-slate-900:hover,
+html.dark .active\:text-slate-700:active {
+  color: #f8fafc !important;
+}

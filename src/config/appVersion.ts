@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.22';
-export const APP_UPDATED_AT = '2026-10-01T00:50:00+07:00';
+export const APP_VERSION = '0.9.23';
+export const APP_UPDATED_AT = '2026-10-01T01:02:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.23',
+    updatedAt: '2026-10-01T01:02:00+07:00',
+    title: 'Thêm giao diện Sáng / Tối',
+    changes: [
+      'Cài đặt có lựa chọn Giao diện Sáng hoặc Tối và áp dụng ngay không cần tải lại trang.',
+      'Theme được lưu trên thiết bị và áp dụng trước khi React render để hạn chế chớp nền sáng khi mở app.',
+      'Dark mode chỉ đổi bảng màu, giữ nguyên layout và giao diện đã rollback ở v0.9.22.',
+      'Reader tiếp tục giữ bộ theme đọc sách riêng.',
+    ],
+  },
   {
     version: '0.9.22',
     updatedAt: '2026-10-01T00:50:00+07:00',

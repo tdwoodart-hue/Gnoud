@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.10';
-export const APP_UPDATED_AT = '2026-09-30T15:28:00+07:00';
+export const APP_VERSION = '0.9.11';
+export const APP_UPDATED_AT = '2026-09-30T16:08:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.11',
+    updatedAt: '2026-09-30T16:08:00+07:00',
+    title: 'Reader nhận đúng Firebase service account đã có trên Vercel',
+    changes: [
+      'Reader TTS chấp nhận cả JSON service account trực tiếp và JSON bị bọc thêm một lớp chuỗi.',
+      'Đồng bộ cách đọc FIREBASE_SERVICE_ACCOUNT_JSON với phần notification đã có trong app.',
+      'Thêm test cho trường hợp Vercel lưu service account theo dạng double-encoded JSON.',
+    ],
+  },
   {
     version: '0.9.10',
     updatedAt: '2026-09-30T15:28:00+07:00',

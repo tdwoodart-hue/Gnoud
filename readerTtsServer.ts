@@ -69,14 +69,21 @@ function getGoogleServiceAccount(): GoogleServiceAccountConfig | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as {
+    let parsed: unknown = JSON.parse(raw);
+
+    // Vercel/AI tools can sometimes store the JSON object as one quoted JSON string.
+    // Notification code in this repo already accepts that format, so Reader should too.
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+
+    if (!parsed || typeof parsed !== 'object') return null;
+    const account = parsed as {
       project_id?: string;
       client_email?: string;
       private_key?: string;
     };
-    const projectId = parsed.project_id?.trim() || '';
-    const clientEmail = parsed.client_email?.trim() || '';
-    const privateKey = parsed.private_key?.replace(/\\n/g, '\n') || '';
+    const projectId = account.project_id?.trim() || '';
+    const clientEmail = account.client_email?.trim() || '';
+    const privateKey = account.private_key?.replace(/\\n/g, '\n') || '';
     if (!projectId || !clientEmail || !privateKey) return null;
     return { projectId, clientEmail, privateKey };
   } catch {

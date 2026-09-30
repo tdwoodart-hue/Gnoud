@@ -285,7 +285,7 @@ export function buildWorkTimeReport(tasks: Task[], range: ReportRange, today: st
   const measured = rangeTasks.filter((task) => (Number(task.actualMinutes) || 0) > 0);
   const actualMinutes = measured.reduce((sum, task) => sum + Math.max(0, Number(task.actualMinutes) || 0), 0);
   const estimatedMinutes = measured.reduce((sum, task) => sum + Math.max(0, Number(task.estimatedMinutes) || 0), 0);
-  const longest = measured.toSorted((a, b) => (b.actualMinutes || 0) - (a.actualMinutes || 0))[0];
+  const longest = [...measured].sort((a, b) => (b.actualMinutes || 0) - (a.actualMinutes || 0))[0];
 
   return {
     actualMinutes: Math.round(actualMinutes),
@@ -374,7 +374,7 @@ export function buildReadingReport(books: ReaderBook[], range: ReportRange, toda
     label: readingWindowLabels[key],
     seconds: Math.round(seconds),
   }));
-  const favorite = timeWindows.toSorted((a, b) => b.seconds - a.seconds)[0];
+  const favorite = [...timeWindows].sort((a, b) => b.seconds - a.seconds)[0];
 
   return {
     readingSeconds,
@@ -458,8 +458,8 @@ export function buildExerciseReport(progress: ExerciseProgressStore, range: Repo
     loggedEntries,
     trackedExercises: Object.keys(progress).length,
     improvedExercises,
-    trends: trends
-      .toSorted((a, b) => b.latest.date.localeCompare(a.latest.date))
+    trends: [...trends]
+      .sort((a, b) => b.latest.date.localeCompare(a.latest.date))
       .slice(0, 8),
   };
 }

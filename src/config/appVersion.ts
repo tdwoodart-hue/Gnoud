@@ -5,10 +5,23 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.16';
-export const APP_UPDATED_AT = '2026-09-30T23:28:00+07:00';
+export const APP_VERSION = '0.9.17';
+export const APP_UPDATED_AT = '2026-09-30T23:35:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.17',
+    updatedAt: '2026-09-30T23:35:00+07:00',
+    title: 'Bỏ Cá nhân và làm gọn Cài đặt',
+    changes: [
+      'Xóa Cá nhân khỏi tab Thêm, sidebar desktop, menu lệnh và màn hình điều hướng.',
+      'Giữ tab Thêm trượt lên/xuống mượt, bỏ hiệu ứng scale để chuyển động giống bottom sheet hơn.',
+      'Cài đặt mobile chuyển thành màn hình full-height có safe area, nhóm theo kiểu app và giảm card/trang trí.',
+      'Ẩn các nút test thông báo, trạng thái scheduler, snapshot ChatGPT và lịch sử version khỏi giao diện người dùng.',
+      'Bảo mật chỉ giữ PIN, tự động khóa, khóa ngay và chế độ riêng tư; bỏ phần chẩn đoán kỹ thuật khỏi màn hình.',
+      'Mục xuất dữ liệu ghi rõ phạm vi công việc & kế hoạch thay vì gọi là bản sao lưu toàn bộ.',
+    ],
+  },
   {
     version: '0.9.16',
     updatedAt: '2026-09-30T23:28:00+07:00',

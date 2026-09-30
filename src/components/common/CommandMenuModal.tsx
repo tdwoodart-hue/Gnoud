@@ -3,7 +3,6 @@ import { useApp } from '../../context/AppContext';
 import {
   Search,
   CheckCircle2,
-  UserRound,
   Play,
   Plus,
   ArrowRight,
@@ -59,7 +58,6 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
     { label: 'Đi tới Hôm nay', tab: 'today' as NavTab, icon: Sun },
     { label: 'Đi tới Công việc', tab: 'tasks' as NavTab, icon: ListTodo },
     { label: 'Đi tới Dinh dưỡng', tab: 'nutrition' as NavTab, icon: UtensilsCrossed },
-    { label: 'Đi tới Cá nhân', tab: 'personal' as NavTab, icon: UserRound },
     { label: 'Đi tới Sách', tab: 'reader' as NavTab, icon: BookOpen },
     { label: 'Đi tới Báo cáo', tab: 'reports' as NavTab, icon: BarChart3 },
   ].filter((action) => action.label.toLowerCase().includes(normalizedQuery));

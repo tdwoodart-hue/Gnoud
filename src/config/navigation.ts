@@ -4,7 +4,6 @@ export const PRIMARY_NAV_ITEMS: ReadonlyArray<{ id: NavTab; label: string }> = [
   { id: 'today', label: 'Hôm nay' },
   { id: 'tasks', label: 'Công việc' },
   { id: 'nutrition', label: 'Dinh dưỡng' },
-  { id: 'personal', label: 'Cá nhân' },
   { id: 'reader', label: 'Sách' },
   { id: 'reports', label: 'Báo cáo' },
 ];

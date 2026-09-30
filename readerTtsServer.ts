@@ -1,3 +1,5 @@
+import { cert } from 'firebase-admin/app';
+
 export type ReaderOnlineTtsProvider = 'azure' | 'google';
 
 export interface ReaderOnlineVoice {
@@ -48,8 +50,74 @@ const GOOGLE_VOICE_DEFS: Array<Omit<ReaderOnlineVoice, 'available'>> = [
   { id: 'vi-VN-Chirp3-HD-Zephyr', provider: 'google', name: 'Zephyr · nữ', gender: 'female', locale: 'vi-VN', quality: 'hd', note: 'Google Chirp 3 HD' },
 ];
 
+type GoogleAuthMode = 'service-account' | 'api-key' | 'none';
+
+type GoogleServiceAccountConfig = {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+};
+
+let googleCredential: ReturnType<typeof cert> | null = null;
+let googleCredentialIdentity = '';
+
 function getGoogleTtsKey(): string | undefined {
   return process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_API_KEY || undefined;
+}
+
+function getGoogleServiceAccount(): GoogleServiceAccountConfig | null {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      project_id?: string;
+      client_email?: string;
+      private_key?: string;
+    };
+    const projectId = parsed.project_id?.trim() || '';
+    const clientEmail = parsed.client_email?.trim() || '';
+    const privateKey = parsed.private_key?.replace(/\\n/g, '\n') || '';
+    if (!projectId || !clientEmail || !privateKey) return null;
+    return { projectId, clientEmail, privateKey };
+  } catch {
+    return null;
+  }
+}
+
+function getGoogleAuthMode(): GoogleAuthMode {
+  if (getGoogleServiceAccount()) return 'service-account';
+  if (getGoogleTtsKey()) return 'api-key';
+  return 'none';
+}
+
+async function getGoogleAccessToken(): Promise<{ token: string; projectId: string }> {
+  const serviceAccount = getGoogleServiceAccount();
+  if (!serviceAccount) throw new Error('Google Cloud TTS chưa có service account hợp lệ.');
+
+  const identity = `${serviceAccount.projectId}|${serviceAccount.clientEmail}`;
+  if (!googleCredential || googleCredentialIdentity !== identity) {
+    googleCredential = cert({
+      projectId: serviceAccount.projectId,
+      clientEmail: serviceAccount.clientEmail,
+      privateKey: serviceAccount.privateKey,
+    });
+    googleCredentialIdentity = identity;
+  }
+
+  const access = await googleCredential.getAccessToken();
+  if (!access?.access_token) throw new Error('Không lấy được access token Google Cloud.');
+  return { token: access.access_token, projectId: serviceAccount.projectId };
+}
+
+export function getReaderTtsConfig(): {
+  google: { configured: boolean; authMode: GoogleAuthMode };
+  azure: { configured: boolean };
+} {
+  const googleAuthMode = getGoogleAuthMode();
+  return {
+    google: { configured: googleAuthMode !== 'none', authMode: googleAuthMode },
+    azure: { configured: Boolean(getAzureConfig()) },
+  };
 }
 
 function getAzureConfig(): { key: string; region: string } | null {
@@ -60,7 +128,14 @@ function getAzureConfig(): { key: string; region: string } | null {
 
 export function getReaderOnlineVoices(): ReaderOnlineVoice[] {
   const azureReady = Boolean(getAzureConfig());
-  const googleReady = Boolean(getGoogleTtsKey());
+  const googleAuthMode = getGoogleAuthMode();
+  const googleReady = googleAuthMode !== 'none';
+  const googleAuthNote = googleAuthMode === 'service-account'
+    ? 'OAuth qua Firebase service account'
+    : googleAuthMode === 'api-key'
+      ? 'API key legacy'
+      : 'cần FIREBASE_SERVICE_ACCOUNT_JSON hoặc GOOGLE_TTS_API_KEY';
+
   return [
     ...AZURE_VOICE_DEFS.map((voice) => ({
       ...voice,
@@ -70,7 +145,7 @@ export function getReaderOnlineVoices(): ReaderOnlineVoice[] {
     ...GOOGLE_VOICE_DEFS.map((voice) => ({
       ...voice,
       available: googleReady,
-      note: googleReady ? voice.note : `${voice.note} · cần GOOGLE_TTS_API_KEY`,
+      note: googleReady ? `${voice.note} · ${googleAuthNote}` : `${voice.note} · ${googleAuthNote}`,
     })),
   ];
 }
@@ -114,13 +189,29 @@ async function synthesizeAzure(text: string, voice: string, rate: number, pitch:
 }
 
 async function synthesizeGoogle(text: string, voice: string, rate: number, pitch: number): Promise<{ audio: Buffer; contentType: string }> {
-  const key = getGoogleTtsKey();
-  if (!key) throw new Error('Google TTS chưa được cấu hình.');
   const allowed = GOOGLE_VOICE_DEFS.some((item) => item.id === voice);
   if (!allowed) throw new Error('Giọng Google không hợp lệ.');
-  const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(key)}`, {
+
+  const serviceAccount = getGoogleServiceAccount();
+  const apiKey = getGoogleTtsKey();
+  if (!serviceAccount && !apiKey) {
+    throw new Error('Google TTS chưa được cấu hình. Cần FIREBASE_SERVICE_ACCOUNT_JSON hoặc GOOGLE_TTS_API_KEY.');
+  }
+
+  let endpoint = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (serviceAccount) {
+    const auth = await getGoogleAccessToken();
+    headers.Authorization = `Bearer ${auth.token}`;
+    headers['x-goog-user-project'] = auth.projectId;
+  } else if (apiKey) {
+    endpoint += `?key=${encodeURIComponent(apiKey)}`;
+  }
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       input: { text },
       voice: { languageCode: 'vi-VN', name: voice },
@@ -135,7 +226,7 @@ async function synthesizeGoogle(text: string, voice: string, rate: number, pitch
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new Error(`Google TTS lỗi ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+    throw new Error(`Google TTS lỗi ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
   }
   const payload = await response.json() as { audioContent?: string };
   if (!payload.audioContent) throw new Error('Google TTS không trả về audio.');

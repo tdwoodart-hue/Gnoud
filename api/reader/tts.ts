@@ -1,9 +1,12 @@
-import { getReaderOnlineVoices, synthesizeReaderTts } from '../../readerTtsServer';
+import { getReaderOnlineVoices, getReaderTtsConfig, synthesizeReaderTts } from '../../readerTtsServer';
 
 export default async function handler(req: any, res: any) {
   if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
-    return res.status(200).json({ voices: getReaderOnlineVoices() });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({
+      voices: getReaderOnlineVoices(),
+      config: getReaderTtsConfig(),
+    });
   }
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST');

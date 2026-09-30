@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.8';
-export const APP_UPDATED_AT = '2026-09-29T14:45:00+07:00';
+export const APP_VERSION = '0.9.9';
+export const APP_UPDATED_AT = '2026-09-30T14:45:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.9',
+    updatedAt: '2026-09-30T14:45:00+07:00',
+    title: 'Sửa kết nối giọng đọc online',
+    changes: [
+      'Google Cloud TTS dùng OAuth từ FIREBASE_SERVICE_ACCOUNT_JSON thay vì phụ thuộc API key query.',
+      'API giọng đọc không cache trạng thái provider để tránh giữ lỗi cấu hình cũ.',
+      'Mobile Safari/iPhone dùng lại một audio element đã được mở khóa từ thao tác chạm, tránh bị chặn phát sau khi fetch audio.',
+      'Tự làm mới danh sách giọng hệ thống nhiều lần trên iOS/Safari và khi mở bảng Nghe sách.',
+      'Hiển thị trạng thái kết nối online rõ ràng, có nút Thử kết nối lại và tự fallback sang giọng trên máy khi online lỗi.',
+    ],
+  },
   {
     version: '0.9.8',
     updatedAt: '2026-09-29T14:45:00+07:00',

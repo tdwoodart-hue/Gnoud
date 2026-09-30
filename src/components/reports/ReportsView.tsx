@@ -6,10 +6,12 @@ import { loadNutritionState, type NutritionState } from '../../services/nutritio
 import {
   buildDailyTaskActivity,
   buildExerciseDeepReport,
+  buildNutritionDayReport,
   buildNutritionDeepReport,
   buildPeriodComparison,
   buildProjectDeepReport,
   buildProjectReport,
+  buildReadingDayReport,
   buildReadingDeepReport,
   buildReportSummary,
   buildWorkTimeReport,
@@ -22,9 +24,9 @@ import { loadReaderLibrary, type ReaderBook } from '../../services/readerService
 import { fetchCloudReaderBooks, mergeReaderLibraries } from '../../services/readerCloudService';
 import { loadExerciseProgress, type ExerciseProgressStore } from '../../services/exerciseService';
 import { DomainButton, formatDuration, formatMinutes, ProgressBar, RangeControl, Section } from './reportUi';
-import { BookReportView, GymReportView, NutritionReportView, ProjectReportView, ReadingReportView, WorkReportView } from './ReportDetailViews';
+import { BookReportView, GymReportView, NutritionDayReportView, NutritionReportView, ProjectReportView, ReadingDayReportView, ReadingReportView, WorkReportView } from './ReportDetailViews';
 
-type ReportPage = 'overview' | 'work' | 'project' | 'reading' | 'book' | 'nutrition' | 'gym';
+type ReportPage = 'overview' | 'work' | 'project' | 'reading' | 'reading-day' | 'book' | 'nutrition' | 'nutrition-day' | 'gym';
 
 export const ReportsView: React.FC = () => {
   const { tasks, projects, user } = useApp();
@@ -32,6 +34,8 @@ export const ReportsView: React.FC = () => {
   const [range, setRange] = useState<ReportRange>('7d');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+  const [selectedReadingDate, setSelectedReadingDate] = useState<string | null>(null);
+  const [selectedNutritionDate, setSelectedNutritionDate] = useState<string | null>(null);
   const [nutrition, setNutrition] = useState<NutritionState>(() => loadNutritionState());
   const [readerBooks, setReaderBooks] = useState<ReaderBook[]>(() => loadReaderLibrary(user?.uid));
   const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress(user?.uid));
@@ -111,6 +115,14 @@ export const ReportsView: React.FC = () => {
     [selectedProject, tasks, range, today],
   );
   const selectedBook = reading.books.find((item) => item.book.id === selectedBookId) || null;
+  const readingDay = useMemo(
+    () => selectedReadingDate ? buildReadingDayReport(readerBooks, selectedReadingDate) : null,
+    [readerBooks, selectedReadingDate],
+  );
+  const nutritionDay = useMemo(
+    () => selectedNutritionDate ? buildNutritionDayReport(nutrition, selectedNutritionDate) : null,
+    [nutrition, selectedNutritionDate],
+  );
 
   const openProject = (id: string) => {
     setSelectedProjectId(id);
@@ -122,11 +134,23 @@ export const ReportsView: React.FC = () => {
     setPage('book');
   };
 
+  const openReadingDay = (date: string) => {
+    setSelectedReadingDate(date);
+    setPage('reading-day');
+  };
+
+  const openNutritionDay = (date: string) => {
+    setSelectedNutritionDate(date);
+    setPage('nutrition-day');
+  };
+
   if (page === 'work') return <WorkReportView summary={summary} comparison={comparison} workTime={workTime} activity={activity} projects={projectRows} range={range} onRange={setRange} onBack={() => setPage('overview')} onOpenProject={openProject} />;
   if (page === 'project' && projectReport) return <ProjectReportView report={projectReport} range={range} onRange={setRange} onBack={() => setPage('work')} />;
-  if (page === 'reading') return <ReadingReportView report={reading} range={range} onRange={setRange} onBack={() => setPage('overview')} onOpenBook={openBook} />;
+  if (page === 'reading') return <ReadingReportView report={reading} range={range} onRange={setRange} onBack={() => setPage('overview')} onOpenBook={openBook} onOpenDay={openReadingDay} />;
+  if (page === 'reading-day' && readingDay) return <ReadingDayReportView report={readingDay} onBack={() => setPage('reading')} onOpenBook={openBook} />;
   if (page === 'book' && selectedBook) return <BookReportView report={selectedBook} range={range} onRange={setRange} onBack={() => setPage('reading')} />;
-  if (page === 'nutrition') return <NutritionReportView report={nutritionReport} range={range} onRange={setRange} onBack={() => setPage('overview')} />;
+  if (page === 'nutrition') return <NutritionReportView report={nutritionReport} range={range} onRange={setRange} onBack={() => setPage('overview')} onOpenDay={openNutritionDay} />;
+  if (page === 'nutrition-day' && nutritionDay) return <NutritionDayReportView report={nutritionDay} onBack={() => setPage('nutrition')} />;
   if (page === 'gym') return <GymReportView report={exercise} range={range} onRange={setRange} onBack={() => setPage('overview')} />;
 
   return (

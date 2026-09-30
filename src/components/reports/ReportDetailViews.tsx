@@ -21,10 +21,12 @@ import { EmptyState } from '../common/EmptyState';
 import type {
   DailyTaskActivity,
   ExerciseDeepReport,
+  NutritionDayReport,
   NutritionDeepReport,
   ProjectDeepReport,
   ProjectReportRow,
   ReadingBookReport,
+  ReadingDayReport,
   ReadingDeepReport,
   ReportComparison,
   ReportRange,
@@ -120,7 +122,8 @@ export const ProjectReportView: React.FC<{
   range: ReportRange;
   onRange: (range: ReportRange) => void;
   onBack: () => void;
-}> = ({ report, range, onRange, onBack }) => {
+  onOpenDay: (date: string) => void;
+}> = ({ report, range, onRange, onBack, onOpenDay }) => {
   const variance = report.timeVarianceMinutes === 0
     ? 'đúng ước tính'
     : report.timeVarianceMinutes > 0
@@ -178,7 +181,8 @@ export const ReadingReportView: React.FC<{
   onRange: (range: ReportRange) => void;
   onBack: () => void;
   onOpenBook: (id: string) => void;
-}> = ({ report, range, onRange, onBack, onOpenBook }) => {
+  onOpenDay: (date: string) => void;
+}> = ({ report, range, onRange, onBack, onOpenBook, onOpenDay }) => {
   const windowMax = Math.max(1, ...report.summary.timeWindows.map((item) => item.seconds));
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
@@ -199,6 +203,22 @@ export const ReadingReportView: React.FC<{
         </div>
       </Section>
       <Section title="Nhịp đọc theo ngày" subtitle="Tối đa 14 ngày gần nhất trên biểu đồ"><ReadingDailyBars rows={report.dailyActivity} /></Section>
+      <Section title="Theo từng ngày" subtitle="Bấm vào một ngày để xem sách và từng session">
+        <div className="space-y-2">
+          {report.dailyActivity.filter((day) => day.totalSeconds > 0 || day.sessionCount > 0).slice().reverse().slice(0, 14).map((day) => (
+            <button key={day.date} type="button" onClick={() => onOpenDay(day.date)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-left shadow-xs active:bg-slate-50">
+              <div>
+                <p className="text-xs font-bold text-slate-800">{formatDate(day.date)}</p>
+                <p className="mt-0.5 text-[9px] text-slate-400">Đọc {Math.round(day.readingSeconds / 60)}p · Nghe {Math.round(day.listeningSeconds / 60)}p · {day.sessionCount} phiên</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">{formatDuration(day.totalSeconds)}</span>
+                <ChevronRight className="h-4 w-4 text-slate-300" />
+              </div>
+            </button>
+          ))}
+        </div>
+      </Section>
       <Section title="Khung giờ đọc">
         <div className="space-y-2 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
           {report.summary.timeWindows.map((window) => (
@@ -278,7 +298,7 @@ export const NutritionReportView: React.FC<{
       </div>
       <Section title="Độ bám mục tiêu"><div className="grid grid-cols-3 gap-2.5">{adherence.map((item) => <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-white p-3 text-center shadow-xs"><p className="text-xl font-bold text-slate-900">{item.value === null ? '—' : item.value + '%'}</p><p className="mt-0.5 text-[9px] font-semibold text-slate-400">{item.label}</p></div>)}</div>{summary.averageCalorieDeviation !== null ? <p className="text-[10px] text-slate-400">Sai lệch calories trung bình: {whole.format(summary.averageCalorieDeviation)} kcal/ngày.</p> : null}</Section>
       <Section title="Lịch sử theo ngày" subtitle="Mỗi dòng là dữ liệu thật đã ghi trong ngày">
-        {report.daily.length ? <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">{report.daily.slice(0, 20).map((day, index) => <div key={day.date} className={'px-4 py-3 ' + (index ? 'border-t border-slate-100' : '')}><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-slate-800">{formatDate(day.date)}</p><p className="text-[10px] font-semibold text-slate-500">{whole.format(day.calories)} kcal · P {whole.format(day.protein)}g</p></div><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-slate-400"><span>{day.mealCount} món</span><span>C {whole.format(day.carbs)}g</span><span>F {whole.format(day.fat)}g</span>{day.steps !== null ? <span>{whole.format(day.steps)} bước</span> : null}{day.weightKg !== null ? <span>{decimal.format(day.weightKg)} kg</span> : null}</div></div>)}</div> : <EmptyState title="Chưa có dữ liệu trong khoảng này" />}
+        {report.daily.length ? <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">{report.daily.slice(0, 20).map((day, index) => <button key={day.date} type="button" onClick={() => onOpenDay(day.date)} className={'flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-slate-50 ' + (index ? 'border-t border-slate-100' : '')}><div className="min-w-0"><p className="text-xs font-bold text-slate-800">{formatDate(day.date)}</p><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-slate-400"><span>{day.mealCount} món</span><span>C {whole.format(day.carbs)}g</span><span>F {whole.format(day.fat)}g</span>{day.steps !== null ? <span>{whole.format(day.steps)} bước</span> : null}{day.weightKg !== null ? <span>{decimal.format(day.weightKg)} kg</span> : null}</div></div><div className="flex shrink-0 items-center gap-2"><p className="text-[10px] font-semibold text-slate-500">{whole.format(day.calories)} kcal · P {whole.format(day.protein)}g</p><ChevronRight className="h-4 w-4 text-slate-300" /></div></button>)}</div> : <EmptyState title="Chưa có dữ liệu trong khoảng này" />}
       </Section>
     </div>
   );

@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.9';
-export const APP_UPDATED_AT = '2026-09-30T14:45:00+07:00';
+export const APP_VERSION = '0.9.10';
+export const APP_UPDATED_AT = '2026-09-30T15:28:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.10',
+    updatedAt: '2026-09-30T15:28:00+07:00',
+    title: 'Sửa lỗi Vercel không khởi động API giọng đọc',
+    changes: [
+      'Xác nhận production /api/reader/tts đang crash ở mức Vercel FUNCTION_INVOCATION_FAILED, chưa chạy tới logic TTS.',
+      'Sửa import server dùng đuôi .js đúng kiểu ESM giống các API serverless đang hoạt động khác trong repo.',
+      'Giữ nguyên fallback giọng trên máy và phần chẩn đoán TTS của v0.9.9.',
+    ],
+  },
   {
     version: '0.9.9',
     updatedAt: '2026-09-30T14:45:00+07:00',

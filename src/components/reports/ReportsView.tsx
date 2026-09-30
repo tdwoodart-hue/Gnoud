@@ -24,7 +24,8 @@ import { loadReaderLibrary, type ReaderBook } from '../../services/readerService
 import { fetchCloudReaderBooks, mergeReaderLibraries } from '../../services/readerCloudService';
 import { loadExerciseProgress, type ExerciseProgressStore } from '../../services/exerciseService';
 import { DomainButton, formatDuration, formatMinutes, ProgressBar, RangeControl, Section } from './reportUi';
-import { BookReportView, GymReportView, NutritionDayReportView, NutritionReportView, ProjectReportView, ReadingDayReportView, ReadingReportView, WorkReportView } from './ReportDetailViews';
+import { BookReportView, GymReportView, NutritionReportView, ProjectReportView, ReadingReportView, WorkReportView } from './ReportDetailViews';
+import { NutritionDayReportView, ReadingDayReportView } from './ReportDayViews';
 
 type ReportPage = 'overview' | 'work' | 'project' | 'reading' | 'reading-day' | 'book' | 'nutrition' | 'nutrition-day' | 'gym';
 

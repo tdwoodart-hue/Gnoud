@@ -122,8 +122,7 @@ export const ProjectReportView: React.FC<{
   range: ReportRange;
   onRange: (range: ReportRange) => void;
   onBack: () => void;
-  onOpenDay: (date: string) => void;
-}> = ({ report, range, onRange, onBack, onOpenDay }) => {
+}> = ({ report, range, onRange, onBack }) => {
   const variance = report.timeVarianceMinutes === 0
     ? 'đúng ước tính'
     : report.timeVarianceMinutes > 0
@@ -279,7 +278,8 @@ export const NutritionReportView: React.FC<{
   range: ReportRange;
   onRange: (range: ReportRange) => void;
   onBack: () => void;
-}> = ({ report, range, onRange, onBack }) => {
+  onOpenDay: (date: string) => void;
+}> = ({ report, range, onRange, onBack, onOpenDay }) => {
   const summary = report.summary;
   const adherence: Array<{ label: string; value: number | null }> = [
     { label: 'Calories', value: summary.calorieAdherenceRate },

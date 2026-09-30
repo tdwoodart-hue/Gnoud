@@ -28,6 +28,14 @@ test('TTS config ưu tiên Firebase service account cho Google Cloud', () => {
       authMode: 'service-account',
     });
 
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON = JSON.stringify(
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    );
+    assert.deepEqual(getReaderTtsConfig().google, {
+      configured: true,
+      authMode: 'service-account',
+    });
+
     delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     assert.deepEqual(getReaderTtsConfig().google, {
       configured: true,

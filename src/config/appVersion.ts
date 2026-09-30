@@ -5,10 +5,23 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.15';
-export const APP_UPDATED_AT = '2026-09-30T21:05:00+07:00';
+export const APP_VERSION = '0.9.16';
+export const APP_UPDATED_AT = '2026-09-30T23:28:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.16',
+    updatedAt: '2026-09-30T23:28:00+07:00',
+    title: 'Làm mượt tab Thêm và dọn lại Cài đặt',
+    changes: [
+      'Tab Thêm trên mobile mở bằng animation trượt từ dưới lên thay vì bật ra đột ngột.',
+      'Sheet Thêm được đồng bộ style với Gnoud, có drag handle và mô tả ngắn cho từng mục.',
+      'Cài đặt được chia thành 4 nhóm rõ ràng: Tài khoản & bảo mật, Thông báo, Ứng dụng và Dữ liệu.',
+      'Cài đặt cũng trượt từ dưới lên; chuyển giữa các nhóm có animation ngang nhẹ và nút quay lại.',
+      'Giảm cảm giác rối bằng cách bỏ màn danh sách dài và chỉ mở nhóm đang cần xem.',
+      'Giữ fix v0.9.15: bottom navigation vẫn ở z-40 nên không đè lên modal/dialog.',
+    ],
+  },
   {
     version: '0.9.15',
     updatedAt: '2026-09-30T21:05:00+07:00',

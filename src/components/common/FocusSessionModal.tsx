@@ -1,5 +1,4 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import { X, Play, Pause, Square, CheckCircle2, Flame } from 'lucide-react';
 
@@ -14,28 +13,16 @@ export const FocusSessionModal: React.FC = () => {
     stopFocusSession,
   } = useApp();
 
+  if (!focusTask) return null;
+
   const minutes = Math.floor(focusSecondsLeft / 60);
   const seconds = focusSecondsLeft % 60;
   const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const progressPercent = Math.max(0, Math.min(100, ((focusTotalSeconds - focusSecondsLeft) / focusTotalSeconds) * 100));
 
   return (
-    <AnimatePresence initial={false}>
-      {focusTask ? (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/28 p-4 backdrop-blur-[2px]"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-        >
-          <motion.div
-            className="relative w-full max-w-md overflow-hidden rounded-[30px] border border-white/70 bg-white p-7 text-center shadow-[0_28px_80px_rgba(15,23,42,0.22)]"
-            initial={{ y: 14, scale: 0.965, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: 10, scale: 0.98, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 470, damping: 38, mass: 0.82 }}
-          >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-7 text-center relative overflow-hidden">
         {/* Top bar */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200/70 px-3 py-1 rounded-full">
@@ -131,9 +118,7 @@ export const FocusSessionModal: React.FC = () => {
             <Square className="w-3.5 h-3.5" /> Dừng phiên làm việc và lưu thời gian
           </button>
         </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+      </div>
+    </div>
   );
 };

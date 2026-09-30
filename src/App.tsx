@@ -4,7 +4,6 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { AppShell } from './components/layout/AppShell';
 import { TodayView } from './components/today/TodayView';
@@ -45,28 +44,19 @@ const MainContent: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={activeTab}
-        className="min-w-0"
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-      >
-        {activeTab === 'today' && (
-          <>
-            <DailyActivityDock />
-            <TodayView />
-          </>
-        )}
-        {activeTab === 'tasks' && <TasksView />}
-        {activeTab === 'nutrition' && <NutritionView key={`nutrition-${dataRevision}`} />}
-        {activeTab === 'personal' && <PersonalView />}
-        {activeTab === 'reader' && <ReaderView />}
-        {activeTab === 'reports' && <ReportsView key={`reports-${dataRevision}`} />}
-      </motion.div>
-    </AnimatePresence>
+    <>
+      {activeTab === 'today' && (
+        <>
+          <DailyActivityDock />
+          <TodayView />
+        </>
+      )}
+      {activeTab === 'tasks' && <TasksView />}
+      {activeTab === 'nutrition' && <NutritionView key={`nutrition-${dataRevision}`} />}
+      {activeTab === 'personal' && <PersonalView />}
+      {activeTab === 'reader' && <ReaderView />}
+      {activeTab === 'reports' && <ReportsView key={`reports-${dataRevision}`} />}
+    </>
   );
 };
 

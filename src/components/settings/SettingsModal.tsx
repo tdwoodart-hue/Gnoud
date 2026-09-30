@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import {
   Bell,
   ChevronDown,
@@ -70,6 +69,8 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
       void refresh();
     }
   }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const enable = async () => {
     setBusy(true);
@@ -178,27 +179,8 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   };
 
   return (
-    <AnimatePresence initial={false}>
-      {isOpen ? (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/28 sm:items-center sm:p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-          onClick={onClose}
-        >
-          <motion.section
-            className="ios-surface flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[30px] border border-white/60 pt-[env(safe-area-inset-top)] shadow-[0_28px_80px_rgba(15,23,42,0.22)] sm:max-h-[88vh] sm:rounded-[30px] sm:pt-0"
-            initial={{ y: 56, scale: 0.985, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: 42, scale: 0.985, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 440, damping: 40, mass: 0.84 }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex justify-center pb-1 pt-2.5 sm:hidden" aria-hidden="true">
-              <span className="h-1.5 w-10 rounded-full bg-slate-300/80" />
-            </div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
+      <section className="flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#f7f8fa] pt-[env(safe-area-inset-top)] shadow-2xl sm:max-h-[88vh] sm:rounded-3xl sm:pt-0">
         <header className="flex min-h-16 items-center border-b border-slate-200 bg-white px-5">
           <h2 className="flex-1 text-lg font-bold">Cài đặt</h2>
           <button onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-500" aria-label="Đóng">
@@ -462,6 +444,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
             </div>
           </section>
         </div>
+      </section>
 
       {pendingPermanentDeleteId ? (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
@@ -484,9 +467,6 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
           </div>
         </div>
       ) : null}
-          </motion.section>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    </div>
   );
 };

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { Calendar, ChevronDown, Clock, Plus, Star, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskPriority } from '../../types';
@@ -7,11 +6,7 @@ import { isTaskDraft } from '../../services/taskDraft';
 
 export const TaskEditModal: React.FC = () => {
   const { editingTask } = useApp();
-  return (
-    <AnimatePresence initial={false}>
-      {editingTask ? <TaskForm key={editingTask.id} initialTask={editingTask} /> : null}
-    </AnimatePresence>
-  );
+  return editingTask ? <TaskForm key={editingTask.id} initialTask={editingTask} /> : null;
 };
 
 const priorities: Array<{ value: TaskPriority; label: string; active: string }> = [
@@ -49,25 +44,8 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
   };
 
   return (
-    <motion.div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/28 sm:items-center sm:p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-      onClick={() => setEditingTask(null)}
-    >
-      <motion.section
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[30px] border border-white/60 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.22)] sm:rounded-[30px]"
-        initial={{ y: 58, scale: 0.985, opacity: 0 }}
-        animate={{ y: 0, scale: 1, opacity: 1 }}
-        exit={{ y: 44, scale: 0.985, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 440, damping: 40, mass: 0.84 }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex justify-center pb-1 pt-2.5 sm:hidden" aria-hidden="true">
-          <span className="h-1.5 w-10 rounded-full bg-slate-300/80" />
-        </div>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
+      <section className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-100 px-4 sm:px-5">
           <button
             type="button"
@@ -100,7 +78,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
           </button>
         </header>
 
-        <form onSubmit={save} className="ios-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+        <form onSubmit={save} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
             Tên việc
           </label>
@@ -324,7 +302,7 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
             </button>
           </div>
         </form>
-      </motion.section>
+      </section>
 
       {pendingDelete ? (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 px-5" role="dialog" aria-modal="true">
@@ -350,6 +328,6 @@ const TaskForm: React.FC<{ initialTask: Task }> = ({ initialTask }) => {
           </div>
         </div>
       ) : null}
-    </motion.div>
+    </div>
   );
 };

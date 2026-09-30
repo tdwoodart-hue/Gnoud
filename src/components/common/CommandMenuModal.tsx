@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import {
   Search,
@@ -45,6 +44,8 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
+  if (!isOpen) return null;
+
   const normalizedQuery = query.toLowerCase();
   const filteredTasks = tasks
     .filter((task) => task.title.toLowerCase().includes(normalizedQuery))
@@ -75,24 +76,8 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <AnimatePresence initial={false}>
-      {isOpen ? (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/28 p-4 pt-16 backdrop-blur-[2px] sm:pt-24"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
-          onClick={onClose}
-        >
-          <motion.div
-            className="flex w-full max-w-xl flex-col overflow-hidden rounded-[24px] border border-white/70 bg-white/96 shadow-[0_24px_70px_rgba(15,23,42,0.22)] backdrop-blur-2xl"
-            initial={{ y: -10, scale: 0.975, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: -8, scale: 0.985, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 42, mass: 0.78 }}
-            onClick={(event) => event.stopPropagation()}
-          >
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16 backdrop-blur-xs animate-in fade-in sm:pt-24">
+      <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl">
         <div className="flex items-center gap-3 border-b border-stone-200 p-3.5">
           <Search className="h-4 w-4 shrink-0 text-stone-400" />
           <input
@@ -232,9 +217,7 @@ export const CommandMenuModal: React.FC<CommandMenuModalProps> = ({ isOpen, onCl
           <span>Nhấp vào kết quả để mở nhanh</span>
           <span className="font-mono">Ctrl + K / ⌘ + K</span>
         </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+      </div>
+    </div>
   );
 };

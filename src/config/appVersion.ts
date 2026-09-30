@@ -5,22 +5,10 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.16';
-export const APP_UPDATED_AT = '2026-09-30T23:03:00+07:00';
+export const APP_VERSION = '0.9.15';
+export const APP_UPDATED_AT = '2026-09-30T21:05:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
-  {
-    version: '0.9.16',
-    updatedAt: '2026-09-30T23:03:00+07:00',
-    title: 'Motion mượt kiểu iOS + polish mobile',
-    changes: [
-      'Menu Thêm (...) trên mobile trượt lên bằng spring, backdrop fade và có grabber như bottom sheet native.',
-      'Cài đặt và form thêm/sửa việc có animation mở/đóng, bo góc và material surface đồng nhất hơn.',
-      'Nhập nhanh, Command Menu và Focus modal có chuyển động ngắn, giảm cảm giác màn hình bật/tắt đột ngột.',
-      'Chuyển giữa các tab dùng fade + dịch chuyển rất nhẹ để giữ cảm giác nhanh nhưng liền mạch.',
-      'Bottom navigation tăng blur/material, bóng nhẹ và tap feedback; bổ sung reduced-motion cho người dùng cần hạn chế chuyển động.',
-    ],
-  },
   {
     version: '0.9.15',
     updatedAt: '2026-09-30T21:05:00+07:00',

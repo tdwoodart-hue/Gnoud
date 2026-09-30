@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.23';
-export const APP_UPDATED_AT = '2026-10-01T01:02:00+07:00';
+export const APP_VERSION = '0.9.24';
+export const APP_UPDATED_AT = '2026-10-01T01:18:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.24',
+    updatedAt: '2026-10-01T01:18:00+07:00',
+    title: 'Tách báo cáo thành từng báo cáo chuyên sâu',
+    changes: [
+      'Báo cáo chuyển thành hub: Công việc, Đọc sách, Dinh dưỡng, Gym và từng dự án được mở thành báo cáo riêng.',
+      'Mỗi dự án có tiến độ, trạng thái task, deadline, đúng hạn, Focus, chênh lệch thời gian, milestone và danh sách việc riêng.',
+      'Đọc sách phân tích riêng đọc chủ động, nghe sách, phiên đọc, ngày hoạt động, khung giờ, từng cuốn và lịch sử session.',
+      'Dinh dưỡng có lịch sử theo ngày; Gym hiển thị lịch sử kg/reps theo từng bài trong khoảng thời gian đã chọn.',
+      'CI chạy thêm test reportService và exerciseService thay vì chỉ test modal mobile.',
+    ],
+  },
   {
     version: '0.9.23',
     updatedAt: '2026-10-01T01:02:00+07:00',

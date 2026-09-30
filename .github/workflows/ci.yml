@@ -28,8 +28,8 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
-      - name: UI regression test
-        run: node --import tsx --test test/mobile-modal-layering.test.ts
+      - name: Regression tests
+        run: node --import tsx --test test/mobile-modal-layering.test.ts test/report-service.test.ts test/exercise-service.test.ts
 
       - name: Build
         run: npm run build

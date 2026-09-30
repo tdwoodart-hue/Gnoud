@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildDailyTaskActivity,
+  buildExerciseDeepReport,
   buildExerciseReport,
+  buildNutritionDeepReport,
   buildNutritionReport,
   buildPeriodComparison,
+  buildReadingDeepReport,
   buildReadingReport,
   buildWorkTimeReport,
+  buildProjectDeepReport,
   buildProjectReport,
   buildReportSummary,
   getReportStart,
@@ -160,4 +164,84 @@ test('exercise report counts dates and improvements from full history', () => {
   assert.equal(report.activeDays, 2);
   assert.equal(report.loggedEntries, 2);
   assert.equal(report.improvedExercises, 1);
+});
+
+
+test('project deep report exposes deadlines, focus time, milestones and status breakdown', () => {
+  const project: Project = {
+    id: 'p-deep',
+    name: 'Launch',
+    description: '',
+    category: 'work',
+    color: '#6366f1',
+    targetDate: '2026-09-30',
+    milestones: [
+      { id: 'm1', title: 'A', completed: true },
+      { id: 'm2', title: 'B', completed: false },
+    ],
+    recentActivity: [],
+  };
+  const tasks = [
+    task({ id: 'a', projectId: project.id, plannedDate: '2026-09-18', status: 'done', completedAt: '2026-09-18', deadline: '2026-09-18', actualMinutes: 70, estimatedMinutes: 60 }),
+    task({ id: 'b', projectId: project.id, plannedDate: '2026-09-19', status: 'in_progress', priority: 'high', deadline: '2026-09-18', actualMinutes: 30, estimatedMinutes: 45 }),
+  ];
+  const report = buildProjectDeepReport(project, tasks, '7d', '2026-09-19');
+  assert.equal(report.totalTasks, 2);
+  assert.equal(report.doneTasks, 1);
+  assert.equal(report.overdueOpen, 1);
+  assert.equal(report.importantOpen, 1);
+  assert.equal(report.actualMinutes, 100);
+  assert.equal(report.estimatedMeasuredMinutes, 105);
+  assert.equal(report.milestoneRate, 50);
+  assert.equal(report.statusBreakdown.inProgress, 1);
+});
+
+test('reading deep report separates activities, books, days and sessions', () => {
+  const first = createReaderBook({ title: 'Book A', content: 'abc' });
+  first.overallProgress = 1;
+  first.readingSecondsByDate = { '2026-09-18': 600, '2026-09-19': 1200 };
+  first.listeningSecondsByDate = { '2026-09-19': 300 };
+  first.sessions = [
+    { id: 's1', startedAt: '2026-09-19T13:00:00.000Z', endedAt: '2026-09-19T13:25:00.000Z', readingSeconds: 1200, listeningSeconds: 300 },
+  ];
+  const second = createReaderBook({ title: 'Book B', content: 'def' });
+  second.readingSecondsByDate = { '2026-09-18': 300 };
+
+  const report = buildReadingDeepReport([first, second], '7d', '2026-09-19');
+  assert.equal(report.summary.readingSeconds, 2100);
+  assert.equal(report.summary.listeningSeconds, 300);
+  assert.equal(report.books.length, 2);
+  assert.equal(report.books[0].book.title, 'Book A');
+  assert.equal(report.books[0].sessionCount, 1);
+  assert.equal(report.recentSessions.length, 1);
+  assert.equal(report.completedBooks, 1);
+  assert.equal(report.dailyActivity.find((day) => day.date === '2026-09-19')?.sessionCount, 1);
+});
+
+test('nutrition deep report keeps per-day measured values', () => {
+  const nutrition: NutritionState = {
+    profile: {
+      sex: 'male', age: 22, heightCm: 169, weightKg: 65.5, activityLevel: 'desk_training', goal: 'recomp',
+      calorieTarget: 2100, proteinTarget: 130, carbTarget: 270, fatTarget: 55, stepTarget: 8000,
+    },
+    entries: [
+      { id: '1', date: '2026-09-19', name: 'A', meal: 'lunch', calories: 2100, protein: 140, carbs: 250, fat: 55, createdAt: 'x' },
+    ],
+    dailyMetrics: [{ date: '2026-09-19', steps: 9000, weightKg: 65.2, updatedAt: 'x' }],
+  };
+  const report = buildNutritionDeepReport(nutrition, '7d', '2026-09-19');
+  assert.equal(report.daily.length, 1);
+  assert.equal(report.daily[0].calorieTargetMet, true);
+  assert.equal(report.daily[0].proteinTargetMet, true);
+  assert.equal(report.daily[0].stepTargetMet, true);
+});
+
+test('exercise deep report keeps full in-range history by exercise', () => {
+  let progress = updateExerciseProgress({}, 'Squat', '2026-09-10', { weight: 80, reps: 8 });
+  progress = updateExerciseProgress(progress, 'Squat', '2026-09-15', { weight: 85, reps: 8 });
+  progress = updateExerciseProgress(progress, 'Squat', '2026-09-19', { weight: 87.5, reps: 7 });
+  const report = buildExerciseDeepReport(progress, '30d', '2026-09-19');
+  assert.equal(report.exercises.length, 1);
+  assert.equal(report.exercises[0].history.length, 3);
+  assert.equal(report.exercises[0].weightDelta, 2.5);
 });

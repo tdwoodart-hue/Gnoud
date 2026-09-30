@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   applyWorkoutQuickAction,
+  buildExerciseProgressStorageKey,
   exerciseKey,
+  shouldClaimLegacyExerciseProgress,
   updateExerciseProgress,
 } from '../src/services/exerciseService.ts';
 
@@ -48,4 +50,13 @@ test('exercise history keeps more than two dates for long-term reports', () => {
   assert.equal(bench?.history?.length, 3);
   assert.equal(bench?.latest?.weight, '45');
   assert.equal(bench?.previous?.weight, '42.5');
+});
+
+
+test('legacy gym data is only claimable by an authenticated account without scoped data', () => {
+  assert.equal(shouldClaimLegacyExerciseProgress(undefined, false), false);
+  assert.equal(shouldClaimLegacyExerciseProgress(null, false), false);
+  assert.equal(shouldClaimLegacyExerciseProgress('user-a', true), false);
+  assert.equal(shouldClaimLegacyExerciseProgress('user-a', false), true);
+  assert.notEqual(buildExerciseProgressStorageKey('user-a'), buildExerciseProgressStorageKey('user-b'));
 });

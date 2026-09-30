@@ -444,10 +444,10 @@ export const ReaderView: React.FC = () => {
       todaySeconds += (book.readingSecondsByDate?.[today] || 0) + (book.listeningSecondsByDate?.[today] || 0);
 
       Object.entries(book.readingSecondsByDate || {}).forEach(([date, seconds]) => {
-        if (seconds > 0) activeDates.add(date);
+        if (Number(seconds) > 0) activeDates.add(date);
       });
       Object.entries(book.listeningSecondsByDate || {}).forEach(([date, seconds]) => {
-        if (seconds > 0) activeDates.add(date);
+        if (Number(seconds) > 0) activeDates.add(date);
       });
     });
 

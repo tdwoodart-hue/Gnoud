@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.18';
-export const APP_UPDATED_AT = '2026-09-30T23:58:00+07:00';
+export const APP_VERSION = '0.9.19';
+export const APP_UPDATED_AT = '2026-10-01T00:28:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.19',
+    updatedAt: '2026-10-01T00:28:00+07:00',
+    title: 'Báo cáo hoạt động chi tiết hơn',
+    changes: [
+      'Reader bắt đầu lưu từng phiên đọc/nghe với giờ bắt đầu, kết thúc và thời lượng để thống kê khung giờ và phiên lâu nhất.',
+      'Gym giữ lịch sử kg/reps đầy đủ theo ngày thay vì chỉ hai lần gần nhất; dữ liệu cũ được migrate tự động.',
+      'Dữ liệu gym local được tách khóa theo tài khoản để giảm nguy cơ lẫn giữa hai tài khoản trên cùng thiết bị.',
+      'Báo cáo thêm thời gian Focus thực tế, phiên đọc, khung giờ đọc, lịch sử gym và độ bám mục tiêu dinh dưỡng.',
+      'Các chỉ số chưa từng được đo trước v0.9.19 không được hồi tố hoặc ước lượng giả.',
+    ],
+  },
   {
     version: '0.9.18',
     updatedAt: '2026-09-30T23:58:00+07:00',

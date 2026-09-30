@@ -8,8 +8,10 @@ export interface ExerciseLogEntry {
 }
 
 export interface ExerciseProgress {
+  label?: string;
   latest?: ExerciseLogEntry;
   previous?: ExerciseLogEntry;
+  history?: ExerciseLogEntry[];
 }
 
 export type ExerciseProgressStore = Record<string, ExerciseProgress>;
@@ -23,6 +25,11 @@ export interface WorkoutApplyResult {
 }
 
 export const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
+const EXERCISE_PROGRESS_SCOPED_PREFIX = 'gnoud-exercise-progress-v2';
+
+export function buildExerciseProgressStorageKey(userId?: string | null): string {
+  return `${EXERCISE_PROGRESS_SCOPED_PREFIX}_${userId || 'guest'}`;
+}
 
 export function exerciseKey(label: string): string {
   return referenceSubject(label)
@@ -44,39 +51,73 @@ export function exerciseId(label: string): string {
   return `exercise-${(hash >>> 0).toString(36)}`;
 }
 
-const newerLog = (left?: ExerciseLogEntry, right?: ExerciseLogEntry): ExerciseLogEntry | undefined => {
-  if (!left) return right;
-  if (!right) return left;
-  return right.date >= left.date ? right : left;
-};
+function validLog(value: unknown): value is ExerciseLogEntry {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Partial<ExerciseLogEntry>;
+  return typeof row.date === 'string'
+    && /^\d{4}-\d{2}-\d{2}$/.test(row.date)
+    && typeof row.weight === 'string'
+    && typeof row.reps === 'string';
+}
+
+function normalizeHistory(progress?: ExerciseProgress): ExerciseLogEntry[] {
+  if (!progress) return [];
+  const rows = [
+    ...(Array.isArray(progress.history) ? progress.history : []),
+    ...(progress.latest ? [progress.latest] : []),
+    ...(progress.previous ? [progress.previous] : []),
+  ].filter(validLog);
+
+  const byDate = new Map<string, ExerciseLogEntry>();
+  rows.forEach((row) => {
+    const existing = byDate.get(row.date);
+    byDate.set(row.date, {
+      date: row.date,
+      weight: row.weight || existing?.weight || '',
+      reps: row.reps || existing?.reps || '',
+    });
+  });
+  return [...byDate.values()]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 730);
+}
 
 const mergeProgress = (left: ExerciseProgress | undefined, right: ExerciseProgress): ExerciseProgress => {
-  if (!left) return right;
-  const latest = newerLog(left.latest, right.latest);
-  const candidates = [left.latest, left.previous, right.latest, right.previous]
-    .filter((entry): entry is ExerciseLogEntry => Boolean(entry))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const previous = candidates.find((entry) => !latest || entry.date < latest.date);
-  return { ...(latest ? { latest } : {}), ...(previous ? { previous } : {}) };
+  const history = normalizeHistory({
+    history: [...normalizeHistory(left), ...normalizeHistory(right)],
+  });
+  return {
+    label: right.label || left?.label,
+    ...(history[0] ? { latest: history[0] } : {}),
+    ...(history[1] ? { previous: history[1] } : {}),
+    history,
+  };
 };
 
-export function loadExerciseProgress(): ExerciseProgressStore {
+function normalizeStore(parsed: unknown): ExerciseProgressStore {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const migrated: ExerciseProgressStore = {};
+  Object.entries(parsed as ExerciseProgressStore).forEach(([legacyKey, value]) => {
+    if (!value || typeof value !== 'object') return;
+    const nextKey = exerciseKey(value.label || legacyKey) || legacyKey;
+    migrated[nextKey] = mergeProgress(migrated[nextKey], {
+      ...value,
+      label: value.label || referenceSubject(legacyKey) || legacyKey,
+    });
+  });
+  return migrated;
+}
+
+export function loadExerciseProgress(userId?: string | null): ExerciseProgressStore {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-
-    // v0.9 chuẩn hóa khóa bài tập. Dữ liệu cũ dùng tên bài làm key vẫn được migrate tự động.
-    const migrated: ExerciseProgressStore = {};
-    Object.entries(parsed as ExerciseProgressStore).forEach(([legacyKey, value]) => {
-      const nextKey = exerciseKey(legacyKey) || legacyKey;
-      migrated[nextKey] = mergeProgress(migrated[nextKey], value);
-    });
-
-    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
-      persistExerciseProgress(migrated);
+    const scopedKey = buildExerciseProgressStorageKey(userId);
+    const scoped = window.localStorage.getItem(scopedKey);
+    const legacy = scoped ? null : window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
+    const parsed = JSON.parse(scoped || legacy || '{}');
+    const migrated = normalizeStore(parsed);
+    if (!scoped || JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      persistExerciseProgress(migrated, userId);
     }
     return migrated;
   } catch {
@@ -84,10 +125,10 @@ export function loadExerciseProgress(): ExerciseProgressStore {
   }
 }
 
-export function persistExerciseProgress(progress: ExerciseProgressStore): void {
+export function persistExerciseProgress(progress: ExerciseProgressStore, userId?: string | null): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(EXERCISE_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+    window.localStorage.setItem(buildExerciseProgressStorageKey(userId), JSON.stringify(progress));
   } catch {
     // Không chặn buổi tập nếu trình duyệt từ chối localStorage.
   }
@@ -103,22 +144,28 @@ export function updateExerciseProgress(
   if (!key) return progress;
 
   const existing = progress[key] || {};
-  const latest = existing.latest;
-  const editingSameDate = latest?.date === date;
-  const nextLatest: ExerciseLogEntry = {
+  const history = normalizeHistory(existing);
+  const sameDate = history.find((entry) => entry.date === date);
+  const nextEntry: ExerciseLogEntry = {
     date,
-    weight: editingSameDate ? latest?.weight || '' : '',
-    reps: editingSameDate ? latest?.reps || '' : '',
+    weight: sameDate?.weight || '',
+    reps: sameDate?.reps || '',
   };
 
-  if (updates.weight !== undefined) nextLatest.weight = String(updates.weight);
-  if (updates.reps !== undefined) nextLatest.reps = String(updates.reps);
+  if (updates.weight !== undefined) nextEntry.weight = String(updates.weight);
+  if (updates.reps !== undefined) nextEntry.reps = String(updates.reps);
+
+  const nextHistory = normalizeHistory({
+    history: [nextEntry, ...history.filter((entry) => entry.date !== date)],
+  });
 
   return {
     ...progress,
     [key]: {
-      latest: nextLatest,
-      previous: editingSameDate ? existing.previous : latest || existing.previous,
+      label: referenceSubject(label) || label.trim(),
+      latest: nextHistory[0],
+      previous: nextHistory[1],
+      history: nextHistory,
     },
   };
 }

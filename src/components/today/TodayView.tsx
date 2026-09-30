@@ -521,7 +521,7 @@ export const TodayView: React.FC = () => {
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceLibraryItem[]>(() => loadReferenceLibraryCache());
   const [reflectionDrafts, setReflectionDrafts] = useState<Record<string, string>>({});
-  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress());
+  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress(user?.uid));
   const [exerciseEditingTaskId, setExerciseEditingTaskId] = useState<string | null>(null);
   const [exerciseDraft, setExerciseDraft] = useState<ExerciseDraftItem[]>([]);
   const [newExerciseName, setNewExerciseName] = useState('');
@@ -563,6 +563,10 @@ export const TodayView: React.FC = () => {
     };
   }, [user?.uid, addToast]);
 
+  useEffect(() => {
+    setExerciseProgress(loadExerciseProgress(user?.uid));
+  }, [user?.uid]);
+
   const today = getFormattedToday(0);
 
   const updateExerciseLog = (label: string, field: 'weight' | 'reps', value: string) => {
@@ -573,7 +577,7 @@ export const TodayView: React.FC = () => {
         today,
         field === 'weight' ? { weight: value } : { reps: value },
       );
-      persistExerciseProgress(next);
+      persistExerciseProgress(next, user?.uid);
       return next;
     });
   };
@@ -712,7 +716,7 @@ export const TodayView: React.FC = () => {
             next[newKey] = current[item.originalKey];
           }
         });
-        persistExerciseProgress(next);
+        persistExerciseProgress(next, user?.uid);
         return next;
       });
 
@@ -798,7 +802,7 @@ export const TodayView: React.FC = () => {
 
       updateTask(selectedTask.id, { description: result.description });
       setExerciseProgress(result.progress);
-      persistExerciseProgress(result.progress);
+      persistExerciseProgress(result.progress, user?.uid);
 
       const changed = result.updatedExercises.length + result.addedExercises.length;
       addToast(
@@ -809,7 +813,7 @@ export const TodayView: React.FC = () => {
           onClick: () => {
             updateTask(selectedTask.id, { description: previousDescription });
             setExerciseProgress(previousProgress);
-            persistExerciseProgress(previousProgress);
+            persistExerciseProgress(previousProgress, user?.uid);
             addToast('Đã hoàn tác lần nhập buổi tập', 'info');
           },
         },

@@ -2,14 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildDailyTaskActivity,
+  buildExerciseReport,
   buildNutritionReport,
   buildPeriodComparison,
+  buildReadingReport,
+  buildWorkTimeReport,
   buildProjectReport,
   buildReportSummary,
   getReportStart,
 } from '../src/services/reportService';
 import type { Project, Task } from '../src/types';
 import type { NutritionState } from '../src/services/nutritionService';
+import { updateExerciseProgress } from '../src/services/exerciseService';
+import { createReaderBook } from '../src/services/readerService';
 
 const task = (partial: Partial<Task>): Task => ({
   id: partial.id || `task-${Math.random()}`,
@@ -122,4 +127,37 @@ test('nutrition report averages only logged days and tracks target adherence', (
   assert.equal(result.stepTargetDays, 1);
   assert.equal(result.latestWeightKg, 65.2);
   assert.ok(Math.abs((result.weightChangeKg || 0) - (-0.3)) < 1e-9);
+});
+
+
+test('reading report exposes real session windows and longest session', () => {
+  const book = createReaderBook({ title: 'Reader', content: 'abc' });
+  book.readingSecondsByDate = { '2026-09-19': 1800 };
+  book.sessions = [
+    { id: 's1', startedAt: '2026-09-19T13:00:00.000Z', endedAt: '2026-09-19T13:20:00.000Z', readingSeconds: 1200, listeningSeconds: 0 },
+    { id: 's2', startedAt: '2026-09-19T15:00:00.000Z', endedAt: '2026-09-19T15:10:00.000Z', readingSeconds: 600, listeningSeconds: 0 },
+  ];
+  const report = buildReadingReport([book], '7d', '2026-09-19');
+  assert.equal(report.sessionCount, 2);
+  assert.equal(report.longestSessionSeconds, 1200);
+  assert.match(report.favoriteTimeLabel || '', /Tối/);
+});
+
+test('work time report uses only measured actual minutes', () => {
+  const report = buildWorkTimeReport([
+    task({ id: 'a', plannedDate: '2026-09-19', actualMinutes: 35, estimatedMinutes: 30 }),
+    task({ id: 'b', plannedDate: '2026-09-19', actualMinutes: 0, estimatedMinutes: 60 }),
+  ], '7d', '2026-09-19');
+  assert.equal(report.actualMinutes, 35);
+  assert.equal(report.estimatedMinutes, 30);
+  assert.equal(report.loggedTasks, 1);
+});
+
+test('exercise report counts dates and improvements from full history', () => {
+  let progress = updateExerciseProgress({}, 'Bench Press', '2026-09-10', { weight: 40, reps: 10 });
+  progress = updateExerciseProgress(progress, 'Bench Press', '2026-09-19', { weight: 45, reps: 8 });
+  const report = buildExerciseReport(progress, '30d', '2026-09-19');
+  assert.equal(report.activeDays, 2);
+  assert.equal(report.loggedEntries, 2);
+  assert.equal(report.improvedExercises, 1);
 });

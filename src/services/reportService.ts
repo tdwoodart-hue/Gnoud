@@ -1,6 +1,7 @@
 import type { Project, Task } from '../types';
 import type { NutritionState } from './nutritionService';
-import type { ReaderBook } from './readerService';
+import type { ReaderBook, ReaderSession } from './readerService';
+import type { ExerciseLogEntry, ExerciseProgressStore } from './exerciseService';
 
 export type ReportRange = '7d' | '30d' | 'all';
 
@@ -50,6 +51,16 @@ export interface NutritionReport {
   stepLoggedDays: number;
   latestWeightKg: number | null;
   weightChangeKg: number | null;
+  calorieAdherenceRate: number | null;
+  proteinAdherenceRate: number | null;
+  stepAdherenceRate: number | null;
+  averageCalorieDeviation: number | null;
+}
+
+export interface ReadingTimeWindow {
+  key: 'late' | 'morning' | 'noon' | 'afternoon' | 'evening';
+  label: string;
+  seconds: number;
 }
 
 export interface ReadingReport {
@@ -58,6 +69,36 @@ export interface ReadingReport {
   totalSeconds: number;
   activeDays: number;
   booksTouched: number;
+  sessionCount: number;
+  longestSessionSeconds: number;
+  averageSessionSeconds: number;
+  favoriteTimeLabel: string | null;
+  timeWindows: ReadingTimeWindow[];
+}
+
+export interface WorkTimeReport {
+  actualMinutes: number;
+  estimatedMinutes: number;
+  loggedTasks: number;
+  longestTaskTitle: string | null;
+  longestTaskMinutes: number;
+}
+
+export interface ExerciseTrend {
+  key: string;
+  label: string;
+  latest: ExerciseLogEntry;
+  previous?: ExerciseLogEntry;
+  weightDelta: number | null;
+  repsDelta: number | null;
+}
+
+export interface ExerciseReport {
+  activeDays: number;
+  loggedEntries: number;
+  trackedExercises: number;
+  improvedExercises: number;
+  trends: ExerciseTrend[];
 }
 
 export function formatLocalDate(date: Date): string {
@@ -213,6 +254,11 @@ export function buildNutritionReport(nutrition: NutritionState, range: ReportRan
     ? (weightMetrics[weightMetrics.length - 1].weightKg || 0) - (weightMetrics[0].weightKg || 0)
     : null;
 
+  const stepTargetDays = stepMetrics.filter((metric) => (metric.steps || 0) >= nutrition.profile.stepTarget).length;
+  const averageCalorieDeviation = loggedDays
+    ? dayTotals.reduce((sum, day) => sum + Math.abs(day.calories - nutrition.profile.calorieTarget), 0) / loggedDays
+    : null;
+
   return {
     loggedDays,
     averageCalories: average('calories'),
@@ -222,12 +268,60 @@ export function buildNutritionReport(nutrition: NutritionState, range: ReportRan
     averageSteps,
     calorieTargetDays,
     proteinTargetDays,
-    stepTargetDays: stepMetrics.filter((metric) => (metric.steps || 0) >= nutrition.profile.stepTarget).length,
+    stepTargetDays,
     stepLoggedDays: stepMetrics.length,
     latestWeightKg,
     weightChangeKg,
+    calorieAdherenceRate: loggedDays ? Math.round((calorieTargetDays / loggedDays) * 100) : null,
+    proteinAdherenceRate: loggedDays ? Math.round((proteinTargetDays / loggedDays) * 100) : null,
+    stepAdherenceRate: stepMetrics.length ? Math.round((stepTargetDays / stepMetrics.length) * 100) : null,
+    averageCalorieDeviation,
   };
 }
+
+export function buildWorkTimeReport(tasks: Task[], range: ReportRange, today: string): WorkTimeReport {
+  const start = getReportStart(range, today);
+  const rangeTasks = tasks.filter((task) => taskBelongsToRange(task, start, today));
+  const measured = rangeTasks.filter((task) => (Number(task.actualMinutes) || 0) > 0);
+  const actualMinutes = measured.reduce((sum, task) => sum + Math.max(0, Number(task.actualMinutes) || 0), 0);
+  const estimatedMinutes = measured.reduce((sum, task) => sum + Math.max(0, Number(task.estimatedMinutes) || 0), 0);
+  const longest = measured.toSorted((a, b) => (b.actualMinutes || 0) - (a.actualMinutes || 0))[0];
+
+  return {
+    actualMinutes: Math.round(actualMinutes),
+    estimatedMinutes: Math.round(estimatedMinutes),
+    loggedTasks: measured.length,
+    longestTaskTitle: longest?.title || null,
+    longestTaskMinutes: Math.round(longest?.actualMinutes || 0),
+  };
+}
+
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+const readingWindow = (startedAt: string): ReadingTimeWindow['key'] => {
+  const date = new Date(Date.parse(startedAt) + VIETNAM_OFFSET_MS);
+  const hour = date.getUTCHours();
+  if (hour < 5) return 'late';
+  if (hour < 11) return 'morning';
+  if (hour < 14) return 'noon';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+};
+
+const sessionDate = (startedAt: string): string => {
+  const date = new Date(Date.parse(startedAt) + VIETNAM_OFFSET_MS);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const readingWindowLabels: Record<ReadingTimeWindow['key'], string> = {
+  late: 'Khuya · 00–05h',
+  morning: 'Sáng · 05–11h',
+  noon: 'Trưa · 11–14h',
+  afternoon: 'Chiều · 14–18h',
+  evening: 'Tối · 18–24h',
+};
 
 export function buildReadingReport(books: ReaderBook[], range: ReportRange, today: string): ReadingReport {
   const start = getReportStart(range, today);
@@ -236,6 +330,7 @@ export function buildReadingReport(books: ReaderBook[], range: ReportRange, toda
   let readingSeconds = 0;
   let listeningSeconds = 0;
   let booksTouched = 0;
+  const sessions: ReaderSession[] = [];
 
   books.forEach((book) => {
     let bookSeconds = 0;
@@ -253,16 +348,118 @@ export function buildReadingReport(books: ReaderBook[], range: ReportRange, toda
       bookSeconds += value;
       if (value > 0) activeDates.add(date);
     });
+    (book.sessions || []).forEach((session) => {
+      if (inRange(sessionDate(session.startedAt))) sessions.push(session);
+    });
     if (bookSeconds > 0) booksTouched += 1;
   });
 
   readingSeconds = Math.round(readingSeconds);
   listeningSeconds = Math.round(listeningSeconds);
+
+  const windowSeconds = new Map<ReadingTimeWindow['key'], number>([
+    ['late', 0],
+    ['morning', 0],
+    ['noon', 0],
+    ['afternoon', 0],
+    ['evening', 0],
+  ]);
+  const sessionSeconds = sessions.map((session) => Math.max(0, session.readingSeconds + session.listeningSeconds));
+  sessions.forEach((session) => {
+    const key = readingWindow(session.startedAt);
+    windowSeconds.set(key, (windowSeconds.get(key) || 0) + Math.max(0, session.readingSeconds + session.listeningSeconds));
+  });
+  const timeWindows = [...windowSeconds.entries()].map(([key, seconds]) => ({
+    key,
+    label: readingWindowLabels[key],
+    seconds: Math.round(seconds),
+  }));
+  const favorite = timeWindows.toSorted((a, b) => b.seconds - a.seconds)[0];
+
   return {
     readingSeconds,
     listeningSeconds,
     totalSeconds: readingSeconds + listeningSeconds,
     activeDays: activeDates.size,
     booksTouched,
+    sessionCount: sessions.length,
+    longestSessionSeconds: sessionSeconds.length ? Math.round(Math.max(...sessionSeconds)) : 0,
+    averageSessionSeconds: sessionSeconds.length
+      ? Math.round(sessionSeconds.reduce((sum, value) => sum + value, 0) / sessionSeconds.length)
+      : 0,
+    favoriteTimeLabel: favorite && favorite.seconds > 0 ? favorite.label : null,
+    timeWindows,
+  };
+}
+
+function numeric(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function historyRows(progress: ExerciseProgressStore[string]): ExerciseLogEntry[] {
+  const rows = [
+    ...(Array.isArray(progress.history) ? progress.history : []),
+    ...(progress.latest ? [progress.latest] : []),
+    ...(progress.previous ? [progress.previous] : []),
+  ];
+  const byDate = new Map<string, ExerciseLogEntry>();
+  rows.forEach((row) => {
+    if (!row?.date) return;
+    const current = byDate.get(row.date);
+    byDate.set(row.date, {
+      date: row.date,
+      weight: row.weight || current?.weight || '',
+      reps: row.reps || current?.reps || '',
+    });
+  });
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function buildExerciseReport(progress: ExerciseProgressStore, range: ReportRange, today: string): ExerciseReport {
+  const start = getReportStart(range, today);
+  const inRange = (date: string) => (!start || date >= start) && date <= today;
+  const activeDates = new Set<string>();
+  let loggedEntries = 0;
+  const trends: ExerciseTrend[] = [];
+
+  Object.entries(progress).forEach(([key, exercise]) => {
+    const history = historyRows(exercise);
+    const rangeRows = history.filter((entry) => inRange(entry.date));
+    rangeRows.forEach((entry) => activeDates.add(entry.date));
+    loggedEntries += rangeRows.length;
+
+    const latest = history[0];
+    const previous = history[1];
+    if (!latest || !inRange(latest.date)) return;
+    const latestWeight = numeric(latest.weight);
+    const previousWeight = numeric(previous?.weight);
+    const latestReps = numeric(latest.reps);
+    const previousReps = numeric(previous?.reps);
+    trends.push({
+      key,
+      label: exercise.label || key,
+      latest,
+      previous,
+      weightDelta: latestWeight !== null && previousWeight !== null ? latestWeight - previousWeight : null,
+      repsDelta: latestReps !== null && previousReps !== null ? latestReps - previousReps : null,
+    });
+  });
+
+  const improvedExercises = trends.filter((trend) =>
+    (trend.weightDelta !== null && trend.weightDelta > 0)
+    || (trend.weightDelta === 0 && trend.repsDelta !== null && trend.repsDelta > 0)
+    || (trend.weightDelta === null && trend.repsDelta !== null && trend.repsDelta > 0)
+  ).length;
+
+  return {
+    activeDays: activeDates.size,
+    loggedEntries,
+    trackedExercises: Object.keys(progress).length,
+    improvedExercises,
+    trends: trends
+      .toSorted((a, b) => b.latest.date.localeCompare(a.latest.date))
+      .slice(0, 8),
   };
 }

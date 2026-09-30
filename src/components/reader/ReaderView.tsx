@@ -272,6 +272,7 @@ export const ReaderView: React.FC = () => {
   const cloudMetadataTimerRef = useRef<number | null>(null);
   const readerActivityAtRef = useRef(Date.now());
   const readerTimePendingRef = useRef({ reading: 0, listening: 0 });
+  const readerSessionRef = useRef<{ id: string; bookId: string; startedAt: string } | null>(null);
 
   const storageIdentity = user?.uid || 'guest';
 
@@ -1246,9 +1247,42 @@ export const ReaderView: React.FC = () => {
     const date = readerDateKey();
     const reading = Math.round(pending.reading);
     const listening = Math.round(pending.listening);
+    const endedAt = new Date().toISOString();
+    let session = readerSessionRef.current;
+    if (!session || session.bookId !== activeBookId) {
+      const elapsed = Math.max(1, reading + listening);
+      session = {
+        id: `reader-session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        bookId: activeBookId,
+        startedAt: new Date(Date.now() - elapsed * 1000).toISOString(),
+      };
+      readerSessionRef.current = session;
+    }
+
     readerTimePendingRef.current = { reading: 0, listening: 0 };
     setBooks((previous) => previous.map((book) => {
       if (book.id !== activeBookId) return book;
+      const existingSessions = book.sessions || [];
+      const sessionIndex = existingSessions.findIndex((item) => item.id === session!.id);
+      const nextSessions = [...existingSessions];
+      if (sessionIndex >= 0) {
+        const current = nextSessions[sessionIndex];
+        nextSessions[sessionIndex] = {
+          ...current,
+          endedAt,
+          readingSeconds: current.readingSeconds + reading,
+          listeningSeconds: current.listeningSeconds + listening,
+        };
+      } else {
+        nextSessions.push({
+          id: session!.id,
+          startedAt: session!.startedAt,
+          endedAt,
+          readingSeconds: reading,
+          listeningSeconds: listening,
+        });
+      }
+
       return {
         ...book,
         readingSecondsByDate: reading > 0
@@ -1257,7 +1291,8 @@ export const ReaderView: React.FC = () => {
         listeningSecondsByDate: listening > 0
           ? { ...book.listeningSecondsByDate, [date]: (book.listeningSecondsByDate?.[date] || 0) + listening }
           : book.listeningSecondsByDate,
-        updatedAt: new Date().toISOString(),
+        sessions: nextSessions.slice(-1000),
+        updatedAt: endedAt,
       };
     }));
   };
@@ -1294,16 +1329,26 @@ export const ReaderView: React.FC = () => {
     };
   }, [readingOpen, activeBookId, ttsStatus]);
 
+  useEffect(() => {
+    if (!readingOpen) readerSessionRef.current = null;
+  }, [readingOpen]);
+
   const openBook = (id: string) => {
     stopSpeech();
+    const openedAt = new Date().toISOString();
     readerActivityAtRef.current = Date.now();
+    readerSessionRef.current = {
+      id: `reader-session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      bookId: id,
+      startedAt: openedAt,
+    };
     setActiveBookId(id);
     setReadingOpen(true);
     setControlsVisible(false);
     setSettingsOpen(false);
     setTocOpen(false);
     setTtsOpen(false);
-    updateBook(id, { lastOpenedAt: new Date().toISOString() });
+    updateBook(id, { lastOpenedAt: openedAt });
   };
 
   const addBook = (book: ReaderBook) => {

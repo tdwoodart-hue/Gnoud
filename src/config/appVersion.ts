@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.20';
-export const APP_UPDATED_AT = '2026-10-01T00:36:00+07:00';
+export const APP_VERSION = '0.9.21';
+export const APP_UPDATED_AT = '2026-10-01T00:46:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.21',
+    updatedAt: '2026-10-01T00:46:00+07:00',
+    title: 'Làm mới visual system toàn app',
+    changes: [
+      'App shell chuyển sang nền nhẹ nhiều chiều sâu hơn, desktop sidebar gọn và nhận diện Gnoud rõ hơn.',
+      'Bottom navigation mobile đổi thành dock nổi có safe area, vẫn giữ z-index thấp hơn modal.',
+      'Page header và empty state được tối giản để các tab bớt cảm giác dashboard web.',
+      'Báo cáo tăng cỡ chữ nhỏ, làm mềm card/surface và bộ lọc thời gian để dễ đọc hơn trên iPhone.',
+      'Không thay đổi logic, dữ liệu hay cấu trúc điều hướng 5 mục mobile.',
+    ],
+  },
   {
     version: '0.9.20',
     updatedAt: '2026-10-01T00:36:00+07:00',

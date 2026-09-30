@@ -4,7 +4,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createNotificationRouter, startNotificationScheduler } from "./notificationServer";
 import { activityChatHandler } from "./activityTutorServer";
-import { getReaderOnlineVoices, synthesizeReaderTts } from "./readerTtsServer";
+import { getReaderOnlineVoices, getReaderTtsConfig, synthesizeReaderTts } from "./readerTtsServer";
 
 const app = express();
 const PORT = 3000;
@@ -13,7 +13,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/api/notifications', createNotificationRouter());
 app.post('/api/activity/chat', activityChatHandler);
 app.get('/api/reader/tts', (_req, res) => {
-  res.json({ voices: getReaderOnlineVoices() });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ voices: getReaderOnlineVoices(), config: getReaderTtsConfig() });
 });
 app.post('/api/reader/tts', async (req, res) => {
   try {

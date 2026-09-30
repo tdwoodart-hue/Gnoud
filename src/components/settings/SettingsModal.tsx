@@ -336,35 +336,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const appPage = (
     <section>
       <div className="overflow-hidden rounded-[18px] bg-white">
-        <div className="flex min-h-[62px] items-center gap-3 px-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium text-slate-800">Giao diện</p>
-            <p className="mt-0.5 text-[12px] text-slate-400">Được lưu lại trên thiết bị này</p>
-          </div>
-          <div className="flex rounded-xl bg-slate-100 p-0.5" role="group" aria-label="Chọn giao diện ứng dụng">
-            <button
-              type="button"
-              onClick={() => updateTheme('light')}
-              aria-pressed={theme === 'light'}
-              className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
-                theme === 'light' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-400'
-              )}
-            >
-              <Sun className="h-3.5 w-3.5" /> Sáng
-            </button>
-            <button
-              type="button"
-              onClick={() => updateTheme('dark')}
-              aria-pressed={theme === 'dark'}
-              className={'flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12px] font-semibold transition ' + (
-                theme === 'dark' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-400'
-              )}
-            >
-              <Moon className="h-3.5 w-3.5" /> Tối
-            </button>
-          </div>
-        </div>
-        <div className="flex min-h-[58px] items-center border-t border-slate-100 px-4">
+        <div className="flex min-h-[58px] items-center px-4">
           <span className="flex-1 text-[14px] font-medium text-slate-800">Phiên bản hiện tại</span>
           <span className="text-[14px] font-semibold text-slate-500">{APP_VERSION}</span>
         </div>

@@ -57,22 +57,21 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [setIsAssistantOpen]);
 
   return (
-    <div className="relative min-h-screen w-full max-w-full overflow-x-hidden bg-[#f5f6f8] font-sans text-slate-900">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_50%_-20%,rgba(99,102,241,0.10),transparent_58%)]" aria-hidden="true" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] overflow-x-hidden">
-        <aside className="sticky top-0 hidden h-screen w-[224px] shrink-0 flex-col justify-between border-r border-slate-200/60 bg-white/70 px-3 py-5 backdrop-blur-xl md:flex">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#fafbfc] font-sans text-slate-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl overflow-x-hidden">
+        <aside className="hidden w-60 shrink-0 flex-col justify-between border-r border-slate-200/70 bg-white/90 px-4 py-7 backdrop-blur-xs md:flex">
           <div>
-            <div className="mb-7 flex items-center gap-3 px-2">
-              <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white shadow-sm">
-                <Sun className="h-[17px] w-[17px]" />
+            <div className="mb-8 flex items-center gap-3 px-2">
+              <div className="grid h-10 w-10 place-items-center rounded-2xl border border-indigo-100 bg-indigo-50/80 text-indigo-600 shadow-xs">
+                <Sun className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-extrabold tracking-[-0.02em] text-slate-950">Gnoud</div>
-                <div className="mt-0.5 text-[11px] font-medium text-slate-400">Một ngày rõ ràng hơn</div>
+                <div className="text-base font-bold tracking-tight text-slate-900">Lịch Sống</div>
+                <div className="text-[11px] font-medium text-slate-400">Quản lý cuộc sống cá nhân</div>
               </div>
             </div>
 
-            <nav className="space-y-1" aria-label="Điều hướng chính">
+            <nav className="space-y-1.5" aria-label="Điều hướng chính">
               {PRIMARY_NAV_ITEMS.map((item) => {
                 const Icon = icons[item.id];
                 const active = activeTab === item.id;
@@ -81,15 +80,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     key={item.id}
                     type="button"
                     onClick={() => setActiveTab(item.id)}
-                    className={`flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-[13px] font-semibold transition-all duration-150 ${
+                    className={`flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150 ${
                       active
-                        ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200/70'
-                        : 'text-slate-500 hover:bg-white/70 hover:text-slate-900'
+                        ? 'border border-indigo-100 bg-indigo-50/70 text-indigo-700 shadow-xs'
+                        : 'border border-transparent text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
                     }`}
                   >
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-colors ${active ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
+                    <Icon className={`h-4 w-4 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -97,12 +94,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </nav>
           </div>
 
-          <div className="space-y-2 border-t border-slate-200/60 pt-4">
+          <div className="space-y-2 border-t border-slate-100/90 pt-5">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setIsCommandMenuOpen(true)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-800 hover:shadow-sm"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-slate-200/60 bg-slate-50/70 text-slate-500 transition hover:bg-slate-100"
                 title="Mở menu lệnh (⌘K)"
                 aria-label="Tìm kiếm"
               >
@@ -113,7 +110,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 <button
                   type="button"
                   onClick={lockApp}
-                  className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-950 hover:text-white hover:shadow-sm"
+                  className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200/60 bg-slate-50/70 text-slate-500 transition hover:bg-slate-900 hover:text-white"
                   title="Khóa ứng dụng ngay"
                   aria-label="Khóa ứng dụng"
                 >
@@ -134,7 +131,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </aside>
 
-        <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-3.5 pb-[calc(102px+env(safe-area-inset-bottom))] pt-[max(14px,env(safe-area-inset-top))] sm:px-5 md:px-8 md:pb-10 md:pt-8 lg:px-10">
+        <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-4 pb-[calc(88px+env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-12 md:pt-10">
           {children}
         </main>
       </div>
@@ -143,7 +140,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         {moreMenuOpen ? (
           <motion.div
             key="mobile-more-sheet"
-            className="fixed inset-0 z-[45] flex items-end px-3 pb-[calc(96px+env(safe-area-inset-bottom))] md:hidden"
+            className="fixed inset-0 z-[45] flex items-end px-3 pb-[calc(78px+env(safe-area-inset-bottom))] md:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -160,7 +157,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               animate={{ y: 0 }}
               exit={{ y: 78 }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full overflow-hidden rounded-[28px] border border-white/80 bg-[#fbfbfc]/95 shadow-[0_24px_70px_rgba(15,23,42,0.20)] backdrop-blur-xl"
+              className="relative w-full overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
               onClick={(event) => event.stopPropagation()}
               aria-label="Điều hướng thêm"
             >
@@ -221,7 +218,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         ) : null}
       </AnimatePresence>
 
-      <nav className="fixed inset-x-3 bottom-[max(8px,env(safe-area-inset-bottom))] z-40 grid grid-cols-5 rounded-[24px] border border-white/80 bg-white/92 p-1.5 shadow-[0_12px_36px_rgba(15,23,42,0.14)] backdrop-blur-xl md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200/80 bg-white/95 px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] backdrop-blur-xl md:hidden">
         {[
           { id: 'today' as NavTab, label: 'Hôm nay', icon: Sun },
           { id: 'tasks' as NavTab, label: 'Công việc', icon: ListTodo },
@@ -238,12 +235,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 setActiveTab(item.id);
                 setMoreMenuOpen(false);
               }}
-              className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-150 ${
-                active ? 'text-slate-950' : 'text-slate-400 active:text-slate-700'
+              className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10.5px] font-semibold transition-all duration-150 ${
+                active ? 'text-indigo-700' : 'text-slate-400 active:text-slate-700'
               }`}
             >
               <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
-                active ? 'bg-slate-950 text-white shadow-sm' : ''
+                active ? 'bg-indigo-50 text-indigo-600' : ''
               }`}>
                 <Icon className="h-[18px] w-[18px]" />
               </span>
@@ -255,9 +252,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <button
           type="button"
           onClick={() => setMoreMenuOpen((open) => !open)}
-          className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-150 ${
+          className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10.5px] font-semibold transition-all duration-150 ${
             moreMenuOpen || activeTab === 'reports'
-              ? 'text-slate-950'
+              ? 'text-indigo-700'
               : 'text-slate-400 active:text-slate-700'
           }`}
           aria-expanded={moreMenuOpen}
@@ -265,7 +262,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         >
           <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
             moreMenuOpen || activeTab === 'reports'
-              ? 'bg-slate-950 text-white shadow-sm'
+              ? 'bg-indigo-50 text-indigo-600'
               : ''
           }`}>
             <MoreHorizontal className="h-[19px] w-[19px]" />

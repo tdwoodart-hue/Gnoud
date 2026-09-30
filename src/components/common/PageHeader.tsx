@@ -10,13 +10,13 @@ export const PageHeader: React.FC<{
   const { pinEnabled, lockApp } = useSecurity();
 
   return (
-    <header className="mb-5 flex min-h-11 items-center justify-between gap-3">
+    <header className="mb-6 flex min-h-14 items-center justify-between gap-3 border-b border-slate-100/90 pb-4">
       <div className="flex min-w-0 items-center gap-3">
-        <h1 className="truncate text-[25px] font-extrabold tracking-[-0.025em] text-slate-950 sm:text-[28px]">
+        <h1 className="truncate text-2xl sm:text-[28px] font-bold tracking-tight text-slate-900">
           {title}
         </h1>
         {meta ? (
-          <span className="inline-flex items-center rounded-full bg-slate-200/65 px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-600">
+          <span className="inline-flex items-center rounded-full border border-slate-200/60 bg-slate-100/80 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-600">
             {meta}
           </span>
         ) : null}
@@ -26,7 +26,7 @@ export const PageHeader: React.FC<{
           <button
             type="button"
             onClick={lockApp}
-            className="grid h-9 w-9 place-items-center rounded-xl bg-white/80 text-slate-400 shadow-sm ring-1 ring-slate-200/70 transition hover:bg-slate-950 hover:text-white"
+            className="grid h-10 w-10 place-items-center rounded-2xl border border-slate-200/70 bg-white text-slate-500 shadow-xs transition hover:bg-slate-900 hover:text-white"
             title="Khóa ứng dụng ngay"
             aria-label="Khóa ứng dụng"
           >

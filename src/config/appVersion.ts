@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.21';
-export const APP_UPDATED_AT = '2026-10-01T00:46:00+07:00';
+export const APP_VERSION = '0.9.22';
+export const APP_UPDATED_AT = '2026-10-01T00:50:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.22',
+    updatedAt: '2026-10-01T00:50:00+07:00',
+    title: 'Khôi phục giao diện trước v0.9.21',
+    changes: [
+      'Hoàn tác visual refresh v0.9.21 và đưa AppShell, header, empty state, Báo cáo cùng mobile bottom navigation về giao diện v0.9.20.',
+      'Giữ nguyên toàn bộ dữ liệu, báo cáo hoạt động, Reader session, Gym history và các sửa lỗi tài khoản từ v0.9.20.',
+      'Khôi phục regression test bottom navigation theo cấu trúc cũ.',
+    ],
+  },
   {
     version: '0.9.21',
     updatedAt: '2026-10-01T00:46:00+07:00',

@@ -5,6 +5,7 @@ import {
   Command,
   ListTodo,
   Lock,
+  MoreHorizontal,
   Settings,
   Sun,
   UserRound,
@@ -34,6 +35,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   } = useApp();
   const { pinEnabled, lockApp } = useSecurity();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   useEffect(() => {
     const open = () => setSettingsOpen(true);
@@ -128,34 +130,121 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </aside>
 
-        <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-12 md:pt-10">
+        <main className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden px-4 pb-[calc(88px+env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] sm:px-6 md:px-10 md:pb-12 md:pt-10">
           {children}
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-slate-200/70 bg-white/92 px-1 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 shadow-sm backdrop-blur-md md:hidden">
-        {PRIMARY_NAV_ITEMS.map((item) => {
-          const Icon = icons[item.id];
+      {moreMenuOpen ? (
+        <div
+          className="fixed inset-0 z-[45] flex items-end bg-slate-950/25 px-3 pb-[calc(78px+env(safe-area-inset-bottom))] backdrop-blur-[1px] md:hidden"
+          onClick={() => setMoreMenuOpen(false)}
+          role="presentation"
+        >
+          <section
+            className="w-full rounded-[24px] border border-slate-200/80 bg-white p-2 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            aria-label="Điều hướng thêm"
+          >
+            {[
+              { id: 'personal' as NavTab, label: 'Cá nhân', icon: UserRound },
+              { id: 'reports' as NavTab, label: 'Báo cáo', icon: BarChart3 },
+            ].map((item) => {
+              const Icon = item.icon;
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`flex min-h-13 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-semibold transition ${
+                    active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 active:bg-slate-100'
+                  }`}
+                >
+                  <Icon className={`h-[18px] w-[18px] ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+                  <span className="flex-1">{item.label}</span>
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => {
+                setMoreMenuOpen(false);
+                setSettingsOpen(true);
+              }}
+              className="flex min-h-13 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-semibold text-slate-700 transition active:bg-slate-100"
+            >
+              <Settings className="h-[18px] w-[18px] text-slate-400" />
+              <span className="flex-1">Cài đặt</span>
+            </button>
+          </section>
+        </div>
+      ) : null}
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-200/80 bg-white/95 px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] backdrop-blur-xl md:hidden">
+        {[
+          { id: 'today' as NavTab, label: 'Hôm nay', icon: Sun },
+          { id: 'tasks' as NavTab, label: 'Công việc', icon: ListTodo },
+          { id: 'nutrition' as NavTab, label: 'Dinh dưỡng', icon: UtensilsCrossed },
+          { id: 'reader' as NavTab, label: 'Đọc sách', icon: BookOpen },
+        ].map((item) => {
+          const Icon = item.icon;
           const active = activeTab === item.id;
           return (
             <button
               key={item.id}
               type="button"
-              onClick={() => setActiveTab(item.id)}
-              className={`flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-[9px] font-semibold transition-all duration-150 ${
-                active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              onClick={() => {
+                setActiveTab(item.id);
+                setMoreMenuOpen(false);
+              }}
+              className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10.5px] font-semibold transition-all duration-150 ${
+                active ? 'text-indigo-700' : 'text-slate-400 active:text-slate-700'
               }`}
             >
-              <span className={`grid h-8 w-10 place-items-center rounded-xl transition-colors ${active ? 'border border-indigo-100 bg-indigo-50/80' : ''}`}>
-                <Icon className="h-[17px] w-[17px]" />
+              <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
+                active ? 'bg-indigo-50 text-indigo-600' : ''
+              }`}>
+                <Icon className="h-[18px] w-[18px]" />
               </span>
               <span className="max-w-full truncate leading-none">{item.label}</span>
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setMoreMenuOpen((open) => !open)}
+          className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10.5px] font-semibold transition-all duration-150 ${
+            moreMenuOpen || activeTab === 'personal' || activeTab === 'reports'
+              ? 'text-indigo-700'
+              : 'text-slate-400 active:text-slate-700'
+          }`}
+          aria-expanded={moreMenuOpen}
+          aria-label="Mở điều hướng thêm"
+        >
+          <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
+            moreMenuOpen || activeTab === 'personal' || activeTab === 'reports'
+              ? 'bg-indigo-50 text-indigo-600'
+              : ''
+          }`}>
+            <MoreHorizontal className="h-[19px] w-[19px]" />
+          </span>
+          <span className="leading-none">Thêm</span>
+        </button>
       </nav>
 
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          setMoreMenuOpen(false);
+        }}
+      />
     </div>
   );
 };

@@ -153,10 +153,10 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               aria-hidden="true"
             />
             <motion.section
-              initial={{ y: 90, scale: 0.985 }}
-              animate={{ y: 0, scale: 1 }}
-              exit={{ y: 90, scale: 0.985 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 36, mass: 0.82 }}
+              initial={{ y: 78 }}
+              animate={{ y: 0 }}
+              exit={{ y: 78 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="relative w-full overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
               onClick={(event) => event.stopPropagation()}
               aria-label="Điều hướng thêm"
@@ -167,7 +167,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
               <div className="px-2 pb-2">
                 {[
-                  { id: 'personal' as NavTab, label: 'Cá nhân', description: 'Hồ sơ và mục tiêu của bạn', icon: UserRound },
                   { id: 'reports' as NavTab, label: 'Báo cáo', description: 'Xem tiến độ và số liệu đã đo', icon: BarChart3 },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -254,7 +253,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           type="button"
           onClick={() => setMoreMenuOpen((open) => !open)}
           className={`flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10.5px] font-semibold transition-all duration-150 ${
-            moreMenuOpen || activeTab === 'personal' || activeTab === 'reports'
+            moreMenuOpen || activeTab === 'reports'
               ? 'text-indigo-700'
               : 'text-slate-400 active:text-slate-700'
           }`}
@@ -262,7 +261,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           aria-label="Mở điều hướng thêm"
         >
           <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
-            moreMenuOpen || activeTab === 'personal' || activeTab === 'reports'
+            moreMenuOpen || activeTab === 'reports'
               ? 'bg-indigo-50 text-indigo-600'
               : ''
           }`}>

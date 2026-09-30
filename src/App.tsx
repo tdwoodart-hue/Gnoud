@@ -9,7 +9,6 @@ import { AppShell } from './components/layout/AppShell';
 import { TodayView } from './components/today/TodayView';
 import { TasksView } from './components/tasks/TasksView';
 import { NutritionView } from './components/nutrition/NutritionView';
-import { PersonalView } from './components/personal/PersonalView';
 import { ReaderView } from './components/reader/ReaderView';
 import { ReportsView } from './components/reports/ReportsView';
 import { TaskEditModal } from './components/common/TaskEditModal';
@@ -53,7 +52,6 @@ const MainContent: React.FC = () => {
       )}
       {activeTab === 'tasks' && <TasksView />}
       {activeTab === 'nutrition' && <NutritionView key={`nutrition-${dataRevision}`} />}
-      {activeTab === 'personal' && <PersonalView />}
       {activeTab === 'reader' && <ReaderView />}
       {activeTab === 'reports' && <ReportsView key={`reports-${dataRevision}`} />}
     </>

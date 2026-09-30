@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.14';
-export const APP_UPDATED_AT = '2026-09-30T17:08:00+07:00';
+export const APP_VERSION = '0.9.15';
+export const APP_UPDATED_AT = '2026-09-30T21:05:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.15',
+    updatedAt: '2026-09-30T21:05:00+07:00',
+    title: 'Sửa bottom nav đè lên modal mobile',
+    changes: [
+      'Sửa regression v0.9.14: bottom navigation không còn cùng z-index với modal.',
+      'Modal Thêm bữa ăn và các dialog z-50+ luôn nằm trên bottom navigation z-40.',
+      'Thêm regression test để chặn lỗi bottom nav đè dialog quay lại ở các bản sau.',
+    ],
+  },
   {
     version: '0.9.14',
     updatedAt: '2026-09-30T17:08:00+07:00',

@@ -37,4 +37,15 @@ test('nhập nhanh workout cập nhật bài cũ và thêm bài mới', () => {
   assert.equal(result.updatedExercises.length, 1);
   assert.equal(result.progress[exerciseKey('Bench Press')]?.latest?.weight, '45');
   assert.equal(result.progress[exerciseKey('Bench Press')]?.previous?.weight, '40');
+  assert.equal(result.progress[exerciseKey('Bench Press')]?.history?.length, 2);
+});
+
+test('exercise history keeps more than two dates for long-term reports', () => {
+  let progress = updateExerciseProgress({}, 'Bench Press 3x10', '2026-09-01', { weight: 40, reps: 10 });
+  progress = updateExerciseProgress(progress, 'Bench Press 3x10', '2026-09-08', { weight: 42.5, reps: 10 });
+  progress = updateExerciseProgress(progress, 'Bench Press 3x10', '2026-09-15', { weight: 45, reps: 8 });
+  const bench = progress[exerciseKey('Bench Press')];
+  assert.equal(bench?.history?.length, 3);
+  assert.equal(bench?.latest?.weight, '45');
+  assert.equal(bench?.previous?.weight, '42.5');
 });

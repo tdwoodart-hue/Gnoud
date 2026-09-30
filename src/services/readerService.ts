@@ -8,6 +8,14 @@ export type ReaderReadingMode = 'scroll' | 'paged';
 export type ReaderTtsMode = 'online' | 'device';
 export type ReaderTtsProvider = 'azure' | 'google';
 
+export interface ReaderSession {
+  id: string;
+  startedAt: string;
+  endedAt: string;
+  readingSeconds: number;
+  listeningSeconds: number;
+}
+
 export interface ReaderBook {
   id: string;
   title: string;
@@ -41,6 +49,7 @@ export interface ReaderBook {
   listeningProgress: number;
   readingSecondsByDate: Record<string, number>;
   listeningSecondsByDate: Record<string, number>;
+  sessions: ReaderSession[];
   cloudFilePath?: string;
   cloudCoverPath?: string;
   cloudSyncedAt?: string;
@@ -218,6 +227,7 @@ export function createReaderBook(input: {
     listeningProgress: 0,
     readingSecondsByDate: {},
     listeningSecondsByDate: {},
+    sessions: [],
     lastPositionAt: undefined,
     theme: 'paper',
     addedAt: now,
@@ -236,6 +246,24 @@ function normalizeSecondsByDate(value: unknown): Record<string, number> {
     result[date] = Math.round(numeric);
   });
   return result;
+}
+
+function normalizeReaderSessions(value: unknown): ReaderSession[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw): ReaderSession | null => {
+      if (!raw || typeof raw !== 'object') return null;
+      const row = raw as Partial<ReaderSession>;
+      if (typeof row.id !== 'string' || typeof row.startedAt !== 'string' || typeof row.endedAt !== 'string') return null;
+      if (!Number.isFinite(Date.parse(row.startedAt)) || !Number.isFinite(Date.parse(row.endedAt))) return null;
+      const readingSeconds = Math.max(0, Math.round(Number(row.readingSeconds) || 0));
+      const listeningSeconds = Math.max(0, Math.round(Number(row.listeningSeconds) || 0));
+      if (readingSeconds + listeningSeconds <= 0) return null;
+      return { id: row.id, startedAt: row.startedAt, endedAt: row.endedAt, readingSeconds, listeningSeconds };
+    })
+    .filter((row): row is ReaderSession => Boolean(row))
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .slice(-1000);
 }
 
 export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
@@ -287,6 +315,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           listeningProgress: Math.min(1, Math.max(0, Number(book.listeningProgress) || 0)),
           readingSecondsByDate: normalizeSecondsByDate(book.readingSecondsByDate),
           listeningSecondsByDate: normalizeSecondsByDate(book.listeningSecondsByDate),
+          sessions: normalizeReaderSessions(book.sessions),
           cloudFilePath: typeof book.cloudFilePath === 'string' ? book.cloudFilePath : undefined,
           cloudCoverPath: typeof book.cloudCoverPath === 'string' ? book.cloudCoverPath : undefined,
           cloudSyncedAt: typeof book.cloudSyncedAt === 'string' ? book.cloudSyncedAt : undefined,

@@ -4,12 +4,14 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  Dumbbell,
   Clock3,
   Footprints,
   Headphones,
   Layers,
   Scale,
   Target,
+  TimerReset,
   TrendingUp,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -17,11 +19,13 @@ import { useApp } from '../../context/AppContext';
 import { loadNutritionState, type NutritionState } from '../../services/nutritionService';
 import {
   buildDailyTaskActivity,
+  buildExerciseReport,
   buildNutritionReport,
   buildPeriodComparison,
   buildReadingReport,
   buildProjectReport,
   buildReportSummary,
+  buildWorkTimeReport,
   formatLocalDate,
   type ReportRange,
 } from '../../services/reportService';
@@ -29,6 +33,7 @@ import { EmptyState } from '../common/EmptyState';
 import { PageHeader } from '../common/PageHeader';
 import { loadReaderLibrary, type ReaderBook } from '../../services/readerService';
 import { fetchCloudReaderBooks, mergeReaderLibraries } from '../../services/readerCloudService';
+import { loadExerciseProgress, type ExerciseProgressStore } from '../../services/exerciseService';
 
 const whole = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -47,6 +52,13 @@ const formatReadingTime = (seconds: number) => {
   if (minutes < 60) return `${minutes} phút`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
+  return rest ? `${hours}g ${rest}p` : `${hours} giờ`;
+};
+
+const formatMinutes = (minutes: number) => {
+  if (minutes < 60) return `${Math.round(minutes)} phút`;
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
   return rest ? `${hours}g ${rest}p` : `${hours} giờ`;
 };
 
@@ -134,6 +146,7 @@ export const ReportsView: React.FC = () => {
   const [range, setRange] = useState<ReportRange>('7d');
   const [nutrition, setNutrition] = useState<NutritionState>(() => loadNutritionState());
   const [readerBooks, setReaderBooks] = useState<ReaderBook[]>(() => loadReaderLibrary(user?.uid));
+  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgressStore>(() => loadExerciseProgress(user?.uid));
   const today = formatLocalDate(new Date());
 
   useEffect(() => {
@@ -150,6 +163,22 @@ export const ReportsView: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
+
+  useEffect(() => {
+    const refresh = () => setExerciseProgress(loadExerciseProgress(user?.uid));
+    refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('storage', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     let disposed = false;
@@ -185,6 +214,8 @@ export const ReportsView: React.FC = () => {
   const projectRows = useMemo(() => buildProjectReport(projects, tasks, range, today), [projects, tasks, range, today]);
   const nutritionReport = useMemo(() => buildNutritionReport(nutrition, range, today), [nutrition, range, today]);
   const readingReport = useMemo(() => buildReadingReport(readerBooks, range, today), [readerBooks, range, today]);
+  const exerciseReport = useMemo(() => buildExerciseReport(exerciseProgress, range, today), [exerciseProgress, range, today]);
+  const workTimeReport = useMemo(() => buildWorkTimeReport(tasks, range, today), [tasks, range, today]);
 
   const calorieProgress = nutritionReport.averageCalories === null ? 0 : (nutritionReport.averageCalories / nutrition.profile.calorieTarget) * 100;
   const proteinProgress = nutritionReport.averageProtein === null ? 0 : (nutritionReport.averageProtein / nutrition.profile.proteinTarget) * 100;
@@ -196,6 +227,7 @@ export const ReportsView: React.FC = () => {
   const bestDay = activity.some((row) => row.completed > 0)
     ? [...activity].sort((a, b) => b.completed - a.completed || b.planned - a.planned)[0]
     : null;
+  const readingWindowMax = Math.max(1, ...readingReport.timeWindows.map((item) => item.seconds));
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
@@ -279,6 +311,33 @@ export const ReportsView: React.FC = () => {
         </div>
       </ReportSection>
 
+      <ReportSection title="Thời gian làm việc" icon={TimerReset} trailing={<span className="text-[10px] font-semibold text-slate-400">Từ Focus timer</span>}>
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+          <StatCard
+            label="Tập trung thực tế"
+            value={formatMinutes(workTimeReport.actualMinutes)}
+            meta={workTimeReport.loggedTasks ? `${workTimeReport.loggedTasks} việc có đo thời gian` : 'Chưa có phiên Focus'}
+            icon={Clock3}
+            tone="border-indigo-200/70 bg-indigo-50 text-indigo-700"
+          />
+          <StatCard
+            label="Ước tính cùng các việc"
+            value={formatMinutes(workTimeReport.estimatedMinutes)}
+            meta="Chỉ so các việc đã có thời gian thực tế"
+            icon={Target}
+            tone="border-sky-200/70 bg-sky-50 text-sky-700"
+          />
+          <StatCard
+            label="Phiên dài nhất"
+            value={workTimeReport.longestTaskMinutes ? formatMinutes(workTimeReport.longestTaskMinutes) : '—'}
+            meta={workTimeReport.longestTaskTitle || 'Chưa có dữ liệu'}
+            icon={TimerReset}
+            tone="border-violet-200/70 bg-violet-50 text-violet-700"
+            className="col-span-2 lg:col-span-1"
+          />
+        </div>
+      </ReportSection>
+
       <ReportSection
         title="Đọc sách"
         icon={BookOpen}
@@ -314,6 +373,70 @@ export const ReportsView: React.FC = () => {
             tone="border-emerald-200/70 bg-emerald-50 text-emerald-700"
           />
         </div>
+
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
+          <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <p className="text-[9px] font-semibold text-slate-400">Số phiên</p>
+              <p className="mt-1 text-sm font-bold text-slate-800">{readingReport.sessionCount || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-semibold text-slate-400">Lâu nhất</p>
+              <p className="mt-1 text-sm font-bold text-slate-800">{readingReport.longestSessionSeconds ? formatReadingTime(readingReport.longestSessionSeconds) : '—'}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-semibold text-slate-400">Thường đọc</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-800">{readingReport.favoriteTimeLabel || '—'}</p>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {readingReport.timeWindows.map((window) => (
+              <div key={window.key} className="grid grid-cols-[92px_minmax(0,1fr)_48px] items-center gap-2">
+                <span className="truncate text-[9px] font-semibold text-slate-500">{window.label}</span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <span className="block h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(0, (window.seconds / readingWindowMax) * 100)}%` }} />
+                </span>
+                <span className="text-right text-[9px] font-bold tabular-nums text-slate-400">{window.seconds ? Math.round(window.seconds / 60) : 0}p</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[9px] leading-4 text-slate-400">Khung giờ, số phiên và phiên lâu nhất chỉ được đo từ v0.9.19; tổng thời gian cũ vẫn được giữ nguyên.</p>
+        </div>
+      </ReportSection>
+
+      <ReportSection title="Gym" icon={Dumbbell} trailing={<span className="text-[10px] font-semibold text-slate-400">Lịch sử kg & reps</span>}>
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          <StatCard label="Ngày có tập" value={`${exerciseReport.activeDays}`} meta="Ngày có ít nhất 1 bài được ghi" icon={CalendarDays} tone="border-indigo-200/70 bg-indigo-50 text-indigo-700" />
+          <StatCard label="Lần ghi bài" value={`${exerciseReport.loggedEntries}`} meta="Mỗi bài / mỗi ngày tính 1 lần" icon={Dumbbell} tone="border-sky-200/70 bg-sky-50 text-sky-700" />
+          <StatCard label="Bài tiến bộ" value={`${exerciseReport.improvedExercises}`} meta="Tăng kg hoặc reps so lần trước" icon={TrendingUp} tone="border-emerald-200/70 bg-emerald-50 text-emerald-700" />
+          <StatCard label="Đang theo dõi" value={`${exerciseReport.trackedExercises}`} meta="Bài có lịch sử trong máy" icon={Target} tone="border-violet-200/70 bg-violet-50 text-violet-700" />
+        </div>
+
+        {exerciseReport.trends.length > 0 ? (
+          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">
+            {exerciseReport.trends.slice(0, 5).map((trend, index) => (
+              <div key={trend.key} className={`flex items-center justify-between gap-3 px-4 py-3 ${index ? 'border-t border-slate-100' : ''}`}>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold text-slate-800">{trend.label}</p>
+                  <p className="mt-0.5 text-[9px] font-medium text-slate-400">{trend.latest.date}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] font-bold tabular-nums text-slate-700">
+                    {trend.latest.weight ? `${trend.latest.weight} kg` : '—'} · {trend.latest.reps ? `${trend.latest.reps} reps` : '—'}
+                  </p>
+                  <p className="mt-0.5 text-[9px] font-semibold text-slate-400">
+                    {trend.weightDelta !== null ? `${trend.weightDelta > 0 ? '+' : ''}${decimal.format(trend.weightDelta)} kg` : 'kg —'}
+                    {' · '}
+                    {trend.repsDelta !== null ? `${trend.repsDelta > 0 ? '+' : ''}${decimal.format(trend.repsDelta)} reps` : 'reps —'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Chưa có lịch sử gym trong khoảng này" description="" />
+        )}
       </ReportSection>
 
       <ReportSection title="Dinh dưỡng & cơ thể" icon={UtensilsCrossed}>
@@ -335,6 +458,24 @@ export const ReportsView: React.FC = () => {
             icon={Scale}
           />
         </div>
+
+        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs">
+          <div>
+            <p className="text-[9px] font-semibold text-slate-400">Calories đạt vùng</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.calorieAdherenceRate === null ? '—' : `${nutritionReport.calorieAdherenceRate}%`}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-semibold text-slate-400">Protein đạt</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.proteinAdherenceRate === null ? '—' : `${nutritionReport.proteinAdherenceRate}%`}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-semibold text-slate-400">Steps đạt</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.stepAdherenceRate === null ? '—' : `${nutritionReport.stepAdherenceRate}%`}</p>
+          </div>
+        </div>
+        {nutritionReport.averageCalorieDeviation !== null ? (
+          <p className="px-1 text-[9px] font-medium text-slate-400">Sai lệch calories trung bình: {whole.format(nutritionReport.averageCalorieDeviation)} kcal/ngày so với mục tiêu.</p>
+        ) : null}
       </ReportSection>
 
       <ReportSection title="Tiến độ dự án" icon={Layers} trailing={<span className="text-[10px] font-semibold text-slate-400">{projectRows.length} dự án</span>}>

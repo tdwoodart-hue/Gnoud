@@ -108,16 +108,36 @@ function normalizeStore(parsed: unknown): ExerciseProgressStore {
   return migrated;
 }
 
+export function shouldClaimLegacyExerciseProgress(userId?: string | null, hasScopedData = false): boolean {
+  return Boolean(userId && !hasScopedData);
+}
+
 export function loadExerciseProgress(userId?: string | null): ExerciseProgressStore {
   if (typeof window === 'undefined') return {};
   try {
     const scopedKey = buildExerciseProgressStorageKey(userId);
     const scoped = window.localStorage.getItem(scopedKey);
-    const legacy = scoped ? null : window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
-    const parsed = JSON.parse(scoped || legacy || '{}');
-    const migrated = normalizeStore(parsed);
-    if (!scoped || JSON.stringify(migrated) !== JSON.stringify(parsed)) {
-      persistExerciseProgress(migrated, userId);
+
+    if (scoped) {
+      const parsed = JSON.parse(scoped);
+      const normalized = normalizeStore(parsed);
+      if (JSON.stringify(normalized) !== JSON.stringify(parsed)) {
+        persistExerciseProgress(normalized, userId);
+      }
+      return normalized;
+    }
+
+    // Legacy v1 không có UID. Chỉ tài khoản đã xác thực đầu tiên được nhận dữ liệu cũ.
+    // Không migrate vào guest vì auth có thể chưa hydrate xong khi app vừa mở.
+    if (!shouldClaimLegacyExerciseProgress(userId, false)) return {};
+
+    const legacy = window.localStorage.getItem(EXERCISE_PROGRESS_STORAGE_KEY);
+    if (!legacy) return {};
+
+    const migrated = normalizeStore(JSON.parse(legacy));
+    if (persistExerciseProgress(migrated, userId)) {
+      // Xóa nguồn legacy sau khi ghi scoped thành công để tài khoản thứ hai không thể import lại.
+      window.localStorage.removeItem(EXERCISE_PROGRESS_STORAGE_KEY);
     }
     return migrated;
   } catch {
@@ -125,12 +145,14 @@ export function loadExerciseProgress(userId?: string | null): ExerciseProgressSt
   }
 }
 
-export function persistExerciseProgress(progress: ExerciseProgressStore, userId?: string | null): void {
-  if (typeof window === 'undefined') return;
+export function persistExerciseProgress(progress: ExerciseProgressStore, userId?: string | null): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     window.localStorage.setItem(buildExerciseProgressStorageKey(userId), JSON.stringify(progress));
+    return true;
   } catch {
     // Không chặn buổi tập nếu trình duyệt từ chối localStorage.
+    return false;
   }
 }
 

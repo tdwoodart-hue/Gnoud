@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.19';
-export const APP_UPDATED_AT = '2026-10-01T00:28:00+07:00';
+export const APP_VERSION = '0.9.20';
+export const APP_UPDATED_AT = '2026-10-01T00:36:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.20',
+    updatedAt: '2026-10-01T00:36:00+07:00',
+    title: 'Khóa migration Gym theo đúng tài khoản',
+    changes: [
+      'Dữ liệu Gym legacy chỉ được chuyển một lần vào tài khoản đã xác thực đầu tiên, không tự copy sang tài khoản thứ hai.',
+      'Không migrate dữ liệu legacy khi auth chưa tải xong và app đang ở trạng thái guest.',
+      'Chỉ xóa dữ liệu legacy sau khi bản scoped theo UID đã ghi thành công.',
+    ],
+  },
   {
     version: '0.9.19',
     updatedAt: '2026-10-01T00:28:00+07:00',

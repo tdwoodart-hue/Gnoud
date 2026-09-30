@@ -10,6 +10,8 @@
 export interface SecuritySettings {
   pinEnabled: boolean;
   pinHash: string; // SHA-256 hash with salt
+  pinOwnerUid: string | null;
+  pinOwnerEmail: string | null;
   autoLockSeconds: number; // 0 = immediately on tab switch, 60 = 1m, 300 = 5m, 900 = 15m, -1 = only restart
   privacyMode: boolean;
   failedAttempts: number;
@@ -25,6 +27,8 @@ const LOCKOUT_DURATION_MS = 30 * 1000; // 30 seconds
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   pinEnabled: false,
   pinHash: '',
+  pinOwnerUid: null,
+  pinOwnerEmail: null,
   autoLockSeconds: 300, // 5 minutes default
   privacyMode: false,
   failedAttempts: 0,
@@ -59,12 +63,21 @@ export function loadSecuritySettings(): SecuritySettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SECURITY_SETTINGS;
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const {
+      pin: _pin,
+      pinCode: _pinCode,
+      passcode: _passcode,
+      password: _password,
+      ...safe
+    } = parsed;
     return {
       ...DEFAULT_SECURITY_SETTINGS,
-      ...parsed,
+      ...safe,
+      pinOwnerUid: typeof safe.pinOwnerUid === 'string' ? safe.pinOwnerUid : null,
+      pinOwnerEmail: typeof safe.pinOwnerEmail === 'string' ? safe.pinOwnerEmail : null,
       lastActiveTime: Date.now(),
-    };
+    } as SecuritySettings;
   } catch {
     return DEFAULT_SECURITY_SETTINGS;
   }
@@ -73,10 +86,29 @@ export function loadSecuritySettings(): SecuritySettings {
 export function saveSecuritySettings(settings: SecuritySettings): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    const safeSettings: SecuritySettings = {
+      pinEnabled: settings.pinEnabled,
+      pinHash: settings.pinHash,
+      pinOwnerUid: settings.pinOwnerUid || null,
+      pinOwnerEmail: settings.pinOwnerEmail || null,
+      autoLockSeconds: settings.autoLockSeconds,
+      privacyMode: settings.privacyMode,
+      failedAttempts: settings.failedAttempts,
+      lockedUntil: settings.lockedUntil,
+      lastActiveTime: settings.lastActiveTime,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(safeSettings));
   } catch (error) {
     console.warn('Could not save security settings:', error);
   }
+}
+
+export function canRecoverPinWithAccount(
+  settings: SecuritySettings,
+  userId: string | null | undefined,
+): boolean {
+  if (!userId) return false;
+  return !settings.pinOwnerUid || settings.pinOwnerUid === userId;
 }
 
 /**

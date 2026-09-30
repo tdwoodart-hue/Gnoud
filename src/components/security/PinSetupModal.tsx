@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Check, KeyRound, Lock, ShieldCheck, X } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
 import { useApp } from '../../context/AppContext';
 
-export type PinModalMode = 'setup' | 'change' | 'disable';
+export type PinModalMode = 'setup' | 'change' | 'disable' | 'recover';
 
 interface PinSetupModalProps {
   isOpen: boolean;
@@ -12,7 +11,7 @@ interface PinSetupModalProps {
 }
 
 export const PinSetupModal: React.FC<PinSetupModalProps> = ({ isOpen, mode, onClose }) => {
-  const { setupPin, changePin, disablePin } = useSecurity();
+  const { setupPin, changePin, disablePin, completePinRecovery } = useSecurity();
   const { addToast } = useApp();
 
   const [step, setStep] = useState<'current' | 'new' | 'confirm'>('new');
@@ -22,183 +21,181 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ isOpen, mode, onCl
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset state when opening
   React.useEffect(() => {
-    if (isOpen) {
-      if (mode === 'setup') setStep('new');
-      if (mode === 'change' || mode === 'disable') setStep('current');
-      setCurrentPin('');
-      setNewPin('');
-      setConfirmPin('');
-      setError('');
-    }
+    if (!isOpen) return;
+    setStep(mode === 'change' || mode === 'disable' ? 'current' : 'new');
+    setCurrentPin('');
+    setNewPin('');
+    setConfirmPin('');
+    setError('');
+    setIsSubmitting(false);
   }, [isOpen, mode]);
 
   if (!isOpen) return null;
 
+  const activePin = step === 'current' ? currentPin : step === 'new' ? newPin : confirmPin;
+
   const handleDigit = (digit: string) => {
+    if (isSubmitting) return;
     setError('');
-    if (step === 'current') {
-      if (currentPin.length < 4) setCurrentPin((p) => p + digit);
-    } else if (step === 'new') {
-      if (newPin.length < 4) setNewPin((p) => p + digit);
-    } else if (step === 'confirm') {
-      if (confirmPin.length < 4) setConfirmPin((p) => p + digit);
-    }
+    if (step === 'current' && currentPin.length < 4) setCurrentPin((value) => value + digit);
+    if (step === 'new' && newPin.length < 4) setNewPin((value) => value + digit);
+    if (step === 'confirm' && confirmPin.length < 4) setConfirmPin((value) => value + digit);
   };
 
   const handleDelete = () => {
+    if (isSubmitting) return;
     setError('');
-    if (step === 'current') setCurrentPin((p) => p.slice(0, -1));
-    else if (step === 'new') setNewPin((p) => p.slice(0, -1));
-    else if (step === 'confirm') setConfirmPin((p) => p.slice(0, -1));
+    if (step === 'current') setCurrentPin((value) => value.slice(0, -1));
+    if (step === 'new') setNewPin((value) => value.slice(0, -1));
+    if (step === 'confirm') setConfirmPin((value) => value.slice(0, -1));
   };
 
   const handleNext = async () => {
     setError('');
+    if (activePin.length !== 4) {
+      setError('Nhập đủ 4 chữ số để tiếp tục.');
+      return;
+    }
+
     if (step === 'current') {
-      if (currentPin.length !== 4) {
-        setError('Vui lòng nhập đủ 4 chữ số');
-        return;
-      }
       if (mode === 'disable') {
         setIsSubmitting(true);
         try {
-          const res = await disablePin(currentPin);
-          if (res.success) {
-            addToast('Đã tắt khóa mã PIN', 'info');
-            onClose();
-          } else {
-            setError(res.error || 'Mã PIN hiện tại không đúng');
+          const result = await disablePin(currentPin);
+          if (!result.success) {
+            setError(result.error || 'Mã PIN hiện tại không đúng.');
             setCurrentPin('');
+            return;
           }
+          addToast('Đã tắt khóa mã PIN', 'info');
+          onClose();
         } finally {
           setIsSubmitting(false);
         }
         return;
       }
-      // If changing, advance to 'new'
       setStep('new');
       return;
     }
 
     if (step === 'new') {
-      if (newPin.length !== 4) {
-        setError('Vui lòng nhập đủ 4 chữ số');
-        return;
-      }
       setStep('confirm');
       return;
     }
 
-    if (step === 'confirm') {
-      if (confirmPin.length !== 4) {
-        setError('Vui lòng nhập đủ 4 chữ số');
-        return;
-      }
-      if (newPin !== confirmPin) {
-        setError('Mã PIN xác nhận không khớp. Vui lòng thử lại.');
-        setConfirmPin('');
+    if (newPin !== confirmPin) {
+      setError('Hai mã PIN không khớp. Nhập lại mã xác nhận.');
+      setConfirmPin('');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (mode === 'setup') {
+        await setupPin(newPin);
+        addToast('Đã bật khóa mã PIN', 'success');
+        onClose();
         return;
       }
 
-      setIsSubmitting(true);
-      try {
-        if (mode === 'setup') {
-          await setupPin(newPin);
-          addToast('Đã thiết lập mã PIN bảo vệ ứng dụng', 'success');
-          onClose();
-        } else if (mode === 'change') {
-          const res = await changePin(currentPin, newPin);
-          if (res.success) {
-            addToast('Đã đổi mã PIN thành công', 'success');
-            onClose();
-          } else {
-            setError(res.error || 'Có lỗi xảy ra');
-            setStep('current');
-            setCurrentPin('');
-          }
+      if (mode === 'change') {
+        const result = await changePin(currentPin, newPin);
+        if (!result.success) {
+          setError(result.error || 'Không đổi được mã PIN.');
+          setStep('current');
+          setCurrentPin('');
+          return;
         }
-      } finally {
-        setIsSubmitting(false);
+        addToast('Đã đổi mã PIN', 'success');
+        onClose();
+        return;
       }
+
+      if (mode === 'recover') {
+        const result = await completePinRecovery(newPin);
+        if (!result.success) {
+          setError(result.error || 'Không đặt lại được mã PIN.');
+          return;
+        }
+        addToast('Đã tạo mã PIN mới', 'success');
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getActivePin = () => {
-    if (step === 'current') return currentPin;
-    if (step === 'new') return newPin;
-    return confirmPin;
-  };
+  const title =
+    step === 'current'
+      ? 'Nhập mã PIN hiện tại'
+      : step === 'confirm'
+        ? 'Nhập lại mã PIN'
+        : mode === 'recover'
+          ? 'Tạo mã PIN mới'
+          : mode === 'change'
+            ? 'Mã PIN mới'
+            : 'Tạo mã PIN';
 
-  const getStepTitle = () => {
-    if (step === 'current') return 'Nhập mã PIN hiện tại';
-    if (step === 'new') return mode === 'change' ? 'Nhập mã PIN mới' : 'Tạo mã PIN 4 số';
-    return 'Xác nhận lại mã PIN';
-  };
+  const subtitle =
+    step === 'current'
+      ? 'Xác nhận mã hiện tại để tiếp tục.'
+      : step === 'confirm'
+        ? 'Nhập lại đúng 4 số vừa chọn.'
+        : mode === 'recover'
+          ? 'PIN cũ không thể xem lại. Hãy chọn 4 số mới.'
+          : 'Chọn 4 chữ số dễ nhớ với bạn.';
 
-  const getStepSubtitle = () => {
-    if (step === 'current') return 'Xác thực để tiếp tục thay đổi';
-    if (step === 'new') return 'Ghi nhớ mã này để mở khóa ứng dụng';
-    return 'Nhập lại đúng 4 số bạn vừa tạo';
-  };
-
-  const activePin = getActivePin();
+  const actionLabel =
+    mode === 'disable' && step === 'current'
+      ? 'Tắt khóa'
+      : step === 'confirm'
+        ? 'Lưu'
+        : 'Tiếp';
 
   return (
     <div
-      className="fixed inset-0 z-[120] grid place-items-center bg-black/50 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
-              <KeyRound className="h-4.5 w-4.5" />
-            </span>
-            <div>
-              <h3 className="font-bold text-slate-900">{getStepTitle()}</h3>
-              <p className="text-xs text-slate-400">{getStepSubtitle()}</p>
-            </div>
+      <div className="w-full max-w-[360px] rounded-[28px] bg-[#fbfbfa] p-5 text-slate-950 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight">{title}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-slate-100 p-1.5 text-slate-400 hover:text-slate-600"
+            className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-400 hover:bg-slate-100"
           >
-            <X className="h-4 w-4" />
+            Đóng
           </button>
         </div>
 
-        {/* Pin Dots */}
-        <div className="my-6 flex justify-center gap-3">
-          {[0, 1, 2, 3].map((idx) => {
-            const filled = activePin.length > idx;
-            return (
-              <div
-                key={idx}
-                className={`h-3.5 w-3.5 rounded-full border-2 transition-all ${
-                  filled ? 'border-indigo-600 bg-indigo-600 scale-110' : 'border-slate-300 bg-transparent'
-                }`}
-              />
-            );
-          })}
+        <div className="my-7 flex justify-center gap-4" aria-label="Mã PIN đã nhập">
+          {[0, 1, 2, 3].map((index) => (
+            <span
+              key={index}
+              className={`h-3 w-3 rounded-full transition ${
+                activePin.length > index ? 'bg-slate-900' : 'bg-slate-200'
+              }`}
+            />
+          ))}
         </div>
 
-        {/* Error message */}
         <div className="min-h-5 text-center">
-          {error && <p className="text-xs font-semibold text-rose-500 animate-fadeIn">{error}</p>}
+          {error ? <p className="text-xs font-semibold text-rose-600">{error}</p> : null}
         </div>
 
-        {/* Numeric keypad */}
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mx-auto mt-3 grid max-w-[270px] grid-cols-3 gap-3">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
             <button
               key={digit}
               type="button"
               onClick={() => handleDigit(digit)}
-              className="flex h-12 items-center justify-center rounded-xl bg-slate-50 text-lg font-semibold text-slate-800 transition active:scale-95 active:bg-slate-200 hover:bg-slate-100"
+              className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white text-xl font-semibold text-slate-900 ring-1 ring-slate-200 transition active:scale-95 active:bg-slate-100"
             >
               {digit}
             </button>
@@ -207,15 +204,16 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ isOpen, mode, onCl
           <button
             type="button"
             onClick={handleDelete}
-            className="flex h-12 items-center justify-center rounded-xl text-xs font-semibold text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+            className="mx-auto grid h-16 w-16 place-items-center rounded-full text-xl font-medium text-slate-400 transition active:scale-95 active:bg-slate-100"
+            aria-label="Xóa số cuối"
           >
-            Xóa
+            ⌫
           </button>
 
           <button
             type="button"
             onClick={() => handleDigit('0')}
-            className="flex h-12 items-center justify-center rounded-xl bg-slate-50 text-lg font-semibold text-slate-800 transition active:scale-95 active:bg-slate-200 hover:bg-slate-100"
+            className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white text-xl font-semibold text-slate-900 ring-1 ring-slate-200 transition active:scale-95 active:bg-slate-100"
           >
             0
           </button>
@@ -224,9 +222,9 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ isOpen, mode, onCl
             type="button"
             disabled={activePin.length !== 4 || isSubmitting}
             onClick={() => void handleNext()}
-            className="flex h-12 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white transition active:scale-95 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-slate-900 px-2 text-[11px] font-bold text-white transition active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
           >
-            <Check className="h-5 w-5" />
+            {isSubmitting ? '...' : actionLabel}
           </button>
         </div>
       </div>

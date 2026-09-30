@@ -4,9 +4,11 @@ import {
   buildDailyTaskActivity,
   buildExerciseDeepReport,
   buildExerciseReport,
+  buildNutritionDayReport,
   buildNutritionDeepReport,
   buildNutritionReport,
   buildPeriodComparison,
+  buildReadingDayReport,
   buildReadingDeepReport,
   buildReadingReport,
   buildWorkTimeReport,
@@ -244,4 +246,44 @@ test('exercise deep report keeps full in-range history by exercise', () => {
   assert.equal(report.exercises.length, 1);
   assert.equal(report.exercises[0].history.length, 3);
   assert.equal(report.exercises[0].weightDelta, 2.5);
+});
+
+
+test('reading day report drills into books and sessions for one day', () => {
+  const first = createReaderBook({ title: 'Book A', content: 'abc' });
+  first.readingSecondsByDate = { '2026-09-19': 1200 };
+  first.listeningSecondsByDate = { '2026-09-19': 300 };
+  first.sessions = [
+    { id: 's1', startedAt: '2026-09-19T13:00:00.000Z', endedAt: '2026-09-19T13:25:00.000Z', readingSeconds: 1200, listeningSeconds: 300 },
+  ];
+  const second = createReaderBook({ title: 'Book B', content: 'def' });
+  second.readingSecondsByDate = { '2026-09-19': 600 };
+
+  const report = buildReadingDayReport([first, second], '2026-09-19');
+  assert.equal(report.totalSeconds, 2100);
+  assert.equal(report.sessionCount, 1);
+  assert.equal(report.longestSessionSeconds, 1500);
+  assert.equal(report.books.length, 2);
+  assert.equal(report.books[0].title, 'Book A');
+});
+
+test('nutrition day report groups meals and keeps item-level data', () => {
+  const nutrition: NutritionState = {
+    profile: {
+      sex: 'male', age: 22, heightCm: 169, weightKg: 65.5, activityLevel: 'desk_training', goal: 'recomp',
+      calorieTarget: 2100, proteinTarget: 130, carbTarget: 270, fatTarget: 55, stepTarget: 8000,
+    },
+    entries: [
+      { id: '1', date: '2026-09-19', name: 'Trứng', meal: 'breakfast', calories: 156, protein: 12.6, carbs: 1.2, fat: 10.6, createdAt: '2026-09-19T01:00:00Z' },
+      { id: '2', date: '2026-09-19', name: 'Cơm', meal: 'lunch', calories: 300, protein: 6, carbs: 65, fat: 1, createdAt: '2026-09-19T05:00:00Z' },
+      { id: '3', date: '2026-09-19', name: 'Ức gà', meal: 'lunch', calories: 165, protein: 31, carbs: 0, fat: 3.6, createdAt: '2026-09-19T05:01:00Z' },
+    ],
+    dailyMetrics: [{ date: '2026-09-19', steps: 9000, weightKg: 65.2, updatedAt: 'x' }],
+  };
+  const report = buildNutritionDayReport(nutrition, '2026-09-19');
+  assert.equal(report.itemCount, 3);
+  assert.equal(report.meals.length, 2);
+  assert.equal(report.meals.find((meal) => meal.meal === 'lunch')?.items.length, 2);
+  assert.equal(report.steps, 9000);
+  assert.equal(report.weightKg, 65.2);
 });

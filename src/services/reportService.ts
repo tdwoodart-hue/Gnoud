@@ -463,3 +463,485 @@ export function buildExerciseReport(progress: ExerciseProgressStore, range: Repo
       .slice(0, 8),
   };
 }
+
+
+export interface ProjectDeepReport {
+  project: Project;
+  totalTasks: number;
+  doneTasks: number;
+  openTasks: number;
+  completionRate: number;
+  overdueOpen: number;
+  importantOpen: number;
+  deadlineDone: number;
+  onTimeDone: number;
+  onTimeRate: number | null;
+  actualMinutes: number;
+  estimatedMeasuredMinutes: number;
+  measuredTasks: number;
+  timeVarianceMinutes: number;
+  milestoneTotal: number;
+  milestoneDone: number;
+  milestoneRate: number;
+  statusBreakdown: {
+    todo: number;
+    inProgress: number;
+    waiting: number;
+    deferred: number;
+    done: number;
+  };
+  priorityBreakdown: {
+    urgent: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  activity: DailyTaskActivity[];
+  tasks: Task[];
+}
+
+export interface ReadingDailyActivity {
+  date: string;
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  sessionCount: number;
+}
+
+export interface ReadingSessionReport {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  startedAt: string;
+  endedAt: string;
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  mode: 'reading' | 'listening' | 'mixed';
+}
+
+export interface ReadingBookReport {
+  book: ReaderBook;
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  activeDays: number;
+  sessionCount: number;
+  longestSessionSeconds: number;
+  averageSessionSeconds: number;
+  progressPercent: number;
+  dailyActivity: ReadingDailyActivity[];
+  recentSessions: ReadingSessionReport[];
+}
+
+export interface ReadingDeepReport {
+  summary: ReadingReport;
+  readingSharePercent: number;
+  listeningSharePercent: number;
+  averageActiveDaySeconds: number;
+  completedBooks: number;
+  dailyActivity: ReadingDailyActivity[];
+  books: ReadingBookReport[];
+  recentSessions: ReadingSessionReport[];
+}
+
+export interface NutritionDailyReport {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  mealCount: number;
+  steps: number | null;
+  weightKg: number | null;
+  calorieTargetMet: boolean;
+  proteinTargetMet: boolean;
+  stepTargetMet: boolean | null;
+}
+
+export interface NutritionDeepReport {
+  summary: NutritionReport;
+  daily: NutritionDailyReport[];
+}
+
+export interface ExerciseDeepRow {
+  key: string;
+  label: string;
+  history: ExerciseLogEntry[];
+  latest?: ExerciseLogEntry;
+  previous?: ExerciseLogEntry;
+  weightDelta: number | null;
+  repsDelta: number | null;
+}
+
+export interface ExerciseDeepReport {
+  summary: ExerciseReport;
+  exercises: ExerciseDeepRow[];
+}
+
+export function buildProjectDeepReport(
+  project: Project,
+  tasks: Task[],
+  range: ReportRange,
+  today: string,
+): ProjectDeepReport {
+  const start = getReportStart(range, today);
+  const related = tasks.filter(
+    (task) => task.projectId === project.id && taskBelongsToRange(task, start, today),
+  );
+  const done = related.filter((task) => task.status === 'done');
+  const open = related.filter((task) => task.status !== 'done');
+  const deadlineDone = done.filter((task) => task.deadline && task.completedAt);
+  const onTimeDone = deadlineDone.filter(
+    (task) => (task.completedAt || '').slice(0, 10) <= (task.deadline || '').slice(0, 10),
+  ).length;
+  const measured = related.filter((task) => (Number(task.actualMinutes) || 0) > 0);
+  const actualMinutes = measured.reduce((sum, task) => sum + Math.max(0, Number(task.actualMinutes) || 0), 0);
+  const estimatedMeasuredMinutes = measured.reduce(
+    (sum, task) => sum + Math.max(0, Number(task.estimatedMinutes) || 0),
+    0,
+  );
+  const milestoneTotal = project.milestones.length;
+  const milestoneDone = project.milestones.filter((milestone) => milestone.completed).length;
+  const activityDays = range === '7d' ? 7 : 14;
+
+  return {
+    project,
+    totalTasks: related.length,
+    doneTasks: done.length,
+    openTasks: open.length,
+    completionRate: related.length ? Math.round((done.length / related.length) * 100) : 0,
+    overdueOpen: open.filter(
+      (task) => Boolean(task.deadline) && (task.deadline || '').slice(0, 10) < today,
+    ).length,
+    importantOpen: open.filter((task) => task.priority === 'urgent' || task.priority === 'high').length,
+    deadlineDone: deadlineDone.length,
+    onTimeDone,
+    onTimeRate: deadlineDone.length ? Math.round((onTimeDone / deadlineDone.length) * 100) : null,
+    actualMinutes: Math.round(actualMinutes),
+    estimatedMeasuredMinutes: Math.round(estimatedMeasuredMinutes),
+    measuredTasks: measured.length,
+    timeVarianceMinutes: Math.round(actualMinutes - estimatedMeasuredMinutes),
+    milestoneTotal,
+    milestoneDone,
+    milestoneRate: milestoneTotal ? Math.round((milestoneDone / milestoneTotal) * 100) : 0,
+    statusBreakdown: {
+      todo: related.filter((task) => task.status === 'todo').length,
+      inProgress: related.filter((task) => task.status === 'in_progress').length,
+      waiting: related.filter((task) => task.status === 'waiting').length,
+      deferred: related.filter((task) => task.status === 'deferred').length,
+      done: done.length,
+    },
+    priorityBreakdown: {
+      urgent: related.filter((task) => task.priority === 'urgent').length,
+      high: related.filter((task) => task.priority === 'high').length,
+      medium: related.filter((task) => task.priority === 'medium').length,
+      low: related.filter((task) => task.priority === 'low').length,
+    },
+    activity: buildDailyTaskActivity(related, today, activityDays),
+    tasks: [...related].sort((a, b) => {
+      const aOpen = a.status === 'done' ? 1 : 0;
+      const bOpen = b.status === 'done' ? 1 : 0;
+      if (aOpen !== bOpen) return aOpen - bOpen;
+      const aDate = (a.deadline || a.plannedDate || a.completedAt || a.createdAt).slice(0, 10);
+      const bDate = (b.deadline || b.plannedDate || b.completedAt || b.createdAt).slice(0, 10);
+      return bDate.localeCompare(aDate);
+    }),
+  };
+}
+
+function reportDates(range: ReportRange, today: string, activeDates: Set<string>): string[] {
+  const start = getReportStart(range, today);
+  if (!start) return [...activeDates].filter((date) => date <= today).sort();
+  const dates: string[] = [];
+  let cursor = start;
+  while (cursor <= today) {
+    dates.push(cursor);
+    cursor = shiftIsoDate(cursor, 1);
+  }
+  return dates;
+}
+
+function buildSessionReport(book: ReaderBook, session: ReaderSession): ReadingSessionReport {
+  const totalSeconds = Math.max(0, session.readingSeconds + session.listeningSeconds);
+  const mode = session.readingSeconds > 0 && session.listeningSeconds > 0
+    ? 'mixed'
+    : session.listeningSeconds > 0
+      ? 'listening'
+      : 'reading';
+  return {
+    id: session.id,
+    bookId: book.id,
+    bookTitle: book.title,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    readingSeconds: session.readingSeconds,
+    listeningSeconds: session.listeningSeconds,
+    totalSeconds,
+    mode,
+  };
+}
+
+export function buildReadingDeepReport(
+  books: ReaderBook[],
+  range: ReportRange,
+  today: string,
+): ReadingDeepReport {
+  const summary = buildReadingReport(books, range, today);
+  const start = getReportStart(range, today);
+  const inRange = (date: string) => (!start || date >= start) && date <= today;
+  const allActiveDates = new Set<string>();
+  const dailyMap = new Map<string, ReadingDailyActivity>();
+  const allSessions: ReadingSessionReport[] = [];
+
+  const addDaily = (date: string, readingSeconds: number, listeningSeconds: number, sessionCount = 0) => {
+    if (!inRange(date)) return;
+    allActiveDates.add(date);
+    const current = dailyMap.get(date) || {
+      date,
+      readingSeconds: 0,
+      listeningSeconds: 0,
+      totalSeconds: 0,
+      sessionCount: 0,
+    };
+    current.readingSeconds += readingSeconds;
+    current.listeningSeconds += listeningSeconds;
+    current.totalSeconds = current.readingSeconds + current.listeningSeconds;
+    current.sessionCount += sessionCount;
+    dailyMap.set(date, current);
+  };
+
+  books.forEach((book) => {
+    Object.entries(book.readingSecondsByDate || {}).forEach(([date, seconds]) => {
+      const value = Math.max(0, Number(seconds) || 0);
+      if (value > 0) addDaily(date, value, 0);
+    });
+    Object.entries(book.listeningSecondsByDate || {}).forEach(([date, seconds]) => {
+      const value = Math.max(0, Number(seconds) || 0);
+      if (value > 0) addDaily(date, 0, value);
+    });
+    (book.sessions || []).forEach((session) => {
+      const date = sessionDate(session.startedAt);
+      if (!inRange(date)) return;
+      allSessions.push(buildSessionReport(book, session));
+      const current = dailyMap.get(date) || {
+        date,
+        readingSeconds: 0,
+        listeningSeconds: 0,
+        totalSeconds: 0,
+        sessionCount: 0,
+      };
+      current.sessionCount += 1;
+      dailyMap.set(date, current);
+      allActiveDates.add(date);
+    });
+  });
+
+  const dates = reportDates(range, today, allActiveDates);
+  const dailyActivity = dates.map((date) => dailyMap.get(date) || {
+    date,
+    readingSeconds: 0,
+    listeningSeconds: 0,
+    totalSeconds: 0,
+    sessionCount: 0,
+  });
+
+  const bookReports = books.map((book): ReadingBookReport => {
+    const activeDates = new Set<string>();
+    let readingSeconds = 0;
+    let listeningSeconds = 0;
+    const bookDaily = new Map<string, ReadingDailyActivity>();
+
+    const addBookDaily = (date: string, reading: number, listening: number) => {
+      if (!inRange(date)) return;
+      if (reading + listening > 0) activeDates.add(date);
+      const current = bookDaily.get(date) || {
+        date,
+        readingSeconds: 0,
+        listeningSeconds: 0,
+        totalSeconds: 0,
+        sessionCount: 0,
+      };
+      current.readingSeconds += reading;
+      current.listeningSeconds += listening;
+      current.totalSeconds = current.readingSeconds + current.listeningSeconds;
+      bookDaily.set(date, current);
+    };
+
+    Object.entries(book.readingSecondsByDate || {}).forEach(([date, seconds]) => {
+      if (!inRange(date)) return;
+      const value = Math.max(0, Number(seconds) || 0);
+      readingSeconds += value;
+      addBookDaily(date, value, 0);
+    });
+    Object.entries(book.listeningSecondsByDate || {}).forEach(([date, seconds]) => {
+      if (!inRange(date)) return;
+      const value = Math.max(0, Number(seconds) || 0);
+      listeningSeconds += value;
+      addBookDaily(date, 0, value);
+    });
+
+    const sessions = (book.sessions || [])
+      .filter((session) => inRange(sessionDate(session.startedAt)))
+      .map((session) => buildSessionReport(book, session))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+
+    sessions.forEach((session) => {
+      const date = sessionDate(session.startedAt);
+      const current = bookDaily.get(date) || {
+        date,
+        readingSeconds: 0,
+        listeningSeconds: 0,
+        totalSeconds: 0,
+        sessionCount: 0,
+      };
+      current.sessionCount += 1;
+      bookDaily.set(date, current);
+      activeDates.add(date);
+    });
+
+    const sessionDurations = sessions.map((session) => session.totalSeconds);
+    const bookDates = reportDates(range, today, activeDates);
+
+    return {
+      book,
+      readingSeconds: Math.round(readingSeconds),
+      listeningSeconds: Math.round(listeningSeconds),
+      totalSeconds: Math.round(readingSeconds + listeningSeconds),
+      activeDays: activeDates.size,
+      sessionCount: sessions.length,
+      longestSessionSeconds: sessionDurations.length ? Math.max(...sessionDurations) : 0,
+      averageSessionSeconds: sessionDurations.length
+        ? Math.round(sessionDurations.reduce((sum, seconds) => sum + seconds, 0) / sessionDurations.length)
+        : 0,
+      progressPercent: Math.round(Math.min(1, Math.max(0, book.overallProgress || 0)) * 100),
+      dailyActivity: bookDates.map((date) => bookDaily.get(date) || {
+        date,
+        readingSeconds: 0,
+        listeningSeconds: 0,
+        totalSeconds: 0,
+        sessionCount: 0,
+      }),
+      recentSessions: sessions.slice(0, 20),
+    };
+  }).sort((a, b) => b.totalSeconds - a.totalSeconds || b.book.lastOpenedAt.localeCompare(a.book.lastOpenedAt));
+
+  const recentSessions = [...allSessions].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 30);
+  const total = Math.max(1, summary.totalSeconds);
+
+  return {
+    summary,
+    readingSharePercent: summary.totalSeconds ? Math.round((summary.readingSeconds / total) * 100) : 0,
+    listeningSharePercent: summary.totalSeconds ? Math.round((summary.listeningSeconds / total) * 100) : 0,
+    averageActiveDaySeconds: summary.activeDays ? Math.round(summary.totalSeconds / summary.activeDays) : 0,
+    completedBooks: books.filter((book) => (book.overallProgress || 0) >= 0.995).length,
+    dailyActivity,
+    books: bookReports,
+    recentSessions,
+  };
+}
+
+export function buildNutritionDeepReport(
+  nutrition: NutritionState,
+  range: ReportRange,
+  today: string,
+): NutritionDeepReport {
+  const summary = buildNutritionReport(nutrition, range, today);
+  const start = getReportStart(range, today);
+  const entries = nutrition.entries.filter((entry) => inDateRange(entry.date, start, today));
+  const metrics = new Map(
+    nutrition.dailyMetrics
+      .filter((metric) => inDateRange(metric.date, start, today))
+      .map((metric) => [metric.date, metric]),
+  );
+  const grouped = new Map<string, NutritionDailyReport>();
+
+  entries.forEach((entry) => {
+    const current = grouped.get(entry.date) || {
+      date: entry.date,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      mealCount: 0,
+      steps: metrics.get(entry.date)?.steps ?? null,
+      weightKg: metrics.get(entry.date)?.weightKg ?? null,
+      calorieTargetMet: false,
+      proteinTargetMet: false,
+      stepTargetMet: null,
+    };
+    current.calories += entry.calories;
+    current.protein += entry.protein;
+    current.carbs += entry.carbs;
+    current.fat += entry.fat;
+    current.mealCount += 1;
+    grouped.set(entry.date, current);
+  });
+
+  metrics.forEach((metric, date) => {
+    if (grouped.has(date)) return;
+    grouped.set(date, {
+      date,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      mealCount: 0,
+      steps: metric.steps ?? null,
+      weightKg: metric.weightKg ?? null,
+      calorieTargetMet: false,
+      proteinTargetMet: false,
+      stepTargetMet: metric.steps === undefined ? null : metric.steps >= nutrition.profile.stepTarget,
+    });
+  });
+
+  const calorieTolerance = nutrition.profile.calorieTarget * 0.1;
+  const daily = [...grouped.values()]
+    .map((day) => ({
+      ...day,
+      calorieTargetMet: day.mealCount > 0
+        && Math.abs(day.calories - nutrition.profile.calorieTarget) <= calorieTolerance,
+      proteinTargetMet: day.mealCount > 0 && day.protein >= nutrition.profile.proteinTarget,
+      stepTargetMet: day.steps === null ? null : day.steps >= nutrition.profile.stepTarget,
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  return { summary, daily };
+}
+
+export function buildExerciseDeepReport(
+  progress: ExerciseProgressStore,
+  range: ReportRange,
+  today: string,
+): ExerciseDeepReport {
+  const summary = buildExerciseReport(progress, range, today);
+  const start = getReportStart(range, today);
+  const inRange = (date: string) => (!start || date >= start) && date <= today;
+  const exercises = Object.entries(progress)
+    .map(([key, exercise]): ExerciseDeepRow => {
+      const history = historyRows(exercise).filter((entry) => inRange(entry.date));
+      const latest = history[0];
+      const previous = history[1];
+      const latestWeight = numeric(latest?.weight);
+      const previousWeight = numeric(previous?.weight);
+      const latestReps = numeric(latest?.reps);
+      const previousReps = numeric(previous?.reps);
+      return {
+        key,
+        label: exercise.label || key,
+        history,
+        latest,
+        previous,
+        weightDelta: latestWeight !== null && previousWeight !== null
+          ? latestWeight - previousWeight
+          : null,
+        repsDelta: latestReps !== null && previousReps !== null
+          ? latestReps - previousReps
+          : null,
+      };
+    })
+    .filter((exercise) => exercise.history.length > 0)
+    .sort((a, b) => (b.latest?.date || '').localeCompare(a.latest?.date || ''));
+
+  return { summary, exercises };
+}

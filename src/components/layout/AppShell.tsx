@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   BarChart3,
   BookOpen,
@@ -135,55 +136,88 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </main>
       </div>
 
-      {moreMenuOpen ? (
-        <div
-          className="fixed inset-0 z-[45] flex items-end bg-slate-950/25 px-3 pb-[calc(78px+env(safe-area-inset-bottom))] backdrop-blur-[1px] md:hidden"
-          onClick={() => setMoreMenuOpen(false)}
-          role="presentation"
-        >
-          <section
-            className="w-full rounded-[24px] border border-slate-200/80 bg-white p-2 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-            aria-label="Điều hướng thêm"
+      <AnimatePresence initial={false}>
+        {moreMenuOpen ? (
+          <motion.div
+            key="mobile-more-sheet"
+            className="fixed inset-0 z-[45] flex items-end px-3 pb-[calc(78px+env(safe-area-inset-bottom))] md:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            onClick={() => setMoreMenuOpen(false)}
+            role="presentation"
           >
-            {[
-              { id: 'personal' as NavTab, label: 'Cá nhân', icon: UserRound },
-              { id: 'reports' as NavTab, label: 'Báo cáo', icon: BarChart3 },
-            ].map((item) => {
-              const Icon = item.icon;
-              const active = activeTab === item.id;
-              return (
+            <motion.div
+              className="absolute inset-0 bg-slate-950/25 backdrop-blur-[1px]"
+              aria-hidden="true"
+            />
+            <motion.section
+              initial={{ y: 90, scale: 0.985 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 90, scale: 0.985 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 36, mass: 0.82 }}
+              className="relative w-full overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
+              onClick={(event) => event.stopPropagation()}
+              aria-label="Điều hướng thêm"
+            >
+              <div className="flex h-7 items-center justify-center">
+                <span className="h-1 w-10 rounded-full bg-slate-300" />
+              </div>
+
+              <div className="px-2 pb-2">
+                {[
+                  { id: 'personal' as NavTab, label: 'Cá nhân', description: 'Hồ sơ và mục tiêu của bạn', icon: UserRound },
+                  { id: 'reports' as NavTab, label: 'Báo cáo', description: 'Xem tiến độ và số liệu đã đo', icon: BarChart3 },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setMoreMenuOpen(false);
+                      }}
+                      className={`flex min-h-[62px] w-full items-center gap-3 rounded-2xl px-3.5 text-left transition ${
+                        active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 active:bg-slate-100'
+                      }`}
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
+                        active ? 'bg-white text-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        <Icon className="h-[18px] w-[18px]" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold">{item.label}</span>
+                        <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-400">{item.description}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+
                 <button
-                  key={item.id}
                   type="button"
                   onClick={() => {
-                    setActiveTab(item.id);
+                    setSettingsOpen(true);
                     setMoreMenuOpen(false);
                   }}
-                  className={`flex min-h-13 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-semibold transition ${
-                    active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 active:bg-slate-100'
-                  }`}
+                  className="flex min-h-[62px] w-full items-center gap-3 rounded-2xl px-3.5 text-left text-slate-700 transition active:bg-slate-100"
                 >
-                  <Icon className={`h-[18px] w-[18px] ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
-                  <span className="flex-1">{item.label}</span>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-100 text-slate-500">
+                    <Settings className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">Cài đặt</span>
+                    <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-400">Tài khoản, bảo mật, thông báo và dữ liệu</span>
+                  </span>
                 </button>
-              );
-            })}
-
-            <button
-              type="button"
-              onClick={() => {
-                setMoreMenuOpen(false);
-                setSettingsOpen(true);
-              }}
-              className="flex min-h-13 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-semibold text-slate-700 transition active:bg-slate-100"
-            >
-              <Settings className="h-[18px] w-[18px] text-slate-400" />
-              <span className="flex-1">Cài đặt</span>
-            </button>
-          </section>
-        </div>
-      ) : null}
+              </div>
+            </motion.section>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-200/80 bg-white/95 px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] backdrop-blur-xl md:hidden">
         {[

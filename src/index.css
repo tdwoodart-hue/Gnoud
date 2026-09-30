@@ -9,6 +9,24 @@ body {
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overscroll-behavior-x: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 /* Khóa chống iOS Safari tự động zoom in khi chạm vào ô nhập liệu (input/select/textarea) */
@@ -27,6 +45,25 @@ body {
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .ios-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .ios-surface {
+    background: color-mix(in srgb, white 92%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.35);
+    backdrop-filter: blur(24px) saturate(1.35);
+  }
+
+  .tap-scale {
+    transition: transform 160ms cubic-bezier(0.32, 0.72, 0, 1), background-color 160ms ease, color 160ms ease;
+  }
+
+  .tap-scale:active {
+    transform: scale(0.965);
   }
 
   /* Chế độ riêng tư: Làm mờ các số liệu nhạy cảm nơi công cộng */
@@ -66,6 +103,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
   .reader-page-slide-next,
   .reader-page-slide-prev {
     animation-duration: 1ms;

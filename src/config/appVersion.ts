@@ -5,10 +5,23 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.12';
-export const APP_UPDATED_AT = '2026-09-30T16:22:00+07:00';
+export const APP_VERSION = '0.9.13';
+export const APP_UPDATED_AT = '2026-09-30T16:55:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.13',
+    updatedAt: '2026-09-30T16:55:00+07:00',
+    title: 'Làm lại màn hình PIN + khôi phục đúng bảo mật',
+    changes: [
+      'Làm lại màn hình PIN tối giản, bỏ logo/biểu tượng lớn và keypad dạng ô nặng nề.',
+      'Quên PIN không còn mở khóa hoặc xóa PIN ngay: phải xác minh lại đúng tài khoản Google trước.',
+      'Sau xác minh chỉ được tạo PIN mới; PIN cũ không bao giờ được hiển thị hoặc lấy lại.',
+      'PIN mới được gắn với UID tài khoản đã tạo/khôi phục để chặn tài khoản khác reset PIN.',
+      'Nếu không có tài khoản để xác minh, chỉ cho xóa dữ liệu cục bộ sau bước xác nhận rõ ràng.',
+      'Loại bỏ API reset PIN không xác minh và chặn lưu nhầm PIN/passcode dạng thô vào localStorage.',
+    ],
+  },
   {
     version: '0.9.12',
     updatedAt: '2026-09-30T16:22:00+07:00',

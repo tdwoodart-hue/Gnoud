@@ -1,4 +1,5 @@
 name: Diagnose production Reader TTS
+# rerun after v0.9.10 production
 
 on:
   push:

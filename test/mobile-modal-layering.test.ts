@@ -8,8 +8,8 @@ test('mobile bottom nav stays below modal layers', () => {
 
   assert.match(
     appShell,
-    /<nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5/,
-    'mobile bottom nav must stay at z-40 so it cannot cover dialogs',
+    /<nav className="fixed inset-x-3 bottom-\[max\(8px,env\(safe-area-inset-bottom\)\)\] z-40 grid grid-cols-5/,
+    'mobile floating bottom nav must stay at z-40 so it cannot cover dialogs',
   );
 
   assert.match(

@@ -63,15 +63,15 @@ const formatMinutes = (minutes: number) => {
 };
 
 const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, className = 'bg-indigo-500' }) => (
-  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+  <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/60">
     <div className={`h-full rounded-full transition-all duration-500 ${className}`} style={{ width: `${clamp(value)}%` }} />
   </div>
 );
 
 const DeltaBadge: React.FC<{ value: number; suffix?: string }> = ({ value, suffix = '' }) => {
-  if (value === 0) return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-400">= kỳ trước</span>;
+  if (value === 0) return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-400">= kỳ trước</span>;
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${value > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${value > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
       {value > 0 ? '+' : ''}{value}{suffix}
     </span>
   );
@@ -86,9 +86,9 @@ const StatCard: React.FC<{
   delta?: React.ReactNode;
   className?: string;
 }> = ({ label, value, meta, icon: Icon, tone, delta, className = '' }) => (
-  <div className={`rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs ${className}`}>
+  <div className={`rounded-[22px] bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/70 ${className}`}>
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[11px] font-semibold text-slate-400">{label}</span>
+      <span className="text-[12px] font-semibold text-slate-400">{label}</span>
       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl border ${tone}`}>
         <Icon className="h-3.5 w-3.5" />
       </span>
@@ -97,7 +97,7 @@ const StatCard: React.FC<{
       <p className="text-[22px] font-bold tracking-tight tabular-nums text-slate-900">{value}</p>
       {delta}
     </div>
-    <p className="mt-0.5 text-[10px] font-medium text-slate-400">{meta}</p>
+    <p className="mt-1 text-[11px] leading-4 font-medium text-slate-400">{meta}</p>
   </div>
 );
 
@@ -107,9 +107,9 @@ const ReportSection: React.FC<{
   trailing?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, icon: Icon, trailing, children }) => (
-  <section className="space-y-2.5">
+  <section className="space-y-3">
     <div className="flex min-h-7 items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+      <h2 className="flex items-center gap-2 text-[15px] font-extrabold tracking-tight text-slate-900">
         <Icon className="h-4 w-4 text-slate-400" /> {title}
       </h2>
       {trailing}
@@ -129,15 +129,15 @@ const NutritionCell: React.FC<{
 }> = ({ label, value, target, progress, progressClassName, footer, icon: Icon }) => (
   <div className="min-w-0 p-3.5 sm:p-4">
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[10px] font-bold text-slate-500">{label}</span>
+      <span className="text-[11px] font-bold text-slate-500">{label}</span>
       <Icon className="h-3.5 w-3.5 shrink-0 text-slate-300" />
     </div>
     <div className="mt-1.5 flex min-w-0 items-baseline gap-1">
       <span className="truncate text-lg font-bold tabular-nums text-slate-900">{value}</span>
-      {target ? <span className="truncate text-[9px] font-semibold text-slate-400">{target}</span> : null}
+      {target ? <span className="truncate text-[11px] font-semibold text-slate-400">{target}</span> : null}
     </div>
     {typeof progress === 'number' ? <div className="mt-2.5"><ProgressBar value={progress} className={progressClassName} /></div> : null}
-    {footer ? <p className="mt-2 truncate text-[9px] font-medium text-slate-400">{footer}</p> : null}
+    {footer ? <p className="mt-2 truncate text-[11px] font-medium text-slate-400">{footer}</p> : null}
   </div>
 );
 
@@ -230,17 +230,17 @@ export const ReportsView: React.FC = () => {
   const readingWindowMax = Math.max(1, ...readingReport.timeWindows.map((item) => item.seconds));
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-6">
+    <div className="mx-auto max-w-6xl space-y-6 pb-4">
       <PageHeader title="Báo cáo" />
 
-      <div className="flex rounded-xl border border-slate-200/70 bg-white p-1 shadow-xs">
+      <div className="flex rounded-[14px] bg-slate-200/60 p-1">
         {(Object.keys(rangeLabels) as ReportRange[]).map((value) => (
           <button
             key={value}
             type="button"
             onClick={() => setRange(value)}
-            className={`h-8 flex-1 rounded-lg px-3 text-[11px] font-bold transition ${
-              range === value ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
+            className={`h-9 flex-1 rounded-[10px] px-3 text-[12px] font-bold transition ${
+              range === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             {rangeLabels[value]}
@@ -277,9 +277,9 @@ export const ReportsView: React.FC = () => {
       <ReportSection
         title="Nhịp công việc 7 ngày"
         icon={TrendingUp}
-        trailing={<span className="text-[10px] font-semibold text-slate-400">{weekCompleted}/{weekPlanned} việc</span>}
+        trailing={<span className="text-[11px] font-semibold text-slate-400">{weekCompleted}/{weekPlanned} việc</span>}
       >
-        <div className="rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs sm:p-4">
+        <div className="rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 p-3.5 shadow-sm sm:p-4">
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {activity.map((row) => (
               <div key={row.date} className="min-w-0 text-center">
@@ -287,31 +287,31 @@ export const ReportsView: React.FC = () => {
                   <span className="w-2 rounded-full bg-slate-300" style={{ height: `${Math.max(5, (row.planned / activityMax) * 72)}%` }} title={`${row.planned} việc đã lên lịch`} />
                   <span className="w-2 rounded-full bg-indigo-500" style={{ height: `${Math.max(5, (row.completed / activityMax) * 72)}%` }} title={`${row.completed} việc hoàn thành`} />
                 </div>
-                <p className="mt-1.5 truncate text-[9px] font-bold text-slate-500">{shortDay(row.date)}</p>
-                <p className="mt-0.5 text-[8px] font-medium tabular-nums text-slate-400">{row.completed}/{row.planned}</p>
+                <p className="mt-1.5 truncate text-[11px] font-bold text-slate-500">{shortDay(row.date)}</p>
+                <p className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-400">{row.completed}/{row.planned}</p>
               </div>
             ))}
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
             <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-              <p className="text-[9px] font-semibold text-slate-400">Ngày hoàn thành nhiều nhất</p>
+              <p className="text-[11px] font-semibold text-slate-400">Ngày hoàn thành nhiều nhất</p>
               <p className="mt-0.5 text-xs font-bold text-slate-800">{bestDay ? `${shortDay(bestDay.date)} · ${bestDay.completed} việc` : '—'}</p>
             </div>
             <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-              <p className="text-[9px] font-semibold text-slate-400">Tổng 7 ngày</p>
+              <p className="text-[11px] font-semibold text-slate-400">Tổng 7 ngày</p>
               <p className="mt-0.5 text-xs font-bold text-slate-800">{weekCompleted} hoàn thành · {weekPlanned} lên lịch</p>
             </div>
           </div>
 
-          <div className="mt-2 flex items-center gap-3 text-[8px] font-semibold text-slate-400">
+          <div className="mt-2 flex items-center gap-3 text-[11px] font-semibold text-slate-400">
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-slate-300" /> Đã lên lịch</span>
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-indigo-500" /> Hoàn thành</span>
           </div>
         </div>
       </ReportSection>
 
-      <ReportSection title="Thời gian làm việc" icon={TimerReset} trailing={<span className="text-[10px] font-semibold text-slate-400">Từ Focus timer</span>}>
+      <ReportSection title="Thời gian làm việc" icon={TimerReset} trailing={<span className="text-[11px] font-semibold text-slate-400">Từ Focus timer</span>}>
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
           <StatCard
             label="Tập trung thực tế"
@@ -341,7 +341,7 @@ export const ReportsView: React.FC = () => {
       <ReportSection
         title="Đọc sách"
         icon={BookOpen}
-        trailing={<span className="text-[10px] font-semibold text-slate-400">Tính từ v0.8.4</span>}
+        trailing={<span className="text-[11px] font-semibold text-slate-400">Tính từ v0.8.4</span>}
       >
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <StatCard
@@ -374,18 +374,18 @@ export const ReportsView: React.FC = () => {
           />
         </div>
 
-        <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
+        <div className="rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 p-4 shadow-sm">
           <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
             <div>
-              <p className="text-[9px] font-semibold text-slate-400">Số phiên</p>
+              <p className="text-[11px] font-semibold text-slate-400">Số phiên</p>
               <p className="mt-1 text-sm font-bold text-slate-800">{readingReport.sessionCount || '—'}</p>
             </div>
             <div>
-              <p className="text-[9px] font-semibold text-slate-400">Lâu nhất</p>
+              <p className="text-[11px] font-semibold text-slate-400">Lâu nhất</p>
               <p className="mt-1 text-sm font-bold text-slate-800">{readingReport.longestSessionSeconds ? formatReadingTime(readingReport.longestSessionSeconds) : '—'}</p>
             </div>
             <div>
-              <p className="text-[9px] font-semibold text-slate-400">Thường đọc</p>
+              <p className="text-[11px] font-semibold text-slate-400">Thường đọc</p>
               <p className="mt-1 truncate text-sm font-bold text-slate-800">{readingReport.favoriteTimeLabel || '—'}</p>
             </div>
           </div>
@@ -393,19 +393,19 @@ export const ReportsView: React.FC = () => {
           <div className="mt-3 space-y-2">
             {readingReport.timeWindows.map((window) => (
               <div key={window.key} className="grid grid-cols-[92px_minmax(0,1fr)_48px] items-center gap-2">
-                <span className="truncate text-[9px] font-semibold text-slate-500">{window.label}</span>
+                <span className="truncate text-[11px] font-semibold text-slate-500">{window.label}</span>
                 <span className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                   <span className="block h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(0, (window.seconds / readingWindowMax) * 100)}%` }} />
                 </span>
-                <span className="text-right text-[9px] font-bold tabular-nums text-slate-400">{window.seconds ? Math.round(window.seconds / 60) : 0}p</span>
+                <span className="text-right text-[11px] font-bold tabular-nums text-slate-400">{window.seconds ? Math.round(window.seconds / 60) : 0}p</span>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-[9px] leading-4 text-slate-400">Khung giờ, số phiên và phiên lâu nhất chỉ được đo từ v0.9.19; tổng thời gian cũ vẫn được giữ nguyên.</p>
+          <p className="mt-3 text-[11px] leading-5 text-slate-400">Khung giờ, số phiên và phiên lâu nhất chỉ được đo từ v0.9.19; tổng thời gian cũ vẫn được giữ nguyên.</p>
         </div>
       </ReportSection>
 
-      <ReportSection title="Gym" icon={Dumbbell} trailing={<span className="text-[10px] font-semibold text-slate-400">Lịch sử kg & reps</span>}>
+      <ReportSection title="Gym" icon={Dumbbell} trailing={<span className="text-[11px] font-semibold text-slate-400">Lịch sử kg & reps</span>}>
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <StatCard label="Ngày có tập" value={`${exerciseReport.activeDays}`} meta="Ngày có ít nhất 1 bài được ghi" icon={CalendarDays} tone="border-indigo-200/70 bg-indigo-50 text-indigo-700" />
           <StatCard label="Lần ghi bài" value={`${exerciseReport.loggedEntries}`} meta="Mỗi bài / mỗi ngày tính 1 lần" icon={Dumbbell} tone="border-sky-200/70 bg-sky-50 text-sky-700" />
@@ -414,18 +414,18 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {exerciseReport.trends.length > 0 ? (
-          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">
+          <div className="overflow-hidden rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 shadow-sm">
             {exerciseReport.trends.slice(0, 5).map((trend, index) => (
               <div key={trend.key} className={`flex items-center justify-between gap-3 px-4 py-3 ${index ? 'border-t border-slate-100' : ''}`}>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-bold text-slate-800">{trend.label}</p>
-                  <p className="mt-0.5 text-[9px] font-medium text-slate-400">{trend.latest.date}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-slate-400">{trend.latest.date}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-[11px] font-bold tabular-nums text-slate-700">
                     {trend.latest.weight ? `${trend.latest.weight} kg` : '—'} · {trend.latest.reps ? `${trend.latest.reps} reps` : '—'}
                   </p>
-                  <p className="mt-0.5 text-[9px] font-semibold text-slate-400">
+                  <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
                     {trend.weightDelta !== null ? `${trend.weightDelta > 0 ? '+' : ''}${decimal.format(trend.weightDelta)} kg` : 'kg —'}
                     {' · '}
                     {trend.repsDelta !== null ? `${trend.repsDelta > 0 ? '+' : ''}${decimal.format(trend.repsDelta)} reps` : 'reps —'}
@@ -440,7 +440,7 @@ export const ReportsView: React.FC = () => {
       </ReportSection>
 
       <ReportSection title="Dinh dưỡng & cơ thể" icon={UtensilsCrossed}>
-        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs lg:grid-cols-4">
+        <div className="grid grid-cols-2 overflow-hidden rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 shadow-sm lg:grid-cols-4">
           <div className="border-b border-r border-slate-100 lg:border-b-0">
             <NutritionCell label="Calories TB" value={nutritionReport.averageCalories === null ? '—' : whole.format(nutritionReport.averageCalories)} target={`/ ${whole.format(nutrition.profile.calorieTarget)} kcal`} progress={calorieProgress} footer={`${nutritionReport.calorieTargetDays}/${nutritionReport.loggedDays} ngày đạt`} icon={UtensilsCrossed} />
           </div>
@@ -459,36 +459,36 @@ export const ReportsView: React.FC = () => {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs">
+        <div className="grid grid-cols-3 gap-2 rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 p-3.5 shadow-sm">
           <div>
-            <p className="text-[9px] font-semibold text-slate-400">Calories đạt vùng</p>
+            <p className="text-[11px] font-semibold text-slate-400">Calories đạt vùng</p>
             <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.calorieAdherenceRate === null ? '—' : `${nutritionReport.calorieAdherenceRate}%`}</p>
           </div>
           <div>
-            <p className="text-[9px] font-semibold text-slate-400">Protein đạt</p>
+            <p className="text-[11px] font-semibold text-slate-400">Protein đạt</p>
             <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.proteinAdherenceRate === null ? '—' : `${nutritionReport.proteinAdherenceRate}%`}</p>
           </div>
           <div>
-            <p className="text-[9px] font-semibold text-slate-400">Steps đạt</p>
+            <p className="text-[11px] font-semibold text-slate-400">Steps đạt</p>
             <p className="mt-1 text-sm font-bold text-slate-800">{nutritionReport.stepAdherenceRate === null ? '—' : `${nutritionReport.stepAdherenceRate}%`}</p>
           </div>
         </div>
         {nutritionReport.averageCalorieDeviation !== null ? (
-          <p className="px-1 text-[9px] font-medium text-slate-400">Sai lệch calories trung bình: {whole.format(nutritionReport.averageCalorieDeviation)} kcal/ngày so với mục tiêu.</p>
+          <p className="px-1 text-[11px] font-medium text-slate-400">Sai lệch calories trung bình: {whole.format(nutritionReport.averageCalorieDeviation)} kcal/ngày so với mục tiêu.</p>
         ) : null}
       </ReportSection>
 
-      <ReportSection title="Tiến độ dự án" icon={Layers} trailing={<span className="text-[10px] font-semibold text-slate-400">{projectRows.length} dự án</span>}>
+      <ReportSection title="Tiến độ dự án" icon={Layers} trailing={<span className="text-[11px] font-semibold text-slate-400">{projectRows.length} dự án</span>}>
         {projectRows.length > 0 ? (
           <div className="space-y-2">
             {projectRows.map(({ project, total, done, rate }) => (
-              <div key={project.id} className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-xs">
+              <div key={project.id} className="rounded-[22px] bg-white/90 ring-1 ring-slate-200/70 px-4 py-3.5 shadow-sm">
                 <div className="mb-2.5 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: project.color || '#6366f1' }} />
                     <p className="truncate text-sm font-bold text-slate-900">{project.name}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2 text-[10px]">
+                  <div className="flex shrink-0 items-center gap-2 text-[11px]">
                     <span className="font-medium text-slate-400">{done}/{total}</span>
                     <span className="font-bold tabular-nums text-slate-700">{rate}%</span>
                   </div>

@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.24';
-export const APP_UPDATED_AT = '2026-10-01T01:18:00+07:00';
+export const APP_VERSION = '0.9.25';
+export const APP_UPDATED_AT = '2026-10-01T01:32:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.25',
+    updatedAt: '2026-10-01T01:32:00+07:00',
+    title: 'Drill-down sâu cho Đọc sách và Dinh dưỡng',
+    changes: [
+      'Đọc sách có báo cáo theo từng ngày, tách sách hoạt động và từng session trong ngày.',
+      'Dinh dưỡng mở được từng ngày thành báo cáo riêng, sau đó chia tiếp theo bữa và từng món đã log.',
+      'Báo cáo ngày dinh dưỡng so calories, protein, carb, fat và steps với mục tiêu thật của profile.',
+      'Giữ drill-down theo từng cuốn sách của v0.9.24 và nối thêm tầng ngày/phiên để cùng độ sâu với báo cáo dự án.',
+    ],
+  },
   {
     version: '0.9.24',
     updatedAt: '2026-10-01T01:18:00+07:00',

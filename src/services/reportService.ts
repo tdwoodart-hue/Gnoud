@@ -1,5 +1,5 @@
 import type { Project, Task } from '../types';
-import type { NutritionState } from './nutritionService';
+import type { MealType, NutritionEntry, NutritionState } from './nutritionService';
 import type { ReaderBook, ReaderSession } from './readerService';
 import type { ExerciseLogEntry, ExerciseProgressStore } from './exerciseService';
 
@@ -944,4 +944,158 @@ export function buildExerciseDeepReport(
     .sort((a, b) => (b.latest?.date || '').localeCompare(a.latest?.date || ''));
 
   return { summary, exercises };
+}
+
+
+export interface ReadingDayBookActivity {
+  bookId: string;
+  title: string;
+  author?: string;
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  sessionCount: number;
+}
+
+export interface ReadingDayReport {
+  date: string;
+  readingSeconds: number;
+  listeningSeconds: number;
+  totalSeconds: number;
+  sessionCount: number;
+  longestSessionSeconds: number;
+  books: ReadingDayBookActivity[];
+  sessions: ReadingSessionReport[];
+}
+
+export interface NutritionMealReport {
+  meal: MealType;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  items: NutritionEntry[];
+}
+
+export interface NutritionDayReport {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  itemCount: number;
+  steps: number | null;
+  weightKg: number | null;
+  calorieTarget: number;
+  proteinTarget: number;
+  carbTarget: number;
+  fatTarget: number;
+  stepTarget: number;
+  calorieDelta: number;
+  proteinDelta: number;
+  caloriePercent: number;
+  proteinPercent: number;
+  carbPercent: number;
+  fatPercent: number;
+  stepPercent: number | null;
+  meals: NutritionMealReport[];
+}
+
+export function buildReadingDayReport(books: ReaderBook[], date: string): ReadingDayReport {
+  let readingSeconds = 0;
+  let listeningSeconds = 0;
+  const sessions: ReadingSessionReport[] = [];
+  const bookRows: ReadingDayBookActivity[] = [];
+
+  books.forEach((book) => {
+    const bookReading = Math.max(0, Number(book.readingSecondsByDate?.[date]) || 0);
+    const bookListening = Math.max(0, Number(book.listeningSecondsByDate?.[date]) || 0);
+    const bookSessions = (book.sessions || [])
+      .filter((session) => sessionDate(session.startedAt) === date)
+      .map((session) => buildSessionReport(book, session))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+
+    readingSeconds += bookReading;
+    listeningSeconds += bookListening;
+    sessions.push(...bookSessions);
+
+    if (bookReading + bookListening > 0 || bookSessions.length > 0) {
+      bookRows.push({
+        bookId: book.id,
+        title: book.title,
+        author: book.author,
+        readingSeconds: Math.round(bookReading),
+        listeningSeconds: Math.round(bookListening),
+        totalSeconds: Math.round(bookReading + bookListening),
+        sessionCount: bookSessions.length,
+      });
+    }
+  });
+
+  const sortedSessions = sessions.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const longestSessionSeconds = sortedSessions.length
+    ? Math.max(...sortedSessions.map((session) => session.totalSeconds))
+    : 0;
+
+  return {
+    date,
+    readingSeconds: Math.round(readingSeconds),
+    listeningSeconds: Math.round(listeningSeconds),
+    totalSeconds: Math.round(readingSeconds + listeningSeconds),
+    sessionCount: sortedSessions.length,
+    longestSessionSeconds,
+    books: bookRows.sort((a, b) => b.totalSeconds - a.totalSeconds || a.title.localeCompare(b.title)),
+    sessions: sortedSessions,
+  };
+}
+
+export function buildNutritionDayReport(nutrition: NutritionState, date: string): NutritionDayReport {
+  const entries = nutrition.entries
+    .filter((entry) => entry.date === date)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const metric = nutrition.dailyMetrics.find((item) => item.date === date);
+  const mealOrder: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const meals = mealOrder
+    .map((meal): NutritionMealReport => {
+      const items = entries.filter((entry) => entry.meal === meal);
+      return {
+        meal,
+        calories: items.reduce((sum, item) => sum + item.calories, 0),
+        protein: items.reduce((sum, item) => sum + item.protein, 0),
+        carbs: items.reduce((sum, item) => sum + item.carbs, 0),
+        fat: items.reduce((sum, item) => sum + item.fat, 0),
+        items,
+      };
+    })
+    .filter((meal) => meal.items.length > 0);
+
+  const calories = entries.reduce((sum, item) => sum + item.calories, 0);
+  const protein = entries.reduce((sum, item) => sum + item.protein, 0);
+  const carbs = entries.reduce((sum, item) => sum + item.carbs, 0);
+  const fat = entries.reduce((sum, item) => sum + item.fat, 0);
+  const percent = (value: number, target: number) => target > 0 ? Math.round((value / target) * 100) : 0;
+
+  return {
+    date,
+    calories,
+    protein,
+    carbs,
+    fat,
+    itemCount: entries.length,
+    steps: metric?.steps ?? null,
+    weightKg: metric?.weightKg ?? null,
+    calorieTarget: nutrition.profile.calorieTarget,
+    proteinTarget: nutrition.profile.proteinTarget,
+    carbTarget: nutrition.profile.carbTarget,
+    fatTarget: nutrition.profile.fatTarget,
+    stepTarget: nutrition.profile.stepTarget,
+    calorieDelta: calories - nutrition.profile.calorieTarget,
+    proteinDelta: protein - nutrition.profile.proteinTarget,
+    caloriePercent: percent(calories, nutrition.profile.calorieTarget),
+    proteinPercent: percent(protein, nutrition.profile.proteinTarget),
+    carbPercent: percent(carbs, nutrition.profile.carbTarget),
+    fatPercent: percent(fat, nutrition.profile.fatTarget),
+    stepPercent: metric?.steps === undefined ? null : percent(metric.steps, nutrition.profile.stepTarget),
+    meals,
+  };
 }

@@ -5,10 +5,22 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.11';
-export const APP_UPDATED_AT = '2026-09-30T16:08:00+07:00';
+export const APP_VERSION = '0.9.12';
+export const APP_UPDATED_AT = '2026-09-30T16:22:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.12',
+    updatedAt: '2026-09-30T16:22:00+07:00',
+    title: 'Sửa Safari/iPhone chặn phát giọng online',
+    changes: [
+      'Bỏ mẹo phát audio im lặng để mở khóa vì Safari vẫn có thể chặn.',
+      'Khi mở Nghe sách, app tải sẵn đoạn audio đầu tiên của vị trí hiện tại.',
+      'Khi bấm Phát, audio đã sẵn sàng và play() chạy trực tiếp trong cú chạm của người dùng.',
+      'Nếu audio chưa kịp tải, app chuẩn bị trước rồi yêu cầu chạm Phát thêm một lần thay vì tự rơi sang giọng trên máy.',
+      'Hiện trạng thái Đang chuẩn bị giọng và xử lý resume audio rõ ràng hơn.',
+    ],
+  },
   {
     version: '0.9.11',
     updatedAt: '2026-09-30T16:08:00+07:00',

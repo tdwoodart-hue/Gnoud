@@ -17,3 +17,11 @@ test('desktop browser keeps popup flow', () => {
 test('unauthorized domain error tells the user the real configuration problem', () => {
   assert.equal(authErrorMessage({ code: 'auth/unauthorized-domain' }), 'Tên miền hiện tại chưa được cho phép trong Firebase.');
 });
+
+
+test('user mismatch tells PIN recovery to use the correct Google account', () => {
+  assert.equal(
+    authErrorMessage({ code: 'auth/user-mismatch' }),
+    'Hãy xác minh đúng tài khoản Google đang dùng trong Gnoud.',
+  );
+});

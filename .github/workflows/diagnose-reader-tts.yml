@@ -33,3 +33,19 @@ jobs:
           echo "--- body prefix ---"
           head -c 800 /tmp/post-body.bin || true
           echo
+
+      - name: Save probe results
+        shell: bash
+        run: |
+          mkdir -p /tmp/reader-tts-probe
+          cp /tmp/get-headers.txt /tmp/reader-tts-probe/get-headers.txt || true
+          cp /tmp/get-body.txt /tmp/reader-tts-probe/get-body.txt || true
+          cp /tmp/post-headers.txt /tmp/reader-tts-probe/post-headers.txt || true
+          cp /tmp/post-body.bin /tmp/reader-tts-probe/post-body.bin || true
+
+      - name: Upload probe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reader-tts-prod-probe
+          path: /tmp/reader-tts-probe
+          retention-days: 1

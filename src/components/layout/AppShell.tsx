@@ -209,20 +209,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
                         active ? 'bg-white text-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {item.id === 'reader' ? (
-                  <img
-                    key={readerAnimating && active ? `reader-animated-${readerAnimationKey}` : 'reader-static'}
-                    src={readerAnimating && active ? readerBookAnimated : readerBookStatic}
-                    alt=""
-                    aria-hidden="true"
-                    draggable={false}
-                    className={`h-[22px] w-[22px] object-contain transition-opacity ${
-                      active ? 'opacity-100' : 'opacity-55'
-                    }`}
-                  />
-                ) : (
-                  <Icon className="h-[18px] w-[18px]" />
-                )}
+                        <Icon className="h-[18px] w-[18px]" />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-bold">{item.label}</span>
@@ -281,7 +268,20 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <span className={`grid h-8 w-11 place-items-center rounded-xl transition-colors ${
                 active ? 'bg-indigo-50 text-indigo-600' : ''
               }`}>
-                <Icon className="h-[18px] w-[18px]" />
+                {item.id === 'reader' ? (
+                  <img
+                    key={readerAnimating && active ? `reader-animated-${readerAnimationKey}` : 'reader-static'}
+                    src={readerAnimating && active ? readerBookAnimated : readerBookStatic}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className={`h-[22px] w-[22px] object-contain transition-opacity ${
+                      active ? 'opacity-100' : 'opacity-55'
+                    }`}
+                  />
+                ) : (
+                  <Icon className="h-[18px] w-[18px]" />
+                )}
               </span>
               <span className="max-w-full truncate leading-none">{item.label}</span>
             </button>

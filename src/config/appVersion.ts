@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.25';
-export const APP_UPDATED_AT = '2026-10-01T01:32:00+07:00';
+export const APP_VERSION = '0.9.26';
+export const APP_UPDATED_AT = '2026-10-01T17:22:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.26',
+    updatedAt: '2026-10-01T17:22:00+07:00',
+    title: 'Icon Đọc sách chuyển động trên mobile',
+    changes: [
+      'Thay icon Đọc sách ở bottom bar mobile bằng đúng mẫu book animation đã chọn.',
+      'Icon đứng yên ở trạng thái thường; chỉ chạy animation khi bấm tab Đọc sách rồi tự trở về frame tĩnh.',
+      'Giữ nguyên các icon, layout và điều hướng còn lại.',
+    ],
+  },
   {
     version: '0.9.25',
     updatedAt: '2026-10-01T01:32:00+07:00',

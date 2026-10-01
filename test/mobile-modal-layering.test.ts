@@ -32,3 +32,13 @@ test('app theme is persisted and exposed from Settings', () => {
   assert.match(themeService, /gnoud-theme-v1/, 'theme preference must be persisted');
   assert.match(css, /html\.dark/, 'dark theme palette must be scoped to the dark root class');
 });
+
+
+test('reader bottom-nav icon only animates after pressing the reader tab', () => {
+  const appShell = readFileSync('src/components/layout/AppShell.tsx', 'utf8');
+
+  assert.match(appShell, /readerBookAnimated/, 'reader tab must use the selected animated book asset');
+  assert.match(appShell, /readerBookStatic/, 'reader tab must keep a static frame outside the click animation');
+  assert.match(appShell, /item\.id === 'reader'[\s\S]*playReaderAnimation\(\)/, 'reader animation must start from the reader tab press');
+  assert.match(appShell, /readerAnimating && active \? readerBookAnimated : readerBookStatic/, 'the GIF must not loop when the reader tab is idle');
+});

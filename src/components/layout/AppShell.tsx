@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   BarChart3,
@@ -17,6 +17,8 @@ import { useSecurity } from '../../context/SecurityContext';
 import { NavTab } from '../../types';
 import { PRIMARY_NAV_ITEMS } from '../../config/navigation';
 import { SettingsModal } from '../settings/SettingsModal';
+import readerBookAnimated from '../../assets/navigation/reader-book-active.gif';
+import readerBookStatic from '../../assets/navigation/reader-book-static.png';
 
 const icons: Record<NavTab, React.FC<{ className?: string }>> = {
   today: Sun,
@@ -37,6 +39,27 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { pinEnabled, lockApp } = useSecurity();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [readerAnimating, setReaderAnimating] = useState(false);
+  const [readerAnimationKey, setReaderAnimationKey] = useState(0);
+  const readerAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const playReaderAnimation = () => {
+    if (readerAnimationTimerRef.current) {
+      clearTimeout(readerAnimationTimerRef.current);
+    }
+    setReaderAnimationKey((value) => value + 1);
+    setReaderAnimating(true);
+    readerAnimationTimerRef.current = setTimeout(() => {
+      setReaderAnimating(false);
+      readerAnimationTimerRef.current = null;
+    }, 2050);
+  };
+
+  useEffect(() => () => {
+    if (readerAnimationTimerRef.current) {
+      clearTimeout(readerAnimationTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const open = () => setSettingsOpen(true);
@@ -186,7 +209,20 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
                         active ? 'bg-white text-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        <Icon className="h-[18px] w-[18px]" />
+                        {item.id === 'reader' ? (
+                  <img
+                    key={readerAnimating && active ? `reader-animated-${readerAnimationKey}` : 'reader-static'}
+                    src={readerAnimating && active ? readerBookAnimated : readerBookStatic}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className={`h-[22px] w-[22px] object-contain transition-opacity ${
+                      active ? 'opacity-100' : 'opacity-55'
+                    }`}
+                  />
+                ) : (
+                  <Icon className="h-[18px] w-[18px]" />
+                )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-bold">{item.label}</span>
@@ -232,6 +268,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               key={item.id}
               type="button"
               onClick={() => {
+                if (item.id === 'reader') {
+                  playReaderAnimation();
+                }
                 setActiveTab(item.id);
                 setMoreMenuOpen(false);
               }}

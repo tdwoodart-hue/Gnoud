@@ -133,6 +133,21 @@ const themeButtons: Array<{ id: ReaderTheme; label: string; icon: React.FC<{ cla
   { id: 'night', label: 'Tối', icon: Moon },
 ];
 
+function mixChannel(from: number, to: number, amount: number): number {
+  return Math.round(from + (to - from) * amount);
+}
+
+function readerBackground(theme: ReaderTheme, intensity = 35): string {
+  const amount = clamp(intensity, 0, 100) / 100;
+  const palette: Record<ReaderTheme, { from: [number, number, number]; to: [number, number, number] }> = {
+    paper: { from: [255, 255, 255], to: [240, 238, 232] },
+    warm: { from: [252, 248, 240], to: [226, 205, 168] },
+    night: { from: [36, 40, 50], to: [8, 10, 14] },
+  };
+  const { from, to } = palette[theme];
+  return `rgb(${mixChannel(from[0], to[0], amount)} ${mixChannel(from[1], to[1], amount)} ${mixChannel(from[2], to[2], amount)})`;
+}
+
 function formatFileTitle(fileName: string): string {
   return fileName.replace(/\.(pdf|epub|txt|md|markdown)$/i, '').replace(/[-_]+/g, ' ').trim() || 'Sách mới';
 }
@@ -467,6 +482,7 @@ export const ReaderView: React.FC = () => {
   }, [books]);
 
   const readingMode: ReaderReadingMode = activeBook?.readingMode === 'paged' ? 'paged' : 'scroll';
+  const readerColorIntensity = clamp(activeBook?.colorIntensity ?? 35, 0, 100);
 
   const updateBook = (id: string, updates: Partial<ReaderBook>) => {
     setBooks((previous) => previous.map((book) => (
@@ -1765,7 +1781,10 @@ export const ReaderView: React.FC = () => {
   };
 
   const readingOverlay = readingOpen && activeBook ? (
-    <div className={`fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden ${themeStyles[activeBook.theme].shell}`}>
+    <div
+      className={`fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden transition-colors duration-150 ${themeStyles[activeBook.theme].shell}`}
+      style={{ backgroundColor: readerBackground(activeBook.theme, readerColorIntensity) }}
+    >
       <div
         className="relative flex min-h-0 flex-1 overflow-hidden"
         onPointerDown={() => { readerActivityAtRef.current = Date.now(); }}
@@ -2133,6 +2152,26 @@ export const ReaderView: React.FC = () => {
                         );
                       })}
                     </div>
+                    <label className="mt-4 block">
+                      <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>
+                        <span>Độ màu</span>
+                        <span>{Math.round(readerColorIntensity)}%</span>
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={readerColorIntensity}
+                        onChange={(event) => updateBook(activeBook.id, { colorIntensity: Number(event.target.value) })}
+                        className="mt-3 w-full accent-indigo-500"
+                        aria-label="Độ màu nền khi đọc"
+                      />
+                      <div className={`mt-1.5 flex justify-between text-[9px] font-medium ${themeStyles[activeBook.theme].muted}`}>
+                        <span>Nhẹ</span>
+                        <span>Đậm</span>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

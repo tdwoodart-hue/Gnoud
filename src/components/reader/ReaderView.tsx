@@ -485,11 +485,20 @@ export const ReaderView: React.FC = () => {
   const readerColorIntensity = clamp(activeBook?.colorIntensity ?? 35, 0, 100);
 
   const updateBook = (id: string, updates: Partial<ReaderBook>) => {
-    setBooks((previous) => previous.map((book) => (
-      book.id === id
-        ? { ...book, ...updates, updatedAt: new Date().toISOString() }
-        : book
-    )));
+    const persistPositionNow = Object.prototype.hasOwnProperty.call(updates, 'lastPositionAt');
+    setBooks((previous) => {
+      const next = previous.map((book) => (
+        book.id === id
+          ? { ...book, ...updates, updatedAt: new Date().toISOString() }
+          : book
+      ));
+      // Vị trí đọc phải sống sót ngay cả khi Reader unmount hoặc app vào background
+      // trước khi useEffect lưu thư viện kịp chạy.
+      if (persistPositionNow && loadedFor === storageIdentity) {
+        saveReaderLibrary(user?.uid, next);
+      }
+      return next;
+    });
   };
 
   useEffect(() => {

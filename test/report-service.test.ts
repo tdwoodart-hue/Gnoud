@@ -287,3 +287,39 @@ test('nutrition day report groups meals and keeps item-level data', () => {
   assert.equal(report.steps, 9000);
   assert.equal(report.weightKg, 65.2);
 });
+
+
+test('nutrition report excludes untracked days from kcal and macro averages', () => {
+  const nutrition: NutritionState = {
+    profile: {
+      sex: 'male', age: 22, heightCm: 169, weightKg: 65.5, activityLevel: 'desk_training', goal: 'recomp',
+      calorieTarget: 2100, proteinTarget: 130, carbTarget: 270, fatTarget: 55, stepTarget: 8000,
+    },
+    entries: [
+      { id: 'exact', date: '2026-10-01', name: 'Ngày đủ', meal: 'lunch', calories: 2000, protein: 130, carbs: 250, fat: 55, createdAt: '1' },
+      { id: 'estimated', date: '2026-10-02', name: 'Ăn ngoài', meal: 'lunch', tracking: 'estimated', calories: 2200, protein: 120, carbs: 280, fat: 70, createdAt: '2' },
+      { id: 'known-part', date: '2026-10-03', name: 'Bữa sáng', meal: 'breakfast', calories: 500, protein: 30, carbs: 50, fat: 20, createdAt: '3' },
+      { id: 'missing', date: '2026-10-03', name: 'Bữa không theo dõi', meal: 'dinner', tracking: 'untracked', calories: 0, protein: 0, carbs: 0, fat: 0, createdAt: '4' },
+    ],
+    dailyMetrics: [],
+  };
+
+  const report = buildNutritionReport(nutrition, '7d', '2026-10-03');
+  assert.equal(report.loggedDays, 3);
+  assert.equal(report.trackedDays, 2);
+  assert.equal(report.estimatedDays, 1);
+  assert.equal(report.incompleteDays, 1);
+  assert.equal(report.averageCalories, 2100);
+  assert.equal(report.averageProtein, 125);
+
+  const deep = buildNutritionDeepReport(nutrition, '7d', '2026-10-03');
+  const incomplete = deep.daily.find((day) => day.date === '2026-10-03');
+  assert.equal(incomplete?.tracking, 'untracked');
+  assert.equal(incomplete?.calories, 500);
+  assert.equal(incomplete?.calorieTargetMet, false);
+
+  const day = buildNutritionDayReport(nutrition, '2026-10-03');
+  assert.equal(day.tracking, 'untracked');
+  assert.equal(day.calories, 500);
+  assert.equal(day.meals.find((meal) => meal.meal === 'dinner')?.tracking, 'untracked');
+});

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   applyWorkoutQuickAction,
   buildExerciseProgressStorageKey,
+  DEFAULT_EXERCISE_LIBRARY,
   exerciseKey,
   shouldClaimLegacyExerciseProgress,
   updateExerciseProgress,
@@ -59,4 +60,17 @@ test('legacy gym data is only claimable by an authenticated account without scop
   assert.equal(shouldClaimLegacyExerciseProgress('user-a', true), false);
   assert.equal(shouldClaimLegacyExerciseProgress('user-a', false), true);
   assert.notEqual(buildExerciseProgressStorageKey('user-a'), buildExerciseProgressStorageKey('user-b'));
+});
+
+
+test('built-in exercise catalog covers main muscle groups without duplicate exercise keys', () => {
+  const keys = DEFAULT_EXERCISE_LIBRARY.map((item) => exerciseKey(item.label));
+  assert.equal(new Set(keys).size, keys.length);
+  const groups = new Set(DEFAULT_EXERCISE_LIBRARY.map((item) => item.group));
+  ['Ngực', 'Lưng', 'Vai', 'Tay trước', 'Tay sau', 'Chân & mông', 'Core'].forEach((group) => {
+    assert.ok(groups.has(group as any));
+  });
+  ['Bench Press', 'Lat Pulldown', 'Dumbbell Lateral Raise', 'Hammer Curl', 'Rope Pushdown', 'Leg Press', 'Romanian Deadlift', 'Cable Crunch'].forEach((label) => {
+    assert.ok(DEFAULT_EXERCISE_LIBRARY.some((item) => item.label === label));
+  });
 });

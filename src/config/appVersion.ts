@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.30';
-export const APP_UPDATED_AT = '2026-10-02T22:05:00+07:00';
+export const APP_VERSION = '0.9.31';
+export const APP_UPDATED_AT = '2026-10-02T22:25:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.31',
+    updatedAt: '2026-10-02T22:25:00+07:00',
+    title: 'Khôi phục trang đọc sau khi mở lại web app',
+    changes: [
+      'Reader chỉ restore vị trí sau khi nội dung EPUB/TEXT thực sự sẵn sàng, không còn clamp tạm về trang 1 lúc khởi động.',
+      'Scroll phát sinh do hệ thống đang restore vị trí bị bỏ qua nên không thể ghi ngược trang 1 thành vị trí mới.',
+      'Khôi phục dựa trên tỷ lệ tiến độ trong chương để giữ đúng vị trí ngay cả khi viewport làm số trang thay đổi sau reload.',
+    ],
+  },
   {
     version: '0.9.30',
     updatedAt: '2026-10-02T22:05:00+07:00',

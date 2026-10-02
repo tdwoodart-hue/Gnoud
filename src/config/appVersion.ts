@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.32';
-export const APP_UPDATED_AT = '2026-10-02T23:05:00+07:00';
+export const APP_VERSION = '0.9.33';
+export const APP_UPDATED_AT = '2026-10-02T23:20:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.33',
+    updatedAt: '2026-10-02T23:20:00+07:00',
+    title: 'Bổ sung thư viện bài tập tự chọn',
+    changes: [
+      'Thêm gần 50 bài phổ biến cho ngực, lưng, vai, tay, chân-mông và core để đổi bài linh hoạt theo buổi tập thực tế.',
+      'Bài từng tập và lịch sử kg/reps vẫn được ưu tiên trên cùng; catalog hệ thống chỉ bổ sung các bài còn thiếu.',
+      'Tìm kiếm nhận cả nhóm cơ và alias tiếng Việt như kéo xô, cuốn búa, đẩy ngực, Romanian deadlift.',
+    ],
+  },
   {
     version: '0.9.32',
     updatedAt: '2026-10-02T23:05:00+07:00',

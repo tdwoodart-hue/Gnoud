@@ -52,6 +52,7 @@ import {
 } from '../../services/taskSwipe';
 import {
   applyWorkoutQuickAction,
+  DEFAULT_EXERCISE_LIBRARY,
   exerciseKey,
   loadExerciseProgress,
   persistExerciseProgress,
@@ -89,6 +90,9 @@ type ExerciseLibraryOption = {
   label: string;
   taskTitle?: string;
   lastUsed?: string;
+  group?: string;
+  aliases?: string[];
+  source?: 'history' | 'reference' | 'catalog';
 };
 
 type ExercisePickerState =
@@ -611,6 +615,7 @@ export const TodayView: React.FC = () => {
           label: reference.label,
           taskTitle: task.title,
           lastUsed: task.plannedDate || task.createdAt?.slice(0, 10),
+          source: 'history',
         });
       });
     });
@@ -618,12 +623,29 @@ export const TodayView: React.FC = () => {
     referenceLibrary.forEach((item) => {
       const key = exerciseKey(item.label);
       if (!key || byKey.has(key)) return;
-      byKey.set(key, { key, label: item.label });
+      byKey.set(key, { key, label: item.label, source: 'reference' });
+    });
+
+    DEFAULT_EXERCISE_LIBRARY.forEach((item) => {
+      const key = exerciseKey(item.label);
+      if (!key || byKey.has(key)) return;
+      byKey.set(key, {
+        key,
+        label: item.label,
+        group: item.group,
+        aliases: item.aliases,
+        source: 'catalog',
+      });
     });
 
     return [...byKey.values()].sort((a, b) => {
       const byDate = (b.lastUsed || '').localeCompare(a.lastUsed || '');
-      return byDate || a.label.localeCompare(b.label, 'vi');
+      if (byDate) return byDate;
+      const sourceRank = { history: 0, reference: 1, catalog: 2 } as const;
+      const bySource = (sourceRank[a.source || 'catalog'] ?? 9) - (sourceRank[b.source || 'catalog'] ?? 9);
+      if (bySource) return bySource;
+      const byGroup = (a.group || '').localeCompare(b.group || '', 'vi');
+      return byGroup || a.label.localeCompare(b.label, 'vi');
     });
   }, [tasks, referenceLibrary]);
 
@@ -769,7 +791,9 @@ export const TodayView: React.FC = () => {
       .filter((option) => !blockedExerciseKeys.has(option.key))
       .filter((option) => {
         if (!pickerQuery) return true;
-        return normalizeExerciseSearch(`${option.label} ${option.taskTitle || ''}`).includes(pickerQuery);
+        return normalizeExerciseSearch(
+          `${option.label} ${option.taskTitle || ''} ${option.group || ''} ${(option.aliases || []).join(' ')}`,
+        ).includes(pickerQuery);
       })
       .slice(0, 30);
 
@@ -1429,7 +1453,7 @@ export const TodayView: React.FC = () => {
                     {exercisePicker.mode === 'replace' ? 'Thay bằng bài đã có' : 'Thêm bài đã có'}
                   </h2>
                   <p className="mt-0.5 text-[10px] text-slate-400">
-                    Dùng lại ảnh tham khảo và lịch sử kg/reps của đúng bài đó.
+                    Bài từng tập ở trên · thư viện hệ thống ở dưới. Chọn tự do, không phụ thuộc lịch mẫu.
                   </p>
                 </div>
                 <button
@@ -1447,7 +1471,7 @@ export const TodayView: React.FC = () => {
                   autoFocus
                   value={exercisePickerQuery}
                   onChange={(event) => setExercisePickerQuery(event.target.value)}
-                  placeholder="Tìm bài tập đã từng dùng…"
+                  placeholder="Tìm bài tập, nhóm cơ hoặc tên tiếng Việt…"
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400 focus:bg-white"
                 />
               </div>
@@ -1476,7 +1500,9 @@ export const TodayView: React.FC = () => {
                                 ? `Gần nhất: ${latest.weight || '—'}kg × ${latest.reps || '—'} reps`
                                 : option.taskTitle
                                   ? `Đã dùng trong “${option.taskTitle}”`
-                                  : 'Đã có trong thư viện bài tập'}
+                                  : option.source === 'catalog'
+                                    ? `${option.group || 'Gym'} · thư viện có sẵn`
+                                    : 'Đã có trong thư viện bài tập'}
                             </span>
                           </span>
                           <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />

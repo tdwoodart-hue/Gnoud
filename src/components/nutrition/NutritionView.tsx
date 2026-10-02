@@ -28,6 +28,7 @@ import {
   fromLocalIso,
   getDailyMetric,
   getEntriesForDate,
+  getNutritionDayTracking,
   getPreviousWeight,
   getTotals,
   getWeekDates,
@@ -37,6 +38,7 @@ import {
   NutritionGoal,
   NutritionEntry,
   NutritionProfile,
+  NutritionTrackingMode,
   recommendedTargets,
   removeNutritionBatch,
   saveNutritionState,
@@ -74,6 +76,18 @@ const mealLabels: Record<MealType, string> = {
   lunch: 'Bữa trưa',
   dinner: 'Bữa tối',
   snack: 'Ăn nhẹ',
+};
+
+const trackingLabels: Record<NutritionTrackingMode, string> = {
+  exact: 'Chính xác',
+  estimated: 'Ước tính',
+  untracked: 'Không theo dõi',
+};
+
+const trackingHelp: Record<NutritionTrackingMode, string> = {
+  exact: 'Đã cân hoặc biết khá rõ khẩu phần.',
+  estimated: 'Ăn ngoài / khó cân: vẫn lưu kcal và macro nhưng đánh dấu là ước tính.',
+  untracked: 'Chỉ lưu dấu bữa ăn. Kcal và macro của ngày sẽ không được dùng để chấm mục tiêu hay tính trung bình.',
 };
 
 const activityLabels: Record<NutritionActivityLevel, string> = {
@@ -285,6 +299,7 @@ interface AddEntryModalProps {
   onAdd: (entries: Array<{
     name: string;
     meal: MealType;
+    tracking?: NutritionTrackingMode;
     calories: number;
     protein: number;
     carbs: number;
@@ -300,6 +315,7 @@ interface AddEntryModalProps {
 
 const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onManageFoods, onSaveCustomFood, onAdd }) => {
   const [meal, setMeal] = useState<MealType>('lunch');
+  const [tracking, setTracking] = useState<NutritionTrackingMode>('exact');
   const [foodQuery, setFoodQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(true);
   const [selectedFoodId, setSelectedFoodId] = useState('');
@@ -501,11 +517,24 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (tracking === 'untracked') {
+      onAdd([{
+        name: 'Bữa không theo dõi',
+        meal,
+        tracking: 'untracked',
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+      }]);
+      onClose();
+      return;
+    }
     if (!selectedItems.length) {
       setError('Thêm ít nhất một món vào bữa.');
       return;
     }
-    onAdd(selectedItems.map(({ draftId: _draftId, ...item }) => ({ ...item, meal })));
+    onAdd(selectedItems.map(({ draftId: _draftId, ...item }) => ({ ...item, meal, tracking })));
     onClose();
   };
 
@@ -539,6 +568,33 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
             </button>
           </div>
 
+          <div>
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Độ chính xác</p>
+            <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1">
+              {(['exact', 'estimated', 'untracked'] as NutritionTrackingMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setTracking(mode);
+                    setError('');
+                  }}
+                  className={`min-h-9 rounded-lg px-2 text-[10px] font-bold transition ${tracking === mode ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+                >
+                  {trackingLabels[mode]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px] leading-4 text-slate-400">{trackingHelp[tracking]}</p>
+          </div>
+
+          {tracking === 'untracked' ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+              <p className="text-[11px] font-bold text-amber-900">Bữa này sẽ không được tính là 0 kcal</p>
+              <p className="mt-1 text-[10px] leading-4 text-amber-700">App chỉ ghi nhận rằng bạn đã ăn nhưng không biết đủ dữ liệu. Ngày này sẽ được đánh dấu thiếu dữ liệu trong báo cáo.</p>
+            </div>
+          ) : (
+            <>
           {!manualMode ? (
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/35 p-3">
               <div className="relative">
@@ -749,11 +805,14 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ date, foods, onClose, onM
             </div>
           ) : null}
 
+            </>
+          )}
+
           {error ? <p className="text-[11px] font-semibold text-rose-600">{error}</p> : null}
         </div>
 
-        <button type="submit" disabled={!selectedItems.length} className="mt-4 h-11 w-full rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
-          Lưu {selectedItems.length ? `${selectedItems.length} món` : 'bữa ăn'}
+        <button type="submit" disabled={tracking !== 'untracked' && !selectedItems.length} className="mt-4 h-11 w-full rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
+          {tracking === 'untracked' ? 'Lưu bữa không theo dõi' : `Lưu ${selectedItems.length ? `${selectedItems.length} món` : 'bữa ăn'}`}
         </button>
       </form>
     </div>
@@ -1532,7 +1591,10 @@ export const NutritionView: React.FC = () => {
   // Tự động thu thập các món người dùng đã tự nhập trước đó vào kho món chung
   useEffect(() => {
     if (!nutrition.entries.length || !foods.length) return;
-    const extracted = extractCustomFoodsFromEntries(nutrition.entries, foods);
+    const extracted = extractCustomFoodsFromEntries(
+      nutrition.entries.filter((entry) => entry.tracking !== 'untracked'),
+      foods,
+    );
     if (extracted.length > 0) {
       setFoods((current) => {
         const merged = mergeFoods(current, extracted);
@@ -1573,11 +1635,13 @@ export const NutritionView: React.FC = () => {
     [nutrition.entries, selectedDate],
   );
   const dayTotals = useMemo(() => getTotals(dayEntries), [dayEntries]);
+  const dayTracking = useMemo(() => getNutritionDayTracking(dayEntries), [dayEntries]);
+  const dayHasUntracked = dayTracking === 'untracked';
   const mealGroups = useMemo(
     () => (Object.keys(mealLabels) as MealType[])
       .map((meal) => {
         const entries = dayEntries.filter((entry) => entry.meal === meal);
-        return { meal, entries, totals: getTotals(entries) };
+        return { meal, entries, totals: getTotals(entries), tracking: getNutritionDayTracking(entries) };
       })
       .filter((group) => group.entries.length > 0),
     [dayEntries],
@@ -1585,7 +1649,7 @@ export const NutritionView: React.FC = () => {
   const dayMetric = getDailyMetric(nutrition.dailyMetrics, selectedDate);
   const previousWeightMetric = getPreviousWeight(nutrition.dailyMetrics, selectedDate);
   const caloriesLeft = profile.calorieTarget - dayTotals.calories;
-  const caloriePercent = clampPercent(dayTotals.calories, profile.calorieTarget);
+  const caloriePercent = dayHasUntracked ? 0 : clampPercent(dayTotals.calories, profile.calorieTarget);
 
   const weekDates = useMemo(() => getWeekDates(selectedDateObject), [selectedDate]);
   const weekRows = useMemo(
@@ -1597,18 +1661,21 @@ export const NutritionView: React.FC = () => {
         key,
         entries,
         totals: getTotals(entries),
+        tracking: getNutritionDayTracking(entries),
         metric: getDailyMetric(nutrition.dailyMetrics, key),
       };
     }),
     [weekDates, nutrition.entries, nutrition.dailyMetrics],
   );
   const loggedWeekRows = weekRows.filter((row) => row.entries.length > 0);
-  const weekTotals = getTotals(loggedWeekRows.flatMap((row) => row.entries));
+  const trackedWeekRows = loggedWeekRows.filter((row) => row.tracking !== 'untracked');
+  const weekTotals = getTotals(trackedWeekRows.flatMap((row) => row.entries));
   const loggedDays = loggedWeekRows.length;
-  const avgCalories = loggedDays ? weekTotals.calories / loggedDays : 0;
-  const avgProtein = loggedDays ? weekTotals.protein / loggedDays : 0;
-  const weeklyBalance = loggedWeekRows.reduce((sum, row) => sum + row.totals.calories - tdee, 0);
-  const targetDays = loggedWeekRows.filter(
+  const trackedDays = trackedWeekRows.length;
+  const avgCalories = trackedDays ? weekTotals.calories / trackedDays : 0;
+  const avgProtein = trackedDays ? weekTotals.protein / trackedDays : 0;
+  const weeklyBalance = trackedWeekRows.reduce((sum, row) => sum + row.totals.calories - tdee, 0);
+  const targetDays = trackedWeekRows.filter(
     (row) => Math.abs(row.totals.calories - profile.calorieTarget) <= profile.calorieTarget * 0.1,
   ).length;
   const stepRows = weekRows.filter((row) => typeof row.metric?.steps === 'number');
@@ -1633,6 +1700,7 @@ export const NutritionView: React.FC = () => {
   const addEntries = (entries: Array<{
     name: string;
     meal: MealType;
+    tracking?: NutritionTrackingMode;
     calories: number;
     protein: number;
     carbs: number;
@@ -1791,7 +1859,7 @@ export const NutritionView: React.FC = () => {
                 <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
                   <div>
                     <p className="text-2xl font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(dayTotals.calories)}</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">đã ăn</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{dayHasUntracked ? 'đã ghi · chưa đủ' : 'đã ăn'}</p>
                   </div>
                 </div>
               </div>
@@ -1802,11 +1870,15 @@ export const NutritionView: React.FC = () => {
                   <span className="text-3xl font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(profile.calorieTarget)}</span>
                   <span className="pb-1 text-xs font-semibold text-slate-400">kcal</span>
                 </div>
-                <p className={`mt-2 text-xs font-semibold ${caloriesLeft >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {caloriesLeft >= 0
-                    ? `Còn ${number.format(caloriesLeft)} kcal`
-                    : `Vượt ${number.format(Math.abs(caloriesLeft))} kcal`}
-                </p>
+                {dayHasUntracked ? (
+                  <p className="mt-2 text-xs font-semibold text-amber-600">Có bữa không theo dõi · không chấm mục tiêu</p>
+                ) : (
+                  <p className={`mt-2 text-xs font-semibold ${caloriesLeft >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {caloriesLeft >= 0
+                      ? `Còn ${number.format(caloriesLeft)} kcal`
+                      : `Vượt ${number.format(Math.abs(caloriesLeft))} kcal`}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1838,6 +1910,13 @@ export const NutritionView: React.FC = () => {
               </div>
               <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-600">{profile.proteinTarget}P · {profile.carbTarget}C · {profile.fatTarget}F</span>
             </div>
+            {dayTracking !== 'exact' ? (
+              <div className={`mb-4 rounded-xl px-3 py-2.5 text-[10px] font-semibold leading-4 ${dayHasUntracked ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700'}`}>
+                {dayHasUntracked
+                  ? 'Macro bên dưới chỉ là phần đã ghi. Ngày này bị loại khỏi trung bình kcal/macro.'
+                  : 'Số liệu hôm nay là ước tính; vẫn được tính vào báo cáo nhưng được gắn nhãn riêng.'}
+              </div>
+            ) : null}
             <div className="space-y-4">
               <ProgressRow label="Protein" value={dayTotals.protein} target={profile.proteinTarget} unit="g" icon={Beef} />
               <ProgressRow label="Carb" value={dayTotals.carbs} target={profile.carbTarget} unit="g" icon={Wheat} />
@@ -1900,10 +1979,14 @@ export const NutritionView: React.FC = () => {
                         </span>
                         <div>
                           <p className="text-[11px] font-extrabold text-slate-800">{mealLabels[group.meal]}</p>
-                          <p className="text-[9px] font-medium text-slate-400">{group.entries.length} món</p>
+                          <p className="text-[9px] font-medium text-slate-400">
+                            {group.tracking === 'untracked' ? 'Không theo dõi' : group.tracking === 'estimated' ? `${group.entries.length} món · Ước tính` : `${group.entries.length} món`}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] font-extrabold tabular-nums text-slate-700">{number.format(Math.round(group.totals.calories))} kcal</p>
+                      <p className="text-[11px] font-extrabold tabular-nums text-slate-700">
+                        {group.tracking === 'untracked' ? '— kcal' : `${number.format(Math.round(group.totals.calories))} kcal`}
+                      </p>
                     </div>
 
                     <div className="divide-y divide-slate-100">
@@ -1917,7 +2000,9 @@ export const NutritionView: React.FC = () => {
                               ) : null}
                             </div>
                             <p className="mt-0.5 text-[9px] font-medium text-slate-400">
-                              {number.format(Math.round(entry.calories))} kcal · P {decimal.format(entry.protein)}g · C {decimal.format(entry.carbs)}g · F {decimal.format(entry.fat)}g
+                              {entry.tracking === 'untracked'
+                                ? 'Không tính kcal / macro'
+                                : `${number.format(Math.round(entry.calories))} kcal · P ${decimal.format(entry.protein)}g · C ${decimal.format(entry.carbs)}g · F ${decimal.format(entry.fat)}g`}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -1958,7 +2043,7 @@ export const NutritionView: React.FC = () => {
               ['TB steps', stepRows.length ? `${number.format(Math.round(avgSteps))}` : '—', 'bước/ngày'],
               ['TB cân nặng', weightRows.length ? `${decimal.format(avgWeight)}` : '—', 'kg'],
               ['Ngày ghi ăn', `${loggedDays}/7`, 'ngày'],
-              ['Đúng calories', `${targetDays}/${loggedDays || 0}`, '±10% mục tiêu'],
+              ['Đúng calories', `${targetDays}/${trackedDays || 0}`, 'chỉ ngày đủ dữ liệu'],
             ].map(([label, value, sub]) => (
               <div key={label} className="rounded-2xl border border-slate-200/70 bg-white p-3.5 shadow-xs">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -1975,8 +2060,8 @@ export const NutritionView: React.FC = () => {
                 <p className="mt-0.5 text-[11px] text-slate-400">Mục tiêu {number.format(profile.calorieTarget)} kcal/ngày</p>
               </div>
               <p className={`text-xs font-bold ${weeklyBalance <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {loggedDays === 0
-                  ? 'Chưa có dữ liệu'
+                {trackedDays === 0
+                  ? 'Chưa có ngày đủ dữ liệu'
                   : `${weeklyBalance <= 0 ? 'Thiếu' : 'Dư'} ${number.format(Math.abs(Math.round(weeklyBalance)))} kcal so TDEE`}
               </p>
             </div>
@@ -1984,7 +2069,8 @@ export const NutritionView: React.FC = () => {
             <div className="flex h-44 items-end gap-2 sm:gap-3">
               {weekRows.map((row) => {
                 const hasData = row.entries.length > 0;
-                const barPercent = hasData ? Math.min(100, Math.max(8, (row.totals.calories / profile.calorieTarget) * 78)) : 4;
+                const hasNumericData = hasData && row.tracking !== 'untracked';
+                const barPercent = hasNumericData ? Math.min(100, Math.max(8, (row.totals.calories / profile.calorieTarget) * 78)) : 4;
                 const isSelected = row.key === selectedDate;
                 return (
                   <button
@@ -1997,11 +2083,11 @@ export const NutritionView: React.FC = () => {
                     className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2 rounded-xl px-0.5 transition hover:bg-slate-50"
                   >
                     <span className="text-[9px] font-semibold tabular-nums text-slate-400">
-                      {hasData ? number.format(row.totals.calories) : '—'}
+                      {row.tracking === 'untracked' ? '?' : hasData ? number.format(row.totals.calories) : '—'}
                     </span>
                     <span className="flex h-28 w-full max-w-8 items-end overflow-hidden rounded-lg bg-slate-100">
                       <span
-                        className={`w-full rounded-lg transition-all ${isSelected ? 'bg-indigo-600' : hasData ? 'bg-indigo-400' : 'bg-slate-200'}`}
+                        className={`w-full rounded-lg transition-all ${isSelected ? 'bg-indigo-600' : row.tracking === 'untracked' ? 'bg-amber-300' : hasData ? 'bg-indigo-400' : 'bg-slate-200'}`}
                         style={{ height: `${barPercent}%` }}
                       />
                     </span>

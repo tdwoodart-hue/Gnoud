@@ -1,5 +1,6 @@
 import type { Project, Task } from '../types';
-import type { MealType, NutritionEntry, NutritionState } from './nutritionService';
+import { getNutritionDayTracking, getTotals } from './nutritionService';
+import type { MealType, NutritionEntry, NutritionState, NutritionTrackingMode } from './nutritionService';
 import type { ReaderBook, ReaderSession } from './readerService';
 import type { ExerciseLogEntry, ExerciseProgressStore } from './exerciseService';
 
@@ -40,6 +41,9 @@ export interface ProjectReportRow {
 
 export interface NutritionReport {
   loggedDays: number;
+  trackedDays: number;
+  estimatedDays: number;
+  incompleteDays: number;
   averageCalories: number | null;
   averageProtein: number | null;
   averageCarbs: number | null;
@@ -218,27 +222,32 @@ export function buildProjectReport(projects: Project[], tasks: Task[], range: Re
 export function buildNutritionReport(nutrition: NutritionState, range: ReportRange, today: string): NutritionReport {
   const start = getReportStart(range, today);
   const entries = nutrition.entries.filter((entry) => inDateRange(entry.date, start, today));
-  const totalsByDate = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();
+  const entriesByDate = new Map<string, NutritionEntry[]>();
 
   for (const entry of entries) {
-    const current = totalsByDate.get(entry.date) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    current.calories += entry.calories;
-    current.protein += entry.protein;
-    current.carbs += entry.carbs;
-    current.fat += entry.fat;
-    totalsByDate.set(entry.date, current);
+    const current = entriesByDate.get(entry.date) || [];
+    current.push(entry);
+    entriesByDate.set(entry.date, current);
   }
 
-  const dayTotals = [...totalsByDate.values()];
-  const loggedDays = dayTotals.length;
+  const dayRows = [...entriesByDate.entries()].map(([date, dayEntries]) => ({
+    date,
+    tracking: getNutritionDayTracking(dayEntries),
+    totals: getTotals(dayEntries),
+  }));
+  const loggedDays = dayRows.length;
+  const incompleteDays = dayRows.filter((day) => day.tracking === 'untracked').length;
+  const estimatedDays = dayRows.filter((day) => day.tracking === 'estimated').length;
+  const trackedRows = dayRows.filter((day) => day.tracking !== 'untracked');
+  const trackedDays = trackedRows.length;
   const average = (key: 'calories' | 'protein' | 'carbs' | 'fat') =>
-    loggedDays ? dayTotals.reduce((sum, value) => sum + value[key], 0) / loggedDays : null;
+    trackedDays ? trackedRows.reduce((sum, day) => sum + day.totals[key], 0) / trackedDays : null;
 
   const calorieTolerance = nutrition.profile.calorieTarget * 0.1;
-  const calorieTargetDays = dayTotals.filter(
-    (day) => Math.abs(day.calories - nutrition.profile.calorieTarget) <= calorieTolerance,
+  const calorieTargetDays = trackedRows.filter(
+    (day) => Math.abs(day.totals.calories - nutrition.profile.calorieTarget) <= calorieTolerance,
   ).length;
-  const proteinTargetDays = dayTotals.filter((day) => day.protein >= nutrition.profile.proteinTarget).length;
+  const proteinTargetDays = trackedRows.filter((day) => day.totals.protein >= nutrition.profile.proteinTarget).length;
 
   const metrics = nutrition.dailyMetrics
     .filter((metric) => inDateRange(metric.date, start, today))
@@ -255,12 +264,15 @@ export function buildNutritionReport(nutrition: NutritionState, range: ReportRan
     : null;
 
   const stepTargetDays = stepMetrics.filter((metric) => (metric.steps || 0) >= nutrition.profile.stepTarget).length;
-  const averageCalorieDeviation = loggedDays
-    ? dayTotals.reduce((sum, day) => sum + Math.abs(day.calories - nutrition.profile.calorieTarget), 0) / loggedDays
+  const averageCalorieDeviation = trackedDays
+    ? trackedRows.reduce((sum, day) => sum + Math.abs(day.totals.calories - nutrition.profile.calorieTarget), 0) / trackedDays
     : null;
 
   return {
     loggedDays,
+    trackedDays,
+    estimatedDays,
+    incompleteDays,
     averageCalories: average('calories'),
     averageProtein: average('protein'),
     averageCarbs: average('carbs'),
@@ -272,8 +284,8 @@ export function buildNutritionReport(nutrition: NutritionState, range: ReportRan
     stepLoggedDays: stepMetrics.length,
     latestWeightKg,
     weightChangeKg,
-    calorieAdherenceRate: loggedDays ? Math.round((calorieTargetDays / loggedDays) * 100) : null,
-    proteinAdherenceRate: loggedDays ? Math.round((proteinTargetDays / loggedDays) * 100) : null,
+    calorieAdherenceRate: trackedDays ? Math.round((calorieTargetDays / trackedDays) * 100) : null,
+    proteinAdherenceRate: trackedDays ? Math.round((proteinTargetDays / trackedDays) * 100) : null,
     stepAdherenceRate: stepMetrics.length ? Math.round((stepTargetDays / stepMetrics.length) * 100) : null,
     averageCalorieDeviation,
   };
@@ -547,6 +559,7 @@ export interface ReadingDeepReport {
 
 export interface NutritionDailyReport {
   date: string;
+  tracking: NutritionTrackingMode;
   calories: number;
   protein: number;
   carbs: number;
@@ -854,56 +867,39 @@ export function buildNutritionDeepReport(
       .filter((metric) => inDateRange(metric.date, start, today))
       .map((metric) => [metric.date, metric]),
   );
-  const grouped = new Map<string, NutritionDailyReport>();
+  const entriesByDate = new Map<string, NutritionEntry[]>();
 
   entries.forEach((entry) => {
-    const current = grouped.get(entry.date) || {
-      date: entry.date,
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      mealCount: 0,
-      steps: metrics.get(entry.date)?.steps ?? null,
-      weightKg: metrics.get(entry.date)?.weightKg ?? null,
-      calorieTargetMet: false,
-      proteinTargetMet: false,
-      stepTargetMet: null,
-    };
-    current.calories += entry.calories;
-    current.protein += entry.protein;
-    current.carbs += entry.carbs;
-    current.fat += entry.fat;
-    current.mealCount += 1;
-    grouped.set(entry.date, current);
+    const current = entriesByDate.get(entry.date) || [];
+    current.push(entry);
+    entriesByDate.set(entry.date, current);
   });
 
-  metrics.forEach((metric, date) => {
-    if (grouped.has(date)) return;
-    grouped.set(date, {
-      date,
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      mealCount: 0,
-      steps: metric.steps ?? null,
-      weightKg: metric.weightKg ?? null,
-      calorieTargetMet: false,
-      proteinTargetMet: false,
-      stepTargetMet: metric.steps === undefined ? null : metric.steps >= nutrition.profile.stepTarget,
-    });
-  });
-
+  const dates = new Set<string>([...entriesByDate.keys(), ...metrics.keys()]);
   const calorieTolerance = nutrition.profile.calorieTarget * 0.1;
-  const daily = [...grouped.values()]
-    .map((day) => ({
-      ...day,
-      calorieTargetMet: day.mealCount > 0
-        && Math.abs(day.calories - nutrition.profile.calorieTarget) <= calorieTolerance,
-      proteinTargetMet: day.mealCount > 0 && day.protein >= nutrition.profile.proteinTarget,
-      stepTargetMet: day.steps === null ? null : day.steps >= nutrition.profile.stepTarget,
-    }))
+  const daily = [...dates]
+    .map((date): NutritionDailyReport => {
+      const dayEntries = entriesByDate.get(date) || [];
+      const totals = getTotals(dayEntries);
+      const tracking = getNutritionDayTracking(dayEntries);
+      const metric = metrics.get(date);
+      const hasCompleteNutrition = dayEntries.length > 0 && tracking !== 'untracked';
+      return {
+        date,
+        tracking,
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        mealCount: dayEntries.length,
+        steps: metric?.steps ?? null,
+        weightKg: metric?.weightKg ?? null,
+        calorieTargetMet: hasCompleteNutrition
+          && Math.abs(totals.calories - nutrition.profile.calorieTarget) <= calorieTolerance,
+        proteinTargetMet: hasCompleteNutrition && totals.protein >= nutrition.profile.proteinTarget,
+        stepTargetMet: metric?.steps === undefined ? null : metric.steps >= nutrition.profile.stepTarget,
+      };
+    })
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return { summary, daily };
@@ -970,6 +966,7 @@ export interface ReadingDayReport {
 
 export interface NutritionMealReport {
   meal: MealType;
+  tracking: NutritionTrackingMode;
   calories: number;
   protein: number;
   carbs: number;
@@ -979,6 +976,7 @@ export interface NutritionMealReport {
 
 export interface NutritionDayReport {
   date: string;
+  tracking: NutritionTrackingMode;
   calories: number;
   protein: number;
   carbs: number;
@@ -1058,29 +1056,30 @@ export function buildNutritionDayReport(nutrition: NutritionState, date: string)
   const meals = mealOrder
     .map((meal): NutritionMealReport => {
       const items = entries.filter((entry) => entry.meal === meal);
+      const totals = getTotals(items);
       return {
         meal,
-        calories: items.reduce((sum, item) => sum + item.calories, 0),
-        protein: items.reduce((sum, item) => sum + item.protein, 0),
-        carbs: items.reduce((sum, item) => sum + item.carbs, 0),
-        fat: items.reduce((sum, item) => sum + item.fat, 0),
+        tracking: getNutritionDayTracking(items),
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
         items,
       };
     })
     .filter((meal) => meal.items.length > 0);
 
-  const calories = entries.reduce((sum, item) => sum + item.calories, 0);
-  const protein = entries.reduce((sum, item) => sum + item.protein, 0);
-  const carbs = entries.reduce((sum, item) => sum + item.carbs, 0);
-  const fat = entries.reduce((sum, item) => sum + item.fat, 0);
+  const totals = getTotals(entries);
+  const tracking = getNutritionDayTracking(entries);
   const percent = (value: number, target: number) => target > 0 ? Math.round((value / target) * 100) : 0;
 
   return {
     date,
-    calories,
-    protein,
-    carbs,
-    fat,
+    tracking,
+    calories: totals.calories,
+    protein: totals.protein,
+    carbs: totals.carbs,
+    fat: totals.fat,
     itemCount: entries.length,
     steps: metric?.steps ?? null,
     weightKg: metric?.weightKg ?? null,
@@ -1089,12 +1088,12 @@ export function buildNutritionDayReport(nutrition: NutritionState, date: string)
     carbTarget: nutrition.profile.carbTarget,
     fatTarget: nutrition.profile.fatTarget,
     stepTarget: nutrition.profile.stepTarget,
-    calorieDelta: calories - nutrition.profile.calorieTarget,
-    proteinDelta: protein - nutrition.profile.proteinTarget,
-    caloriePercent: percent(calories, nutrition.profile.calorieTarget),
-    proteinPercent: percent(protein, nutrition.profile.proteinTarget),
-    carbPercent: percent(carbs, nutrition.profile.carbTarget),
-    fatPercent: percent(fat, nutrition.profile.fatTarget),
+    calorieDelta: totals.calories - nutrition.profile.calorieTarget,
+    proteinDelta: totals.protein - nutrition.profile.proteinTarget,
+    caloriePercent: percent(totals.calories, nutrition.profile.calorieTarget),
+    proteinPercent: percent(totals.protein, nutrition.profile.proteinTarget),
+    carbPercent: percent(totals.carbs, nutrition.profile.carbTarget),
+    fatPercent: percent(totals.fat, nutrition.profile.fatTarget),
     stepPercent: metric?.steps === undefined ? null : percent(metric.steps, nutrition.profile.stepTarget),
     meals,
   };

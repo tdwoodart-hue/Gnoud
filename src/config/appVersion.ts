@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.29';
-export const APP_UPDATED_AT = '2026-10-02T21:42:00+07:00';
+export const APP_VERSION = '0.9.30';
+export const APP_UPDATED_AT = '2026-10-02T22:05:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.30',
+    updatedAt: '2026-10-02T22:05:00+07:00',
+    title: 'Giữ đúng vị trí đọc khi quay lại',
+    changes: [
+      'Vị trí đọc được ghi xuống bộ nhớ ngay khi đổi trang, cuộn hoặc thoát Reader thay vì chờ effect.',
+      'Khi local và cloud đồng bộ, lastPositionAt mới hơn quyết định vị trí đọc; thay đổi theme/settings không thể kéo sách về trang cũ.',
+      'Thêm regression test cho tình huống cloud có metadata mới hơn nhưng vị trí đọc cũ hơn.',
+    ],
+  },
   {
     version: '0.9.29',
     updatedAt: '2026-10-02T21:42:00+07:00',

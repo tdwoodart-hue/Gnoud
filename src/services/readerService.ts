@@ -86,6 +86,46 @@ export function pickLatestReaderPosition(local: ReaderBook, cloud: ReaderBook): 
   };
 }
 
+export interface ReaderRestoredPagePosition {
+  page: number;
+  withinPage: number;
+}
+
+export function restoreReaderPagePosition(
+  readingMode: ReaderReadingMode,
+  pageCount: number,
+  currentPage: number,
+  pageScrollProgress: number,
+  scrollProgress: number,
+): ReaderRestoredPagePosition {
+  const count = Math.max(1, Math.round(pageCount) || 1);
+  const savedPage = Math.min(count, Math.max(1, Math.round(currentPage || 0) + 1));
+  const savedWithin = Math.min(1, Math.max(0, Number(pageScrollProgress) || 0));
+  const ratio = Math.min(1, Math.max(0, Number(scrollProgress) || 0));
+
+  // Newer Reader versions store a stable chapter ratio. Prefer it because the number
+  // of visual pages can change after app reload when viewport/font metrics are measured again.
+  if (ratio > 0) {
+    if (readingMode === 'paged') {
+      const page = count <= 1 ? 1 : Math.round(ratio * (count - 1)) + 1;
+      return { page: Math.min(count, Math.max(1, page)), withinPage: 0 };
+    }
+    if (ratio >= 1) return { page: count, withinPage: 1 };
+    const scaled = ratio * count;
+    const zeroBased = Math.min(count - 1, Math.max(0, Math.floor(scaled)));
+    return {
+      page: zeroBased + 1,
+      withinPage: Math.min(1, Math.max(0, scaled - zeroBased)),
+    };
+  }
+
+  // Backward compatibility for old books that only have page index / within-page scroll.
+  return {
+    page: savedPage,
+    withinPage: readingMode === 'scroll' ? savedWithin : 0,
+  };
+}
+
 export interface EpubChapter {
   id: string;
   title: string;

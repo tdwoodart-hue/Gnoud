@@ -24,6 +24,77 @@ export interface WorkoutApplyResult {
   batchId: string;
 }
 
+export interface ExerciseCatalogItem {
+  label: string;
+  group: 'Ngực' | 'Lưng' | 'Vai' | 'Tay trước' | 'Tay sau' | 'Chân & mông' | 'Core';
+  aliases?: string[];
+}
+
+export const DEFAULT_EXERCISE_LIBRARY: ExerciseCatalogItem[] = [
+  // Ngực
+  { label: 'Bench Press', group: 'Ngực', aliases: ['barbell bench press', 'đẩy ngực đòn'] },
+  { label: 'Incline Dumbbell Press', group: 'Ngực', aliases: ['incline db press', 'đẩy ngực trên tạ đơn'] },
+  { label: 'Incline Smith Press', group: 'Ngực', aliases: ['smith incline press', 'đẩy ngực trên smith'] },
+  { label: 'Chest Press Machine', group: 'Ngực', aliases: ['machine chest press', 'máy đẩy ngực'] },
+  { label: 'Pec Deck Fly', group: 'Ngực', aliases: ['pec deck', 'butterfly', 'ép ngực máy'] },
+  { label: 'Cable Fly', group: 'Ngực', aliases: ['cable crossover', 'ép ngực cáp'] },
+  { label: 'Push-Up', group: 'Ngực', aliases: ['push up', 'hít đất'] },
+  { label: 'Dips', group: 'Ngực', aliases: ['chest dips', 'xà kép'] },
+
+  // Lưng
+  { label: 'Lat Pulldown', group: 'Lưng', aliases: ['kéo xô', 'wide grip pulldown'] },
+  { label: 'Neutral-Grip Lat Pulldown', group: 'Lưng', aliases: ['neutral pulldown', 'kéo xô tay trung lập'] },
+  { label: 'Pull-Up', group: 'Lưng', aliases: ['pull up', 'hít xà'] },
+  { label: 'Seated Cable Row', group: 'Lưng', aliases: ['cable row', 'kéo cáp ngồi'] },
+  { label: 'Chest-Supported Row', group: 'Lưng', aliases: ['chest supported row', 'row tựa ngực'] },
+  { label: 'One-Arm Dumbbell Row', group: 'Lưng', aliases: ['one arm row', 'dumbbell row', 'kéo tạ đơn một tay'] },
+  { label: 'T-Bar Row', group: 'Lưng', aliases: ['t bar row'] },
+  { label: 'Straight-Arm Pulldown', group: 'Lưng', aliases: ['straight arm pulldown', 'kéo cáp tay thẳng'] },
+  { label: 'Face Pull', group: 'Lưng', aliases: ['facepull', 'kéo cáp mặt'] },
+  { label: 'Deadlift', group: 'Lưng', aliases: ['conventional deadlift'] },
+
+  // Vai
+  { label: 'Overhead Press', group: 'Vai', aliases: ['ohp', 'barbell shoulder press', 'đẩy vai đòn'] },
+  { label: 'Dumbbell Shoulder Press', group: 'Vai', aliases: ['db shoulder press', 'đẩy vai tạ đơn'] },
+  { label: 'Machine Shoulder Press', group: 'Vai', aliases: ['shoulder press machine', 'máy đẩy vai'] },
+  { label: 'Dumbbell Lateral Raise', group: 'Vai', aliases: ['lateral raise', 'nâng vai ngang tạ đơn'] },
+  { label: 'Cable Lateral Raise', group: 'Vai', aliases: ['cable side raise', 'nâng vai ngang cáp'] },
+  { label: 'Rear Delt Fly', group: 'Vai', aliases: ['rear delt raise', 'vai sau'] },
+  { label: 'Reverse Pec Deck', group: 'Vai', aliases: ['reverse fly machine', 'pec deck ngược'] },
+
+  // Tay trước
+  { label: 'Dumbbell Curl', group: 'Tay trước', aliases: ['biceps curl', 'cuốn tay trước tạ đơn'] },
+  { label: 'Hammer Curl', group: 'Tay trước', aliases: ['hammer curls', 'cuốn búa'] },
+  { label: 'Preacher Curl', group: 'Tay trước', aliases: ['preacher curls', 'cuốn ghế preacher'] },
+  { label: 'Cable Curl', group: 'Tay trước', aliases: ['cable biceps curl', 'cuốn tay trước cáp'] },
+
+  // Tay sau
+  { label: 'Rope Pushdown', group: 'Tay sau', aliases: ['triceps rope pushdown', 'đẩy cáp dây thừng'] },
+  { label: 'Straight-Bar Pushdown', group: 'Tay sau', aliases: ['bar pushdown', 'triceps pushdown'] },
+  { label: 'Overhead Cable Extension', group: 'Tay sau', aliases: ['overhead triceps extension', 'duỗi tay sau qua đầu'] },
+  { label: 'Skull Crusher', group: 'Tay sau', aliases: ['lying triceps extension'] },
+  { label: 'Close-Grip Bench Press', group: 'Tay sau', aliases: ['close grip bench', 'bench tay hẹp'] },
+
+  // Chân & mông
+  { label: 'Back Squat', group: 'Chân & mông', aliases: ['barbell squat', 'squat đòn'] },
+  { label: 'Hack Squat', group: 'Chân & mông', aliases: ['hack squat machine'] },
+  { label: 'Leg Press', group: 'Chân & mông', aliases: ['máy đạp chân'] },
+  { label: 'Romanian Deadlift', group: 'Chân & mông', aliases: ['rdl', 'romanian dead lift'] },
+  { label: 'Leg Extension', group: 'Chân & mông', aliases: ['duỗi chân máy'] },
+  { label: 'Seated Leg Curl', group: 'Chân & mông', aliases: ['leg curl ngồi', 'gập chân ngồi'] },
+  { label: 'Lying Leg Curl', group: 'Chân & mông', aliases: ['leg curl nằm', 'gập chân nằm'] },
+  { label: 'Bulgarian Split Squat', group: 'Chân & mông', aliases: ['bulgarian squat'] },
+  { label: 'Hip Thrust', group: 'Chân & mông', aliases: ['hip thrust barbell', 'đẩy hông'] },
+  { label: 'Standing Calf Raise', group: 'Chân & mông', aliases: ['calf raise đứng', 'nhón bắp chân'] },
+  { label: 'Seated Calf Raise', group: 'Chân & mông', aliases: ['calf raise ngồi'] },
+
+  // Core
+  { label: 'Cable Crunch', group: 'Core', aliases: ['crunch cáp', 'gập bụng cáp'] },
+  { label: 'Hanging Leg Raise', group: 'Core', aliases: ['leg raise treo', 'nâng chân treo'] },
+  { label: 'Ab Wheel', group: 'Core', aliases: ['ab rollout', 'con lăn bụng'] },
+  { label: 'Plank', group: 'Core', aliases: ['plank bụng'] },
+];
+
 export const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
 const EXERCISE_PROGRESS_SCOPED_PREFIX = 'gnoud-exercise-progress-v2';
 

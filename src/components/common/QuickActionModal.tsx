@@ -176,13 +176,11 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
                           <div key={`${item.name}-${index}`} className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200/70">
                             <div className="flex items-center justify-between gap-3">
                               <p className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800">{item.name}</p>
-                              <span className="shrink-0 text-[10px] font-bold text-slate-700">{number.format(item.calories)} kcal</span>
+                              <span className="shrink-0 text-[10px] font-bold text-slate-600">{number.format(item.calories)} kcal</span>
                             </div>
-                            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold">
-                              <span className="text-blue-600">P {number.format(item.protein)}g</span>
-                              <span className="text-amber-600">C {number.format(item.carbs)}g</span>
-                              <span className="text-rose-600">F {number.format(item.fat)}g</span>
-                              {item.amount ? <span className="font-medium text-slate-400">{number.format(item.amount)} {item.unit || ''}</span> : null}
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              P {number.format(item.protein)}g · C {number.format(item.carbs)}g · F {number.format(item.fat)}g
+                              {item.amount ? ` · ${number.format(item.amount)} ${item.unit || ''}`.trimEnd() : ''}
                             </p>
                           </div>
                         ))}

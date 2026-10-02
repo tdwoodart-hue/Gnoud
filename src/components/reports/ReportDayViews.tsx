@@ -96,7 +96,7 @@ export const NutritionDayReportView: React.FC<{
 
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard label="Calories" value={whole.format(report.calories) + ' kcal'} meta={calorieMeta} icon={UtensilsCrossed} />
-        <MetricCard label="Protein" value={whole.format(report.protein) + ' g'} meta={proteinMeta} icon={Target} tone="bg-blue-50 text-blue-700" />
+        <MetricCard label="Protein" value={whole.format(report.protein) + ' g'} meta={proteinMeta} icon={Target} tone="bg-sky-50 text-sky-700" />
         <MetricCard label="Steps" value={report.steps === null ? '—' : whole.format(report.steps)} meta={report.steps === null ? 'Chưa ghi trong ngày' : whole.format(report.stepTarget) + ' mục tiêu'} icon={Footprints} tone="bg-emerald-50 text-emerald-700" />
         <MetricCard label="Cân nặng" value={report.weightKg === null ? '—' : decimal.format(report.weightKg) + ' kg'} meta={report.itemCount + ' món đã log'} icon={Scale} tone="bg-violet-50 text-violet-700" />
       </div>
@@ -104,8 +104,8 @@ export const NutritionDayReportView: React.FC<{
       <Section title="So với mục tiêu ngày">
         <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
           {[
-            ['Calories', report.caloriePercent, whole.format(report.calories) + ' / ' + whole.format(report.calorieTarget) + ' kcal', 'bg-slate-700'],
-            ['Protein', report.proteinPercent, whole.format(report.protein) + ' / ' + whole.format(report.proteinTarget) + ' g', 'bg-blue-500'],
+            ['Calories', report.caloriePercent, whole.format(report.calories) + ' / ' + whole.format(report.calorieTarget) + ' kcal', 'bg-indigo-500'],
+            ['Protein', report.proteinPercent, whole.format(report.protein) + ' / ' + whole.format(report.proteinTarget) + ' g', 'bg-sky-500'],
             ['Carb', report.carbPercent, whole.format(report.carbs) + ' / ' + whole.format(report.carbTarget) + ' g', 'bg-amber-500'],
             ['Fat', report.fatPercent, whole.format(report.fat) + ' / ' + whole.format(report.fatTarget) + ' g', 'bg-rose-500'],
           ].map(([label, percent, value, color]) => (
@@ -142,11 +142,7 @@ export const NutritionDayReportView: React.FC<{
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-bold text-slate-800">{whole.format(meal.calories)} kcal</p>
-                      <p className="mt-0.5 flex items-center justify-end gap-1.5 text-[9px] font-semibold">
-                        <span className="text-blue-600">P {whole.format(meal.protein)}</span>
-                        <span className="text-amber-600">C {whole.format(meal.carbs)}</span>
-                        <span className="text-rose-600">F {whole.format(meal.fat)}</span>
-                      </p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">P {whole.format(meal.protein)} · C {whole.format(meal.carbs)} · F {whole.format(meal.fat)}</p>
                     </div>
                   </div>
                 </div>
@@ -159,11 +155,7 @@ export const NutritionDayReportView: React.FC<{
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-[11px] font-bold text-slate-700">{whole.format(item.calories)} kcal</p>
-                        <p className="mt-0.5 flex items-center justify-end gap-1.5 text-[9px] font-semibold">
-                          <span className="text-blue-600">P {decimal.format(item.protein)}</span>
-                          <span className="text-amber-600">C {decimal.format(item.carbs)}</span>
-                          <span className="text-rose-600">F {decimal.format(item.fat)}</span>
-                        </p>
+                        <p className="mt-0.5 text-[9px] text-slate-400">P {decimal.format(item.protein)} · C {decimal.format(item.carbs)} · F {decimal.format(item.fat)}</p>
                       </div>
                     </div>
                   </div>

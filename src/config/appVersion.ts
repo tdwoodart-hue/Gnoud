@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.26';
-export const APP_UPDATED_AT = '2026-10-02T16:15:00+07:00';
+export const APP_VERSION = '0.9.27';
+export const APP_UPDATED_AT = '2026-10-02T16:30:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.27',
+    updatedAt: '2026-10-02T16:30:00+07:00',
+    title: 'Gom màu macro vào vòng tổng quan',
+    changes: [
+      'Trả danh sách món, nhập nhanh và báo cáo về màu chữ trung tính để giảm rối mắt.',
+      'Vòng calories dùng màu than thay cho tím và hiển thị P/C/F ngay bên trong.',
+      'Protein xanh, Carb hổ phách và Fat rose chỉ dùng làm điểm nhận diện trong vòng tổng quan.',
+    ],
+  },
   {
     version: '0.9.26',
     updatedAt: '2026-10-02T16:15:00+07:00',

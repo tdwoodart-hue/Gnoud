@@ -61,6 +61,31 @@ export interface ReaderBook {
   lastOpenedAt: string;
 }
 
+export type ReaderPositionSnapshot = Pick<
+  ReaderBook,
+  'currentChapter' | 'currentPage' | 'pageScrollProgress' | 'scrollProgress' | 'overallProgress' | 'lastPositionAt'
+>;
+
+function readerTimestamp(value?: string): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function pickLatestReaderPosition(local: ReaderBook, cloud: ReaderBook): ReaderPositionSnapshot {
+  const localPositionAt = readerTimestamp(local.lastPositionAt) || readerTimestamp(local.updatedAt);
+  const cloudPositionAt = readerTimestamp(cloud.lastPositionAt) || readerTimestamp(cloud.updatedAt);
+  const source = localPositionAt >= cloudPositionAt ? local : cloud;
+  return {
+    currentChapter: source.currentChapter,
+    currentPage: source.currentPage,
+    pageScrollProgress: source.pageScrollProgress,
+    scrollProgress: source.scrollProgress,
+    overallProgress: source.overallProgress,
+    lastPositionAt: source.lastPositionAt,
+  };
+}
+
 export interface EpubChapter {
   id: string;
   title: string;

@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.25';
-export const APP_UPDATED_AT = '2026-10-01T01:32:00+07:00';
+export const APP_VERSION = '0.9.26';
+export const APP_UPDATED_AT = '2026-10-02T15:00:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.26',
+    updatedAt: '2026-10-02T15:00:00+07:00',
+    title: 'Bữa ước tính và ngày không theo dõi',
+    changes: [
+      'Mỗi bữa có 3 mức độ dữ liệu: Chính xác, Ước tính và Không theo dõi.',
+      'Bữa không theo dõi chỉ lưu marker, không bị hiểu sai thành 0 kcal hay 0 macro.',
+      'Ngày có bữa không theo dõi được loại khỏi trung bình kcal/macro và tỷ lệ đạt mục tiêu.',
+      'Báo cáo ngày và tuần hiển thị rõ số liệu ước tính hoặc thiếu dữ liệu để tránh kết luận sai.',
+    ],
+  },
   {
     version: '0.9.25',
     updatedAt: '2026-10-01T01:32:00+07:00',

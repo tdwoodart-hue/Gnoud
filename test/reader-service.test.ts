@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, sanitizeSpeechText } from '../src/services/readerService';
+import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, pickLatestReaderPosition, sanitizeSpeechText } from '../src/services/readerService';
 
 test('reader detects supported book formats', () => {
   assert.equal(detectReaderFormat('book.pdf'), 'pdf');
@@ -62,4 +62,34 @@ test('speech cleanup removes URLs, emails, domains and noisy reference markers',
   assert.equal(cleaned.includes('[12]'), false);
   assert.match(cleaned, /Đọc nội dung này/);
   assert.match(cleaned, /Tiếp tục câu cuối/);
+});
+
+
+test('reader keeps the newest reading position even when other metadata is newer', () => {
+  const local = createReaderBook({ title: 'Local', content: 'Nội dung' });
+  const cloud = createReaderBook({ title: 'Cloud', content: 'Nội dung' });
+
+  local.currentChapter = 3;
+  local.currentPage = 11;
+  local.pageScrollProgress = 0.42;
+  local.scrollProgress = 0.61;
+  local.overallProgress = 0.58;
+  local.lastPositionAt = '2026-10-02T14:00:00.000Z';
+  local.updatedAt = '2026-10-02T14:00:00.000Z';
+
+  cloud.currentChapter = 0;
+  cloud.currentPage = 0;
+  cloud.pageScrollProgress = 0;
+  cloud.scrollProgress = 0;
+  cloud.overallProgress = 0;
+  cloud.lastPositionAt = '2026-10-02T13:55:00.000Z';
+  cloud.updatedAt = '2026-10-02T14:05:00.000Z';
+
+  const position = pickLatestReaderPosition(local, cloud);
+  assert.equal(position.currentChapter, 3);
+  assert.equal(position.currentPage, 11);
+  assert.equal(position.pageScrollProgress, 0.42);
+  assert.equal(position.scrollProgress, 0.61);
+  assert.equal(position.overallProgress, 0.58);
+  assert.equal(position.lastPositionAt, local.lastPositionAt);
 });

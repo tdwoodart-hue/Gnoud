@@ -4,6 +4,7 @@ export type NutritionSex = 'male' | 'female';
 export type NutritionGoal = 'recomp' | 'cut' | 'maintain' | 'gain';
 export type NutritionActivityLevel = 'sedentary' | 'desk_training' | 'moderate' | 'active';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type NutritionTrackingMode = 'exact' | 'estimated' | 'untracked';
 
 export interface NutritionProfile {
   sex: NutritionSex;
@@ -24,6 +25,8 @@ export interface NutritionEntry {
   date: string;
   name: string;
   meal: MealType;
+  /** Legacy entries without this field are treated as exact. */
+  tracking?: NutritionTrackingMode;
   calories: number;
   protein: number;
   carbs: number;
@@ -138,14 +141,27 @@ export function recommendedTargets(profile: NutritionProfile): Pick<
   };
 }
 
+export function getEntryTrackingMode(entry: NutritionEntry): NutritionTrackingMode {
+  return entry.tracking || 'exact';
+}
+
+export function getNutritionDayTracking(entries: NutritionEntry[]): NutritionTrackingMode {
+  if (entries.some((entry) => getEntryTrackingMode(entry) === 'untracked')) return 'untracked';
+  if (entries.some((entry) => getEntryTrackingMode(entry) === 'estimated')) return 'estimated';
+  return 'exact';
+}
+
 export function getTotals(entries: NutritionEntry[]): NutritionTotals {
   return entries.reduce<NutritionTotals>(
-    (total, entry) => ({
-      calories: total.calories + entry.calories,
-      protein: total.protein + entry.protein,
-      carbs: total.carbs + entry.carbs,
-      fat: total.fat + entry.fat,
-    }),
+    (total, entry) => {
+      if (getEntryTrackingMode(entry) === 'untracked') return total;
+      return {
+        calories: total.calories + entry.calories,
+        protein: total.protein + entry.protein,
+        carbs: total.carbs + entry.carbs,
+        fat: total.fat + entry.fat,
+      };
+    },
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   );
 }

@@ -5,6 +5,7 @@ import {
   calculateTdee,
   DEFAULT_NUTRITION_PROFILE,
   getDailyMetric,
+  getNutritionDayTracking,
   getPreviousWeight,
   getTotals,
   getWeekDates,
@@ -87,3 +88,29 @@ test('removing one food entry subtracts exactly that entry from day totals', () 
   });
 });
 
+
+
+test('untracked meals are markers, not zero-calorie nutrition data', () => {
+  const entries = [
+    {
+      id: 'known', date: '2026-10-02', name: 'Cơm', meal: 'lunch' as const, createdAt: '1',
+      calories: 300, protein: 6, carbs: 65, fat: 1,
+    },
+    {
+      id: 'unknown', date: '2026-10-02', name: 'Bữa không theo dõi', meal: 'dinner' as const, createdAt: '2',
+      tracking: 'untracked' as const, calories: 0, protein: 0, carbs: 0, fat: 0,
+    },
+  ];
+
+  assert.equal(getNutritionDayTracking(entries), 'untracked');
+  assert.deepEqual(getTotals(entries), { calories: 300, protein: 6, carbs: 65, fat: 1 });
+});
+
+test('legacy entries remain exact while estimated entries keep their label', () => {
+  const legacy = [{
+    id: 'legacy', date: '2026-10-02', name: 'Trứng', meal: 'breakfast' as const, createdAt: '1',
+    calories: 156, protein: 12.6, carbs: 1.2, fat: 10.6,
+  }];
+  assert.equal(getNutritionDayTracking(legacy), 'exact');
+  assert.equal(getNutritionDayTracking([{ ...legacy[0], tracking: 'estimated' as const }]), 'estimated');
+});

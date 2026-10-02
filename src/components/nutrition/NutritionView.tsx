@@ -1586,6 +1586,33 @@ export const NutritionView: React.FC = () => {
   const previousWeightMetric = getPreviousWeight(nutrition.dailyMetrics, selectedDate);
   const caloriesLeft = profile.calorieTarget - dayTotals.calories;
   const caloriePercent = clampPercent(dayTotals.calories, profile.calorieTarget);
+  const macroCalories = {
+    protein: dayTotals.protein * 4,
+    carbs: dayTotals.carbs * 4,
+    fat: dayTotals.fat * 9,
+  };
+  const totalMacroCalories = macroCalories.protein + macroCalories.carbs + macroCalories.fat;
+  const consumedDegrees = caloriePercent * 3.6;
+  const proteinDegrees = totalMacroCalories > 0
+    ? consumedDegrees * (macroCalories.protein / totalMacroCalories)
+    : 0;
+  const carbDegrees = totalMacroCalories > 0
+    ? consumedDegrees * (macroCalories.carbs / totalMacroCalories)
+    : 0;
+  const fatDegrees = totalMacroCalories > 0
+    ? consumedDegrees * (macroCalories.fat / totalMacroCalories)
+    : 0;
+  const proteinEnd = proteinDegrees;
+  const carbEnd = proteinEnd + carbDegrees;
+  const fatEnd = carbEnd + fatDegrees;
+  const macroRingBackground = totalMacroCalories > 0
+    ? `conic-gradient(
+        rgb(37 99 235) 0deg ${proteinEnd}deg,
+        rgb(217 119 6) ${proteinEnd}deg ${carbEnd}deg,
+        rgb(225 29 72) ${carbEnd}deg ${fatEnd}deg,
+        rgb(241 245 249) ${fatEnd}deg 360deg
+      )`
+    : `conic-gradient(rgb(148 163 184) 0deg ${consumedDegrees}deg, rgb(241 245 249) ${consumedDegrees}deg 360deg)`;
 
   const weekDates = useMemo(() => getWeekDates(selectedDateObject), [selectedDate]);
   const weekRows = useMemo(
@@ -1784,18 +1811,12 @@ export const NutritionView: React.FC = () => {
             <div className="flex items-center gap-5">
               <div
                 className="grid h-32 w-32 shrink-0 place-items-center rounded-full p-2"
-                style={{
-                  background: `conic-gradient(rgb(51 65 85) ${caloriePercent * 3.6}deg, rgb(241 245 249) 0deg)`,
-                }}
+                style={{ background: macroRingBackground }}
+                aria-label={`Vòng calories: Protein ${decimal.format(dayTotals.protein)}g, Carb ${decimal.format(dayTotals.carbs)}g, Fat ${decimal.format(dayTotals.fat)}g`}
               >
                 <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center">
-                  <p className="text-[21px] font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(dayTotals.calories)}</p>
+                  <p className="text-[22px] font-extrabold tracking-tight tabular-nums text-slate-900 privacy-blur">{number.format(dayTotals.calories)}</p>
                   <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">kcal đã ăn</p>
-                  <div className="mt-2 flex items-center justify-center gap-2.5 text-[9px] font-extrabold tabular-nums">
-                    <span className="text-blue-600">P {decimal.format(dayTotals.protein)}g</span>
-                    <span className="text-amber-600">C {decimal.format(dayTotals.carbs)}g</span>
-                    <span className="text-rose-600">F {decimal.format(dayTotals.fat)}g</span>
-                  </div>
                 </div>
               </div>
 

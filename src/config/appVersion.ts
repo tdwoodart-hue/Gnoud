@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.31';
-export const APP_UPDATED_AT = '2026-10-02T22:25:00+07:00';
+export const APP_VERSION = '0.9.32';
+export const APP_UPDATED_AT = '2026-10-02T23:05:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.32',
+    updatedAt: '2026-10-02T23:05:00+07:00',
+    title: 'Night Reader dịu mắt và sửa ghi đè vị trí khi thoát app',
+    changes: [
+      'Sửa listener pagehide/visibilitychange dùng state cũ khiến lúc thoát web app có thể ghi đè vị trí hiện tại về trang đầu.',
+      'Night Reader chuyển sang nền charcoal ấm, chữ trắng ngà, panel trung tính và accent kem thay cho xanh tím gắt.',
+      'Thêm regression test khóa đúng lỗi đóng/mở app và giao diện Night Reader.',
+    ],
+  },
   {
     version: '0.9.31',
     updatedAt: '2026-10-02T22:25:00+07:00',

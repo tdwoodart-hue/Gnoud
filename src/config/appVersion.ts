@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.27';
-export const APP_UPDATED_AT = '2026-10-02T16:30:00+07:00';
+export const APP_VERSION = '0.9.28';
+export const APP_UPDATED_AT = '2026-10-02T16:45:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.28',
+    updatedAt: '2026-10-02T16:45:00+07:00',
+    title: 'Vòng calories chia theo 3 macro',
+    changes: [
+      'Vòng dashboard chia trực tiếp thành ba đoạn màu theo tỷ trọng năng lượng từ Protein, Carb và Fat.',
+      'Protein dùng xanh, Carb dùng hổ phách, Fat dùng rose; phần chưa đạt mục tiêu calories vẫn là xám.',
+      'Bỏ chữ P/C/F khỏi giữa vòng để dashboard gọn hơn.',
+    ],
+  },
   {
     version: '0.9.27',
     updatedAt: '2026-10-02T16:30:00+07:00',

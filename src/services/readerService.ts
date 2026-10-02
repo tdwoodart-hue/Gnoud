@@ -16,14 +16,6 @@ export interface ReaderSession {
   listeningSeconds: number;
 }
 
-export interface ReaderBookmark {
-  id: string;
-  chapter: number;
-  page: number;
-  scrollProgress: number;
-  createdAt: string;
-}
-
 export interface ReaderBook {
   id: string;
   title: string;
@@ -58,7 +50,6 @@ export interface ReaderBook {
   readingSecondsByDate: Record<string, number>;
   listeningSecondsByDate: Record<string, number>;
   sessions: ReaderSession[];
-  bookmarks?: ReaderBookmark[];
   cloudFilePath?: string;
   cloudCoverPath?: string;
   cloudSyncedAt?: string;
@@ -68,24 +59,6 @@ export interface ReaderBook {
   addedAt: string;
   updatedAt: string;
   lastOpenedAt: string;
-}
-
-export function findReaderBookmarkAtPosition(
-  bookmarks: ReaderBookmark[] | undefined,
-  chapter: number,
-  page: number,
-  scrollProgress: number,
-  pageCount: number,
-): ReaderBookmark | undefined {
-  if (!bookmarks?.length) return undefined;
-  const tolerance = 0.6 / Math.max(1, pageCount);
-  return bookmarks.find((bookmark) => (
-    bookmark.chapter === chapter &&
-    (
-      bookmark.page === page ||
-      Math.abs(bookmark.scrollProgress - scrollProgress) <= tolerance
-    )
-  ));
 }
 
 export type ReaderPositionSnapshot = Pick<
@@ -321,7 +294,6 @@ export function createReaderBook(input: {
     readingSecondsByDate: {},
     listeningSecondsByDate: {},
     sessions: [],
-    bookmarks: [],
     lastPositionAt: undefined,
     theme: 'paper',
     colorIntensity: 35,
@@ -341,22 +313,6 @@ function normalizeSecondsByDate(value: unknown): Record<string, number> {
     result[date] = Math.round(numeric);
   });
   return result;
-}
-
-function normalizeReaderBookmarks(value: unknown): ReaderBookmark[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((raw): ReaderBookmark | null => {
-      if (!raw || typeof raw !== 'object') return null;
-      const row = raw as Partial<ReaderBookmark>;
-      if (typeof row.id !== 'string' || typeof row.createdAt !== 'string') return null;
-      const chapter = Math.max(0, Math.round(Number(row.chapter) || 0));
-      const page = Math.max(0, Math.round(Number(row.page) || 0));
-      const scrollProgress = Math.min(1, Math.max(0, Number(row.scrollProgress) || 0));
-      return { id: row.id, chapter, page, scrollProgress, createdAt: row.createdAt };
-    })
-    .filter((row): row is ReaderBookmark => Boolean(row))
-    .slice(-100);
 }
 
 function normalizeReaderSessions(value: unknown): ReaderSession[] {
@@ -427,7 +383,6 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           readingSecondsByDate: normalizeSecondsByDate(book.readingSecondsByDate),
           listeningSecondsByDate: normalizeSecondsByDate(book.listeningSecondsByDate),
           sessions: normalizeReaderSessions(book.sessions),
-          bookmarks: normalizeReaderBookmarks(book.bookmarks),
           cloudFilePath: typeof book.cloudFilePath === 'string' ? book.cloudFilePath : undefined,
           cloudCoverPath: typeof book.cloudCoverPath === 'string' ? book.cloudCoverPath : undefined,
           cloudSyncedAt: typeof book.cloudSyncedAt === 'string' ? book.cloudSyncedAt : undefined,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateReaderProgress, createReaderBook, detectReaderFormat, findReaderBookmarkAtPosition, paginateBookContent, pickLatestReaderPosition, restoreReaderPagePosition, sanitizeSpeechText } from '../src/services/readerService';
+import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, pickLatestReaderPosition, restoreReaderPagePosition, sanitizeSpeechText } from '../src/services/readerService';
 
 test('reader detects supported book formats', () => {
   assert.equal(detectReaderFormat('book.pdf'), 'pdf');
@@ -41,7 +41,6 @@ test('new reader book starts at first chapter and page with compact defaults', (
   assert.equal(book.ttsOnlineVoiceId, 'vi-VN-HoaiMyNeural');
   assert.equal(book.listeningProgress, 0);
   assert.equal(book.theme, 'paper');
-  assert.deepEqual(book.bookmarks, []);
 });
 
 
@@ -113,19 +112,4 @@ test('reader restores progress after reload even when page count changes', () =>
 test('reader falls back to legacy saved page when ratio is absent', () => {
   assert.deepEqual(restoreReaderPagePosition('scroll', 20, 6, 0.25, 0), { page: 7, withinPage: 0.25 });
   assert.deepEqual(restoreReaderPagePosition('paged', 20, 6, 0.75, 0), { page: 7, withinPage: 0 });
-});
-
-
-test('reader bookmark remains associated with the same reading area after small repagination changes', () => {
-  const bookmarks = [{
-    id: 'bookmark-1',
-    chapter: 2,
-    page: 7,
-    scrollProgress: 0.42,
-    createdAt: '2026-10-02T15:00:00.000Z',
-  }];
-
-  assert.equal(findReaderBookmarkAtPosition(bookmarks, 2, 7, 0.43, 12)?.id, 'bookmark-1');
-  assert.equal(findReaderBookmarkAtPosition(bookmarks, 2, 8, 0.44, 12)?.id, 'bookmark-1');
-  assert.equal(findReaderBookmarkAtPosition(bookmarks, 3, 7, 0.42, 12), undefined);
 });

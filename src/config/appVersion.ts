@@ -5,20 +5,10 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.32';
-export const APP_UPDATED_AT = '2026-10-02T22:40:00+07:00';
+export const APP_VERSION = '0.9.31';
+export const APP_UPDATED_AT = '2026-10-02T22:25:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
-  {
-    version: '0.9.32',
-    updatedAt: '2026-10-02T22:40:00+07:00',
-    title: 'Bookmark góc trang kiểu Kindle',
-    changes: [
-      'Khi thanh công cụ ẩn, góc trên bên phải có dấu bookmark nhỏ kiểu Kindle.',
-      'Chạm vào góc để đánh dấu hoặc bỏ đánh dấu trang; trạng thái được lưu theo từng cuốn sách và đồng bộ.',
-      'Bookmark dùng cả trang và tiến độ trong chương để vẫn nhận ra vị trí khi số trang thay đổi nhẹ sau reload.',
-    ],
-  },
   {
     version: '0.9.31',
     updatedAt: '2026-10-02T22:25:00+07:00',

@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   AlignJustify,
   AlignLeft,
-  Bookmark,
   BookmarkCheck,
   BookOpen,
   Clock3,
@@ -38,7 +37,6 @@ import {
   createReaderBook,
   deleteReaderBinary,
   detectReaderFormat,
-  findReaderBookmarkAtPosition,
   loadReaderBinary,
   loadReaderLibrary,
   parseEpubBook,
@@ -490,9 +488,7 @@ export const ReaderView: React.FC = () => {
   const readerColorIntensity = clamp(activeBook?.colorIntensity ?? 35, 0, 100);
 
   const updateBook = (id: string, updates: Partial<ReaderBook>) => {
-    const persistPositionNow =
-      Object.prototype.hasOwnProperty.call(updates, 'lastPositionAt') ||
-      Object.prototype.hasOwnProperty.call(updates, 'bookmarks');
+    const persistPositionNow = Object.prototype.hasOwnProperty.call(updates, 'lastPositionAt');
     setBooks((previous) => {
       const next = previous.map((book) => (
         book.id === id
@@ -695,41 +691,6 @@ export const ReaderView: React.FC = () => {
     );
   }, [activeBook, chapterIndex, epubChapters.length, liveScrollProgress]);
   const progress = Math.round(progressRatio * 100);
-
-  const currentBookmark = activeBook
-    ? findReaderBookmarkAtPosition(
-        activeBook.bookmarks,
-        chapterIndex,
-        Math.max(0, visualPage - 1),
-        liveScrollProgress,
-        Math.max(1, readerPages.length),
-      )
-    : undefined;
-
-  const toggleCurrentPageBookmark = () => {
-    if (!activeBook || activeBook.format === 'pdf') return;
-    const bookmarks = activeBook.bookmarks || [];
-    if (currentBookmark) {
-      updateBook(activeBook.id, { bookmarks: bookmarks.filter((bookmark) => bookmark.id !== currentBookmark.id) });
-      addToast('Đã bỏ đánh dấu trang này', 'info');
-      return;
-    }
-
-    const createdAt = new Date().toISOString();
-    updateBook(activeBook.id, {
-      bookmarks: [
-        ...bookmarks,
-        {
-          id: `reader-bookmark-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          chapter: chapterIndex,
-          page: Math.max(0, visualPage - 1),
-          scrollProgress: clamp(liveScrollProgress, 0, 1),
-          createdAt,
-        },
-      ].slice(-100),
-    });
-    addToast(`Đã đánh dấu trang ${bookVisualPage}`, 'success');
-  };
 
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
@@ -1972,27 +1933,6 @@ export const ReaderView: React.FC = () => {
               </>
             )}
           </div>
-        )}
-
-        {!controlsVisible && activeBook.format !== 'pdf' && (
-          <button
-            type="button"
-            onClick={toggleCurrentPageBookmark}
-            aria-label={currentBookmark ? 'Bỏ đánh dấu trang này' : 'Đánh dấu trang này'}
-            title={currentBookmark ? 'Bỏ đánh dấu trang' : 'Đánh dấu trang'}
-            className="absolute right-1 top-0 z-30 h-14 w-12 overflow-visible"
-          >
-            <span
-              className={`absolute right-1 top-0 flex h-10 w-7 items-start justify-center pt-2 transition-all duration-200 ease-out ${
-                currentBookmark
-                  ? 'translate-y-0 bg-indigo-500 text-white shadow-md'
-                  : '-translate-y-6 bg-current text-current opacity-20 hover:-translate-y-4 hover:opacity-35'
-              }`}
-              style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%)' }}
-            >
-              {currentBookmark ? <Bookmark className="h-3.5 w-3.5 fill-current" /> : null}
-            </span>
-          </button>
         )}
 
         {controlsVisible && (

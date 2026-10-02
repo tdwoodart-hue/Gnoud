@@ -110,9 +110,9 @@ const themeStyles: Record<ReaderTheme, { shell: string; muted: string; panel: st
     panel: 'border-stone-300/60 bg-[#fbf6ec]/95',
   },
   night: {
-    shell: 'bg-[#111318] text-slate-100',
-    muted: 'text-slate-500',
-    panel: 'border-slate-700/80 bg-[#181b22]/95',
+    shell: 'bg-[#181715] text-[#e9e4da]',
+    muted: 'text-[#969086]',
+    panel: 'border-[#403b34]/70 bg-[#201e1b]/95',
   },
 };
 
@@ -143,7 +143,7 @@ function readerBackground(theme: ReaderTheme, intensity = 35): string {
   const palette: Record<ReaderTheme, { from: [number, number, number]; to: [number, number, number] }> = {
     paper: { from: [255, 255, 255], to: [240, 238, 232] },
     warm: { from: [252, 248, 240], to: [226, 205, 168] },
-    night: { from: [36, 40, 50], to: [8, 10, 14] },
+    night: { from: [30, 29, 26], to: [11, 11, 10] },
   };
   const { from, to } = palette[theme];
   return `rgb(${mixChannel(from[0], to[0], amount)} ${mixChannel(from[1], to[1], amount)} ${mixChannel(from[2], to[2], amount)})`;
@@ -286,6 +286,7 @@ export const ReaderView: React.FC = () => {
   const pendingPageScrollRef = useRef<number | null>(null);
   const restoringPositionRef = useRef(false);
   const restorePositionTimerRef = useRef<number | null>(null);
+  const persistCurrentReadingPositionRef = useRef<() => void>(() => undefined);
   const pageTurnTimerRef = useRef<number | null>(null);
   const cloudMetadataTimerRef = useRef<number | null>(null);
   const readerActivityAtRef = useRef(Date.now());
@@ -486,6 +487,19 @@ export const ReaderView: React.FC = () => {
 
   const readingMode: ReaderReadingMode = activeBook?.readingMode === 'paged' ? 'paged' : 'scroll';
   const readerColorIntensity = clamp(activeBook?.colorIntensity ?? 35, 0, 100);
+  const readerChrome = activeBook?.theme === 'night'
+    ? {
+        active: 'border-[#d8cdbc] bg-[#d8cdbc] text-[#1a1815]',
+        progress: 'bg-[#cdbda7]',
+        icon: 'text-[#cdbda7]',
+        primary: 'bg-[#d8cdbc] text-[#1a1815] hover:bg-[#e3d9cb]',
+      }
+    : {
+        active: 'border-indigo-400 bg-indigo-500 text-white',
+        progress: 'bg-indigo-500',
+        icon: 'text-indigo-500',
+        primary: 'bg-indigo-500 text-white hover:bg-indigo-600',
+      };
 
   const updateBook = (id: string, updates: Partial<ReaderBook>) => {
     const persistPositionNow = Object.prototype.hasOwnProperty.call(updates, 'lastPositionAt');
@@ -1584,6 +1598,8 @@ export const ReaderView: React.FC = () => {
     });
   };
 
+  persistCurrentReadingPositionRef.current = () => persistCurrentReadingPosition();
+
   const handleReadingScroll = () => {
     if (!activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return;
     if (restoringPositionRef.current) return;
@@ -1617,7 +1633,7 @@ export const ReaderView: React.FC = () => {
 
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf') return undefined;
-    const flush = () => persistCurrentReadingPosition();
+    const flush = () => persistCurrentReadingPositionRef.current();
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
     };
@@ -1627,7 +1643,7 @@ export const ReaderView: React.FC = () => {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [readingOpen, activeBook?.id, activeBook?.format, chapterIndex, readerText, readingMode]);
+  }, [readingOpen, activeBook?.id, activeBook?.format]);
 
   const changeChapter = (nextIndex: number, edge: 'start' | 'end' = 'start') => {
     if (!activeBook || activeBook.format !== 'epub' || epubChapters.length === 0) return;
@@ -1968,7 +1984,7 @@ export const ReaderView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setTtsOpen(true); setSettingsOpen(false); setTocOpen(false); }}
-                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/5 ${ttsStatus !== 'idle' ? 'text-indigo-500' : ''}`}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/5 ${ttsStatus !== 'idle' ? readerChrome.icon : ''}`}
                   title="Nghe sách"
                   aria-label="Nghe sách"
                 >
@@ -2001,7 +2017,7 @@ export const ReaderView: React.FC = () => {
               <footer className={`absolute inset-x-0 bottom-0 z-20 border-t px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl ${themeStyles[activeBook.theme].panel}`}>
                 <div className="mx-auto max-w-3xl">
                   <div className="mb-3 h-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                    <div className="h-full rounded-full bg-indigo-500 transition-[width] duration-200" style={{ width: `${progress}%` }} />
+                    <div className={`h-full rounded-full ${readerChrome.progress} transition-[width] duration-200`} style={{ width: `${progress}%` }} />
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     {readingMode === 'paged' ? (
@@ -2020,7 +2036,7 @@ export const ReaderView: React.FC = () => {
                       className={`min-w-0 flex-1 text-center text-[10px] font-semibold ${themeStyles[activeBook.theme].muted}`}
                     >
                       <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-current">
-                        <BookmarkCheck className="h-3.5 w-3.5 text-indigo-500" />
+                        <BookmarkCheck className={`h-3.5 w-3.5 ${readerChrome.icon}`} />
                         {formatSavedAt(lastPinnedAt || activeBook.lastPositionAt)} · Trang {bookVisualPage}/{bookPageCount}
                       </span>
                       <span className="mt-0.5 block text-[9px] font-medium">
@@ -2096,7 +2112,7 @@ export const ReaderView: React.FC = () => {
                           key={id}
                           type="button"
                           onClick={() => { persistCurrentReadingPosition(); updateBook(activeBook.id, { readingMode: id }); }}
-                          className={`h-10 rounded-xl border text-xs font-bold transition ${readingMode === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                          className={`h-10 rounded-xl border text-xs font-bold transition ${readingMode === id ? readerChrome.active : 'border-current/15 bg-transparent'}`}
                         >
                           {label}
                         </button>
@@ -2117,7 +2133,7 @@ export const ReaderView: React.FC = () => {
                           key={id}
                           type="button"
                           onClick={() => updateBook(activeBook.id, { fontFamily: id })}
-                          className={`h-11 rounded-xl border text-sm font-bold transition ${activeBook.fontFamily === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                          className={`h-11 rounded-xl border text-sm font-bold transition ${activeBook.fontFamily === id ? readerChrome.active : 'border-current/15 bg-transparent'}`}
                           style={{ fontFamily: fontFamilies[id] }}
                         >
                           {label}
@@ -2129,11 +2145,11 @@ export const ReaderView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <label>
                       <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Cỡ chữ</span><span>{activeBook.fontSize}px</span></span>
-                      <input type="range" min="15" max="30" step="1" value={activeBook.fontSize} onChange={(event) => updateBook(activeBook.id, { fontSize: Number(event.target.value) })} className="mt-3 w-full accent-indigo-500" />
+                      <input type="range" min="15" max="30" step="1" value={activeBook.fontSize} onChange={(event) => updateBook(activeBook.id, { fontSize: Number(event.target.value) })} className={`mt-3 w-full ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`} />
                     </label>
                     <label>
                       <span className={`flex items-center justify-between text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}><span>Giãn dòng</span><span>{activeBook.lineHeight.toFixed(1)}</span></span>
-                      <input type="range" min="1.4" max="2.3" step="0.1" value={activeBook.lineHeight} onChange={(event) => updateBook(activeBook.id, { lineHeight: Number(event.target.value) })} className="mt-3 w-full accent-indigo-500" />
+                      <input type="range" min="1.4" max="2.3" step="0.1" value={activeBook.lineHeight} onChange={(event) => updateBook(activeBook.id, { lineHeight: Number(event.target.value) })} className={`mt-3 w-full ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`} />
                     </label>
                   </div>
 
@@ -2143,14 +2159,14 @@ export const ReaderView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateBook(activeBook.id, { textAlign: 'justify' })}
-                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'justify' ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'justify' ? readerChrome.active : 'border-current/15 bg-transparent'}`}
                       >
                         <AlignJustify className="h-4 w-4" /> Căn đều
                       </button>
                       <button
                         type="button"
                         onClick={() => updateBook(activeBook.id, { textAlign: 'left' })}
-                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'left' ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}
+                        className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.textAlign === 'left' ? readerChrome.active : 'border-current/15 bg-transparent'}`}
                       >
                         <AlignLeft className="h-4 w-4" /> Căn trái
                       </button>
@@ -2165,7 +2181,7 @@ export const ReaderView: React.FC = () => {
                         ['medium', 'Vừa'],
                         ['wide', 'Rộng'],
                       ] as Array<[ReaderWidth, string]>).map(([id, label]) => (
-                        <button key={id} type="button" onClick={() => updateBook(activeBook.id, { contentWidth: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.contentWidth === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}>{label}</button>
+                        <button key={id} type="button" onClick={() => updateBook(activeBook.id, { contentWidth: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.contentWidth === id ? readerChrome.active : 'border-current/15 bg-transparent'}`}>{label}</button>
                       ))}
                     </div>
                   </div>
@@ -2175,7 +2191,7 @@ export const ReaderView: React.FC = () => {
                       <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${themeStyles[activeBook.theme].muted}`}>Chuyển trang</p>
                       <div className="grid grid-cols-2 gap-2">
                         {([['none', 'Không hiệu ứng'], ['slide', 'Trượt nhẹ']] as Array<[ReaderPageTransition, string]>).map(([id, label]) => (
-                          <button key={id} type="button" onClick={() => updateBook(activeBook.id, { pageTransition: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.pageTransition === id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}>{label}</button>
+                          <button key={id} type="button" onClick={() => updateBook(activeBook.id, { pageTransition: id })} className={`h-10 rounded-xl border text-xs font-bold transition ${activeBook.pageTransition === id ? readerChrome.active : 'border-current/15 bg-transparent'}`}>{label}</button>
                         ))}
                       </div>
                       <p className={`mt-2 text-[9px] leading-4 ${themeStyles[activeBook.theme].muted}`}>Mặc định không hiệu ứng. Vuốt trái/phải để chuyển trang.</p>
@@ -2188,7 +2204,7 @@ export const ReaderView: React.FC = () => {
                       {themeButtons.map((theme) => {
                         const Icon = theme.icon;
                         return (
-                          <button key={theme.id} type="button" onClick={() => updateBook(activeBook.id, { theme: theme.id })} className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.theme === theme.id ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-current/15 bg-transparent'}`}>
+                          <button key={theme.id} type="button" onClick={() => updateBook(activeBook.id, { theme: theme.id })} className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${activeBook.theme === theme.id ? readerChrome.active : 'border-current/15 bg-transparent'}`}>
                             <Icon className="h-3.5 w-3.5" /> {theme.label}
                           </button>
                         );
@@ -2206,7 +2222,7 @@ export const ReaderView: React.FC = () => {
                         step="5"
                         value={readerColorIntensity}
                         onChange={(event) => updateBook(activeBook.id, { colorIntensity: Number(event.target.value) })}
-                        className="mt-3 w-full accent-indigo-500"
+                        className={`mt-3 w-full ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`}
                         aria-label="Độ màu nền khi đọc"
                       />
                       <div className={`mt-1.5 flex justify-between text-[9px] font-medium ${themeStyles[activeBook.theme].muted}`}>
@@ -2241,7 +2257,7 @@ export const ReaderView: React.FC = () => {
                     type="button"
                     onClick={toggleSpeech}
                     disabled={ttsPlaybackMode === 'online' && onlineAudioPreparing && ttsStatus === 'idle'}
-                    className="grid h-14 w-14 place-items-center rounded-full bg-indigo-500 text-white shadow-sm transition hover:bg-indigo-600 disabled:cursor-wait disabled:opacity-55"
+                    className={`grid h-14 w-14 place-items-center rounded-full shadow-sm transition disabled:cursor-wait disabled:opacity-55 ${readerChrome.primary}`}
                     aria-label={ttsStatus === 'playing' ? 'Tạm dừng' : onlineAudioPreparing ? 'Đang chuẩn bị giọng' : 'Phát'}
                   >
                     {ttsStatus === 'playing' ? <Pause className="h-6 w-6" /> : <Play className="ml-0.5 h-6 w-6" />}
@@ -2270,7 +2286,7 @@ export const ReaderView: React.FC = () => {
                         stopSpeech();
                         updateBook(activeBook.id, { ttsMode: 'online' });
                       }}
-                      className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'online' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                      className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'online' ? `${readerChrome.primary} shadow-sm` : 'hover:bg-black/5'}`}
                     >
                       <Cloud className="h-4 w-4" /> Online neural
                     </button>
@@ -2281,7 +2297,7 @@ export const ReaderView: React.FC = () => {
                       stopSpeech();
                       updateBook(activeBook.id, { ttsMode: 'device' });
                     }}
-                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'device' ? 'bg-indigo-500 text-white shadow-sm' : 'hover:bg-black/5'}`}
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl text-xs font-bold transition ${ttsPlaybackMode === 'device' ? `${readerChrome.primary} shadow-sm` : 'hover:bg-black/5'}`}
                   >
                     <Smartphone className="h-4 w-4" /> Trên máy
                   </button>
@@ -2398,7 +2414,7 @@ export const ReaderView: React.FC = () => {
                           stopSpeech();
                           updateBook(activeBook.id, { ttsRate: value });
                         }}
-                        className="mt-3 w-full accent-indigo-500"
+                        className={`mt-3 w-full ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`}
                       />
                     </label>
                     <label className="block">
@@ -2414,7 +2430,7 @@ export const ReaderView: React.FC = () => {
                           stopSpeech();
                           updateBook(activeBook.id, { ttsPitch: value });
                         }}
-                        className="mt-3 w-full accent-indigo-500"
+                        className={`mt-3 w-full ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`}
                       />
                     </label>
                   </div>
@@ -2428,7 +2444,7 @@ export const ReaderView: React.FC = () => {
                       stopSpeech();
                       updateBook(activeBook.id, { ttsCleanText: event.target.checked });
                     }}
-                    className="mt-0.5 h-4 w-4 accent-indigo-500"
+                    className={`mt-0.5 h-4 w-4 ${activeBook.theme === 'night' ? 'accent-[#cdbda7]' : 'accent-indigo-500'}`}
                   />
                   <span className="min-w-0">
                     <span className="block text-xs font-bold">Lọc nội dung gây khó chịu</span>

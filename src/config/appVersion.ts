@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.25';
-export const APP_UPDATED_AT = '2026-10-01T01:32:00+07:00';
+export const APP_VERSION = '0.9.26';
+export const APP_UPDATED_AT = '2026-10-02T16:15:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.26',
+    updatedAt: '2026-10-02T16:15:00+07:00',
+    title: 'Phân màu macro rõ hơn',
+    changes: [
+      'Calories dùng màu than trung tính thay vì tím để không cạnh tranh thị giác với macro.',
+      'Protein dùng xanh biển, Carb dùng hổ phách và Fat dùng đỏ hồng trầm xuyên suốt màn Dinh dưỡng.',
+      'Nhập nhanh và báo cáo dùng cùng hệ màu để nhìn P/C/F nhanh mà giao diện vẫn dịu.',
+    ],
+  },
   {
     version: '0.9.25',
     updatedAt: '2026-10-01T01:32:00+07:00',

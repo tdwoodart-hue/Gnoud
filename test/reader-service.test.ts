@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, pickLatestReaderPosition, sanitizeSpeechText } from '../src/services/readerService';
+import { calculateReaderProgress, createReaderBook, detectReaderFormat, paginateBookContent, pickLatestReaderPosition, restoreReaderPagePosition, sanitizeSpeechText } from '../src/services/readerService';
 
 test('reader detects supported book formats', () => {
   assert.equal(detectReaderFormat('book.pdf'), 'pdf');
@@ -92,4 +92,24 @@ test('reader keeps the newest reading position even when other metadata is newer
   assert.equal(position.scrollProgress, 0.61);
   assert.equal(position.overallProgress, 0.58);
   assert.equal(position.lastPositionAt, local.lastPositionAt);
+});
+
+
+test('reader restores progress after reload even when page count changes', () => {
+  const beforeReload = restoreReaderPagePosition('scroll', 12, 7, 0.4, (7 + 0.4) / 12);
+  assert.equal(beforeReload.page, 8);
+  assert.ok(Math.abs(beforeReload.withinPage - 0.4) < 0.0001);
+
+  // Same reading progress, but viewport repaginates the chapter to 18 visual pages.
+  const afterReload = restoreReaderPagePosition('scroll', 18, 7, 0.4, (7 + 0.4) / 12);
+  assert.equal(afterReload.page, 12);
+  assert.ok(afterReload.withinPage > 0);
+
+  const paged = restoreReaderPagePosition('paged', 20, 7, 0, 7 / 11);
+  assert.equal(paged.page, 13);
+});
+
+test('reader falls back to legacy saved page when ratio is absent', () => {
+  assert.deepEqual(restoreReaderPagePosition('scroll', 20, 6, 0.25, 0), { page: 7, withinPage: 0.25 });
+  assert.deepEqual(restoreReaderPagePosition('paged', 20, 6, 0.75, 0), { page: 7, withinPage: 0 });
 });

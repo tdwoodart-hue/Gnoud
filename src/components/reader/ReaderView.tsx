@@ -41,6 +41,7 @@ import {
   loadReaderLibrary,
   parseEpubBook,
   paginateBookContent,
+  restoreReaderPagePosition,
   READER_MAX_BOOK_CHARS,
   READER_MAX_BOOKS,
   READER_MAX_FILE_BYTES,
@@ -283,6 +284,8 @@ export const ReaderView: React.FC = () => {
   const touchStartYRef = useRef<number | null>(null);
   const lastHorizontalSwipeAtRef = useRef(0);
   const pendingPageScrollRef = useRef<number | null>(null);
+  const restoringPositionRef = useRef(false);
+  const restorePositionTimerRef = useRef<number | null>(null);
   const pageTurnTimerRef = useRef<number | null>(null);
   const cloudMetadataTimerRef = useRef<number | null>(null);
   const readerActivityAtRef = useRef(Date.now());
@@ -646,6 +649,13 @@ export const ReaderView: React.FC = () => {
     return Math.round(clamp(470 * widthFactor * heightFactor * fontFactor * lineFactor * widthSettingFactor * modeFactor, 220, 3200));
   }, [activeBook?.fontSize, activeBook?.lineHeight, activeBook?.contentWidth, readerViewport.height, readerViewport.width, readingMode]);
 
+  const readerContentReady = Boolean(
+    activeBook && (
+      activeBook.format === 'pdf' ||
+      (activeBook.format === 'epub' ? epubChapters.length > 0 && Boolean(activeChapter) : Boolean(activeBook.content))
+    ),
+  );
+
   const readerPages = useMemo(
     () => activeBook?.format === 'pdf' ? [''] : paginateBookContent(readerText, pageCharLimit),
     [activeBook?.format, readerText, pageCharLimit],
@@ -706,15 +716,23 @@ export const ReaderView: React.FC = () => {
   }, [readingOpen, activeBook?.id, activeBook?.format]);
 
   useEffect(() => {
-    if (!readingOpen || !activeBook || activeBook.format === 'pdf') return;
+    if (!readingOpen || !activeBook || activeBook.format === 'pdf' || !readerContentReady) return;
     const count = Math.max(1, readerPages.length);
-    const page = clamp((activeBook.currentPage || 0) + 1, 1, count);
+    const restored = restoreReaderPagePosition(
+      readingMode,
+      count,
+      activeBook.currentPage,
+      activeBook.pageScrollProgress,
+      activeBook.scrollProgress,
+    );
+    restoringPositionRef.current = true;
+    if (restorePositionTimerRef.current) window.clearTimeout(restorePositionTimerRef.current);
     setVisualPageCount(count);
-    setVisualPage(page);
+    setVisualPage(restored.page);
     setLiveScrollProgress(clamp(activeBook.scrollProgress || 0, 0, 1));
     setLastPinnedAt(activeBook.lastPositionAt || null);
-    pendingPageScrollRef.current = readingMode === 'scroll' ? clamp(activeBook.pageScrollProgress || 0, 0, 1) : 0;
-  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerPages.length, readingMode]);
+    pendingPageScrollRef.current = readingMode === 'scroll' ? restored.withinPage : 0;
+  }, [readingOpen, activeBook?.id, activeBook?.currentChapter, activeBook?.format, readerContentReady, readerPages.length, readingMode]);
 
   useEffect(() => {
     if (!readingOpen || !activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return undefined;
@@ -729,6 +747,10 @@ export const ReaderView: React.FC = () => {
         const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
         element.scrollTop = maxScroll * clamp(requested, 0, 1);
         pendingPageScrollRef.current = null;
+        restorePositionTimerRef.current = window.setTimeout(() => {
+          restoringPositionRef.current = false;
+          restorePositionTimerRef.current = null;
+        }, 120);
       });
     });
 
@@ -1360,6 +1382,11 @@ export const ReaderView: React.FC = () => {
 
   const openBook = (id: string) => {
     stopSpeech();
+    restoringPositionRef.current = true;
+    if (restorePositionTimerRef.current) {
+      window.clearTimeout(restorePositionTimerRef.current);
+      restorePositionTimerRef.current = null;
+    }
     const openedAt = new Date().toISOString();
     readerActivityAtRef.current = Date.now();
     readerSessionRef.current = {
@@ -1559,6 +1586,7 @@ export const ReaderView: React.FC = () => {
 
   const handleReadingScroll = () => {
     if (!activeBook || activeBook.format === 'pdf' || readingMode !== 'scroll') return;
+    if (restoringPositionRef.current) return;
     const metrics = getScrollMetrics();
     if (!metrics) return;
     readerActivityAtRef.current = Date.now();
@@ -1779,6 +1807,11 @@ export const ReaderView: React.FC = () => {
       window.clearTimeout(pageTurnTimerRef.current);
       pageTurnTimerRef.current = null;
     }
+    if (restorePositionTimerRef.current) {
+      window.clearTimeout(restorePositionTimerRef.current);
+      restorePositionTimerRef.current = null;
+    }
+    restoringPositionRef.current = false;
     persistCurrentReadingPosition();
     flushReaderTime();
     stopSpeech();

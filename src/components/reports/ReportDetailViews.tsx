@@ -286,7 +286,7 @@ export const NutritionReportView: React.FC<{
   ];
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
-      <DetailHeader title="Dinh dưỡng" subtitle="Báo cáo ăn uống, bước chân và cân nặng" onBack={onBack} />
+      <DetailHeader title="Dinh dưỡng" subtitle="Trung bình kcal/macro chỉ tính các ngày có đủ dữ liệu" onBack={onBack} />
       <RangeControl value={range} onChange={onRange} />
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard label="Calories TB" value={summary.averageCalories === null ? '—' : whole.format(summary.averageCalories) + ' kcal'} meta={summary.calorieAdherenceRate === null ? undefined : summary.calorieAdherenceRate + '% ngày đạt vùng'} icon={UtensilsCrossed} />
@@ -294,9 +294,18 @@ export const NutritionReportView: React.FC<{
         <MetricCard label="Steps TB" value={summary.averageSteps === null ? '—' : whole.format(summary.averageSteps)} meta={summary.stepAdherenceRate === null ? undefined : summary.stepAdherenceRate + '% ngày đạt'} icon={Footprints} tone="bg-emerald-50 text-emerald-700" />
         <MetricCard label="Cân nặng" value={summary.latestWeightKg === null ? '—' : decimal.format(summary.latestWeightKg) + ' kg'} meta={summary.weightChangeKg === null ? 'Chưa đủ mốc so sánh' : (summary.weightChangeKg > 0 ? '+' : '') + decimal.format(summary.weightChangeKg) + ' kg trong khoảng'} icon={Scale} tone="bg-violet-50 text-violet-700" />
       </div>
+      {summary.incompleteDays > 0 || summary.estimatedDays > 0 ? (
+        <div className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-[10px] leading-5 text-slate-500 shadow-xs">
+          <strong className="text-slate-700">{summary.trackedDays}/{summary.loggedDays} ngày</strong> có đủ số liệu để tính trung bình.
+          {summary.estimatedDays > 0 ? ` ${summary.estimatedDays} ngày có số liệu ước tính.` : ''}
+          {summary.incompleteDays > 0 ? ` ${summary.incompleteDays} ngày có bữa không theo dõi đã được loại khỏi kcal/macro trung bình.` : ''}
+        </div>
+      ) : null}
       <Section title="Độ bám mục tiêu"><div className="grid grid-cols-3 gap-2.5">{adherence.map((item) => <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-white p-3 text-center shadow-xs"><p className="text-xl font-bold text-slate-900">{item.value === null ? '—' : item.value + '%'}</p><p className="mt-0.5 text-[9px] font-semibold text-slate-400">{item.label}</p></div>)}</div>{summary.averageCalorieDeviation !== null ? <p className="text-[10px] text-slate-400">Sai lệch calories trung bình: {whole.format(summary.averageCalorieDeviation)} kcal/ngày.</p> : null}</Section>
       <Section title="Lịch sử theo ngày" subtitle="Mỗi dòng là dữ liệu thật đã ghi trong ngày">
-        {report.daily.length ? <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">{report.daily.slice(0, 20).map((day, index) => <button key={day.date} type="button" onClick={() => onOpenDay(day.date)} className={'flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-slate-50 ' + (index ? 'border-t border-slate-100' : '')}><div className="min-w-0"><p className="text-xs font-bold text-slate-800">{formatDate(day.date)}</p><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-slate-400"><span>{day.mealCount} món</span><span>C {whole.format(day.carbs)}g</span><span>F {whole.format(day.fat)}g</span>{day.steps !== null ? <span>{whole.format(day.steps)} bước</span> : null}{day.weightKg !== null ? <span>{decimal.format(day.weightKg)} kg</span> : null}</div></div><div className="flex shrink-0 items-center gap-2"><p className="text-[10px] font-semibold text-slate-500">{whole.format(day.calories)} kcal · P {whole.format(day.protein)}g</p><ChevronRight className="h-4 w-4 text-slate-300" /></div></button>)}</div> : <EmptyState title="Chưa có dữ liệu trong khoảng này" />}
+        {report.daily.length ? <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xs">{report.daily.slice(0, 20).map((day, index) => <button key={day.date} type="button" onClick={() => onOpenDay(day.date)} className={'flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-slate-50 ' + (index ? 'border-t border-slate-100' : '')}><div className="min-w-0"><p className="text-xs font-bold text-slate-800">{formatDate(day.date)}</p><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-slate-400"><span>{day.tracking === 'untracked' ? 'Thiếu dữ liệu' : day.tracking === 'estimated' ? `${day.mealCount} mục · Ước tính` : `${day.mealCount} mục`}</span><span>C {whole.format(day.carbs)}g</span><span>F {whole.format(day.fat)}g</span>{day.steps !== null ? <span>{whole.format(day.steps)} bước</span> : null}{day.weightKg !== null ? <span>{decimal.format(day.weightKg)} kg</span> : null}</div></div><div className="flex shrink-0 items-center gap-2"><p className={`text-[10px] font-semibold ${day.tracking === 'untracked' ? 'text-amber-600' : 'text-slate-500'}`}>
+  {day.tracking === 'untracked' ? 'Không đủ dữ liệu kcal/macro' : `${whole.format(day.calories)} kcal · P ${whole.format(day.protein)}g`}
+</p><ChevronRight className="h-4 w-4 text-slate-300" /></div></button>)}</div> : <EmptyState title="Chưa có dữ liệu trong khoảng này" />}
       </Section>
     </div>
   );

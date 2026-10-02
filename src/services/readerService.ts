@@ -55,6 +55,7 @@ export interface ReaderBook {
   cloudSyncedAt?: string;
   lastPositionAt?: string;
   theme: ReaderTheme;
+  colorIntensity?: number;
   addedAt: string;
   updatedAt: string;
   lastOpenedAt: string;
@@ -230,6 +231,7 @@ export function createReaderBook(input: {
     sessions: [],
     lastPositionAt: undefined,
     theme: 'paper',
+    colorIntensity: 35,
     addedAt: now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -321,6 +323,7 @@ export function loadReaderLibrary(userId?: string | null): ReaderBook[] {
           cloudSyncedAt: typeof book.cloudSyncedAt === 'string' ? book.cloudSyncedAt : undefined,
           lastPositionAt: typeof book.lastPositionAt === 'string' ? book.lastPositionAt : undefined,
           theme,
+          colorIntensity: Math.min(100, Math.max(0, Number(book.colorIntensity) || 35)),
           addedAt: typeof book.addedAt === 'string' ? book.addedAt : new Date().toISOString(),
           updatedAt: typeof book.updatedAt === 'string' ? book.updatedAt : new Date().toISOString(),
           lastOpenedAt: typeof book.lastOpenedAt === 'string' ? book.lastOpenedAt : new Date().toISOString(),

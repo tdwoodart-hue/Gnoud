@@ -16,6 +16,7 @@ import {
 import { db, storage } from '../lib/firebase';
 import {
   loadReaderBinary,
+  pickLatestReaderPosition,
   saveReaderBinary,
   type ReaderBook,
 } from './readerService';
@@ -280,9 +281,12 @@ export function mergeReaderLibraries(localBooks: ReaderBook[], cloudBooks: Reade
     const cloudWins = newer(cloud.updatedAt, local.updatedAt);
     const primary = cloudWins ? cloud : local;
     const secondary = cloudWins ? local : cloud;
+    const latestPosition = pickLatestReaderPosition(local, cloud);
     merged.push({
       ...secondary,
       ...primary,
+      // Vị trí đọc có nhịp cập nhật riêng; theme/settings mới hơn không được kéo trang về dữ liệu cũ.
+      ...latestPosition,
       // Không để metadata cloud rỗng ghi đè nội dung text đã cache trên máy.
       content: local.content || cloud.content || '',
       binaryKey: local.binaryKey || cloud.binaryKey || `reader-file:${id}`,

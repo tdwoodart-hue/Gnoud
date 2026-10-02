@@ -87,47 +87,69 @@ export const NutritionDayReportView: React.FC<{
   report: NutritionDayReport;
   onBack: () => void;
 }> = ({ report, onBack }) => {
-  const calorieMeta = (report.calorieDelta > 0 ? '+' : '') + whole.format(report.calorieDelta) + ' kcal so mục tiêu';
-  const proteinMeta = (report.proteinDelta > 0 ? '+' : '') + whole.format(report.proteinDelta) + ' g so mục tiêu';
+  const incomplete = report.tracking === 'untracked';
+  const estimated = report.tracking === 'estimated';
+  const calorieMeta = incomplete
+    ? 'Dữ liệu chưa đầy đủ · không chấm mục tiêu'
+    : (report.calorieDelta > 0 ? '+' : '') + whole.format(report.calorieDelta) + ' kcal so mục tiêu';
+  const proteinMeta = incomplete
+    ? 'Dữ liệu chưa đầy đủ'
+    : (report.proteinDelta > 0 ? '+' : '') + whole.format(report.proteinDelta) + ' g so mục tiêu';
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-6">
       <DetailHeader title={'Dinh dưỡng · ' + formatDate(report.date)} subtitle="Báo cáo theo ngày → bữa → từng món" onBack={onBack} />
 
+      {incomplete || estimated ? (
+        <div className={`rounded-2xl px-4 py-3 text-[11px] font-semibold leading-5 ${incomplete ? 'bg-amber-50 text-amber-800' : 'bg-sky-50 text-sky-800'}`}>
+          {incomplete
+            ? 'Ngày này có ít nhất một bữa không theo dõi. Các số kcal/macro chỉ là phần đã ghi và ngày này bị loại khỏi trung bình dinh dưỡng.'
+            : 'Ngày này dùng số liệu ước tính. Kcal/macro vẫn được tính nhưng được giữ nhãn ước tính trong báo cáo.'}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard label="Calories" value={whole.format(report.calories) + ' kcal'} meta={calorieMeta} icon={UtensilsCrossed} />
         <MetricCard label="Protein" value={whole.format(report.protein) + ' g'} meta={proteinMeta} icon={Target} tone="bg-sky-50 text-sky-700" />
         <MetricCard label="Steps" value={report.steps === null ? '—' : whole.format(report.steps)} meta={report.steps === null ? 'Chưa ghi trong ngày' : whole.format(report.stepTarget) + ' mục tiêu'} icon={Footprints} tone="bg-emerald-50 text-emerald-700" />
-        <MetricCard label="Cân nặng" value={report.weightKg === null ? '—' : decimal.format(report.weightKg) + ' kg'} meta={report.itemCount + ' món đã log'} icon={Scale} tone="bg-violet-50 text-violet-700" />
+        <MetricCard label="Cân nặng" value={report.weightKg === null ? '—' : decimal.format(report.weightKg) + ' kg'} meta={report.itemCount + ' mục đã ghi'} icon={Scale} tone="bg-violet-50 text-violet-700" />
       </div>
 
-      <Section title="So với mục tiêu ngày">
-        <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
-          {[
-            ['Calories', report.caloriePercent, whole.format(report.calories) + ' / ' + whole.format(report.calorieTarget) + ' kcal', 'bg-indigo-500'],
-            ['Protein', report.proteinPercent, whole.format(report.protein) + ' / ' + whole.format(report.proteinTarget) + ' g', 'bg-sky-500'],
-            ['Carb', report.carbPercent, whole.format(report.carbs) + ' / ' + whole.format(report.carbTarget) + ' g', 'bg-amber-500'],
-            ['Fat', report.fatPercent, whole.format(report.fat) + ' / ' + whole.format(report.fatTarget) + ' g', 'bg-rose-500'],
-          ].map(([label, percent, value, color]) => (
-            <div key={String(label)}>
-              <div className="mb-1.5 flex items-center justify-between gap-3 text-[10px]">
-                <span className="font-semibold text-slate-500">{label}</span>
-                <span className="font-bold text-slate-700">{value} · {percent}%</span>
+      {incomplete ? (
+        <Section title="So với mục tiêu ngày">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-[11px] leading-5 text-amber-800">
+            Bỏ qua chấm mục tiêu kcal và macro vì ngày này có bữa không theo dõi. App không coi phần thiếu là 0 kcal.
+          </div>
+        </Section>
+      ) : (
+        <Section title="So với mục tiêu ngày">
+          <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-xs">
+            {[
+              ['Calories', report.caloriePercent, whole.format(report.calories) + ' / ' + whole.format(report.calorieTarget) + ' kcal', 'bg-indigo-500'],
+              ['Protein', report.proteinPercent, whole.format(report.protein) + ' / ' + whole.format(report.proteinTarget) + ' g', 'bg-sky-500'],
+              ['Carb', report.carbPercent, whole.format(report.carbs) + ' / ' + whole.format(report.carbTarget) + ' g', 'bg-amber-500'],
+              ['Fat', report.fatPercent, whole.format(report.fat) + ' / ' + whole.format(report.fatTarget) + ' g', 'bg-rose-500'],
+            ].map(([label, percent, value, color]) => (
+              <div key={String(label)}>
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[10px]">
+                  <span className="font-semibold text-slate-500">{label}</span>
+                  <span className="font-bold text-slate-700">{value} · {percent}%</span>
+                </div>
+                <ProgressBar value={Number(percent)} className={String(color)} />
               </div>
-              <ProgressBar value={Number(percent)} className={String(color)} />
-            </div>
-          ))}
-          {report.stepPercent !== null ? (
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-3 text-[10px]">
-                <span className="font-semibold text-slate-500">Steps</span>
-                <span className="font-bold text-slate-700">{whole.format(report.steps || 0)} / {whole.format(report.stepTarget)} · {report.stepPercent}%</span>
+            ))}
+            {report.stepPercent !== null ? (
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[10px]">
+                  <span className="font-semibold text-slate-500">Steps</span>
+                  <span className="font-bold text-slate-700">{whole.format(report.steps || 0)} / {whole.format(report.stepTarget)} · {report.stepPercent}%</span>
+                </div>
+                <ProgressBar value={report.stepPercent} className="bg-emerald-500" />
               </div>
-              <ProgressBar value={report.stepPercent} className="bg-emerald-500" />
-            </div>
-          ) : null}
-        </div>
-      </Section>
+            ) : null}
+          </div>
+        </Section>
+      )}
 
       <Section title="Theo từng bữa" subtitle="Mỗi bữa mở ra toàn bộ món đã log">
         {report.meals.length ? (
@@ -138,11 +160,15 @@ export const NutritionDayReportView: React.FC<{
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-slate-900">{mealLabels[meal.meal]}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">{meal.items.length} món</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">
+                        {meal.tracking === 'untracked' ? 'Không theo dõi' : meal.tracking === 'estimated' ? `${meal.items.length} món · Ước tính` : `${meal.items.length} món`}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-bold text-slate-800">{whole.format(meal.calories)} kcal</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">P {whole.format(meal.protein)} · C {whole.format(meal.carbs)} · F {whole.format(meal.fat)}</p>
+                      <p className="text-xs font-bold text-slate-800">{meal.tracking === 'untracked' ? '— kcal' : whole.format(meal.calories) + ' kcal'}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">
+                        {meal.tracking === 'untracked' ? 'Không tính macro' : `P ${whole.format(meal.protein)} · C ${whole.format(meal.carbs)} · F ${whole.format(meal.fat)}`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -154,8 +180,10 @@ export const NutritionDayReportView: React.FC<{
                         <p className="mt-0.5 text-[9px] text-slate-400">{item.servingLabel || (item.amount !== undefined ? String(item.amount) + ' ' + (item.unit || '') : 'Khẩu phần đã lưu')}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[11px] font-bold text-slate-700">{whole.format(item.calories)} kcal</p>
-                        <p className="mt-0.5 text-[9px] text-slate-400">P {decimal.format(item.protein)} · C {decimal.format(item.carbs)} · F {decimal.format(item.fat)}</p>
+                        <p className="text-[11px] font-bold text-slate-700">{item.tracking === 'untracked' ? 'Không theo dõi' : whole.format(item.calories) + ' kcal'}</p>
+                        <p className="mt-0.5 text-[9px] text-slate-400">
+                          {item.tracking === 'untracked' ? 'Không tính kcal / macro' : `P ${decimal.format(item.protein)} · C ${decimal.format(item.carbs)} · F ${decimal.format(item.fat)}`}
+                        </p>
                       </div>
                     </div>
                   </div>

@@ -18,6 +18,7 @@ import {
   saveDailyNote,
   subscribeDailyNotes,
 } from '../../services/dailyNotesService';
+import { dailyNotePrompt } from '../../services/dailyNotePromptService';
 
 export const DailyHourlyNotesSection: React.FC = () => {
   const { user } = useApp();
@@ -76,6 +77,11 @@ export const DailyHourlyNotesSection: React.FC = () => {
         return (b.id || '').localeCompare(a.id || '');
       });
   }, [notes, todayStr]);
+
+  const notePrompt = useMemo(
+    () => dailyNotePrompt(todayStr, todayNotes.length),
+    [todayStr, todayNotes.length],
+  );
 
   const handleAddNote = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -138,8 +144,8 @@ export const DailyHourlyNotesSection: React.FC = () => {
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-xs transition">
-      <div className="mb-2 flex items-center justify-between px-1">
-        <span className="text-xs font-semibold text-slate-600">Ghi chú trong ngày</span>
+      <div className="mb-2 flex items-start justify-between gap-3 px-1">
+        <span className="min-w-0 flex-1 text-xs font-medium leading-5 text-slate-500">{notePrompt}</span>
         {todayNotes.length > 0 && (
           <span className="text-[11px] font-medium text-slate-400">
             {todayNotes.length} ghi chú
@@ -154,7 +160,7 @@ export const DailyHourlyNotesSection: React.FC = () => {
           type="text"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Ghi chú nhanh trong ngày..."
+          placeholder="Gõ điều mày đang nghĩ..."
           className="min-w-0 flex-1 bg-transparent px-2.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none sm:text-sm"
         />
 

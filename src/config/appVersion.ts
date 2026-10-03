@@ -5,10 +5,20 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.33';
-export const APP_UPDATED_AT = '2026-10-02T23:20:00+07:00';
+export const APP_VERSION = '0.9.34';
+export const APP_UPDATED_AT = '2026-10-03T14:05:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.34',
+    updatedAt: '2026-10-03T14:05:00+07:00',
+    title: 'Câu hỏi gợi ý cho ghi chú trong ngày',
+    changes: [
+      'Thay tiêu đề xám Ghi chú trong ngày bằng một câu hỏi gợi ý ngắn để dễ nảy ý viết.',
+      'Thêm 240 câu hỏi xoay quanh quan sát, công việc, ý tưởng, khách hàng, học tập, sức khỏe, cảm xúc, tiền bạc và quyết định.',
+      'Câu hỏi đổi theo ngày và đổi tiếp sau mỗi ghi chú được lưu; ô nhập vẫn giữ giao diện gọn.',
+    ],
+  },
   {
     version: '0.9.33',
     updatedAt: '2026-10-02T23:20:00+07:00',

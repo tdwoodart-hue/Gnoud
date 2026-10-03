@@ -22,7 +22,7 @@ import { dailyNotePrompt } from '../../services/dailyNotePromptService';
 
 export const DailyHourlyNotesSection: React.FC = () => {
   const { user } = useApp();
-  const todayStr = useMemo(() => getFormattedToday(0), []);
+  const [todayStr, setTodayStr] = useState(() => getFormattedToday(0));
 
   const [notes, setNotes] = useState<DailyHourlyNote[]>(() => loadDailyNotesCache());
   const [content, setContent] = useState('');
@@ -32,6 +32,25 @@ export const DailyHourlyNotesSection: React.FC = () => {
   const [editText, setEditText] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const refreshDate = () => {
+      const next = getFormattedToday(0);
+      setTodayStr((current) => (current === next ? current : next));
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshDate();
+    };
+
+    const timer = window.setInterval(refreshDate, 60_000);
+    window.addEventListener('focus', refreshDate);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshDate);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   // Sync real-time / Firestore
   useEffect(() => {

@@ -19,6 +19,10 @@ import {
 } from './nutritionService';
 import type { FoodItem } from './foodLibraryService';
 import {
+  mergeExerciseProgressStores,
+  type ExerciseProgressStore,
+} from './exerciseService';
+import {
   normalizeNotificationPreferences,
   type NotificationPreferences,
 } from './notificationPolicy';
@@ -26,9 +30,11 @@ import {
 const NUTRITION_PROFILE_DOC = 'nutritionProfile';
 const FOOD_LIBRARY_META_DOC = 'foodLibrary';
 const NOTIFICATION_PREFS_DOC = 'notificationPreferences';
+const EXERCISE_PROGRESS_META_DOC = 'exerciseProgress';
 const NUTRITION_ENTRIES_COLLECTION = 'nutritionEntries';
 const NUTRITION_METRICS_COLLECTION = 'nutritionMetrics';
 const FOOD_LIBRARY_COLLECTION = 'foodLibrary';
+const EXERCISE_PROGRESS_COLLECTION = 'exerciseProgress';
 
 const safeDocId = (value: string) => encodeURIComponent(value || 'item');
 
@@ -206,6 +212,30 @@ export function sameNotificationPreferences(
   return JSON.stringify(normalizeNotificationPreferences(left)) === JSON.stringify(normalizeNotificationPreferences(right));
 }
 
+function canonicalExerciseProgress(progress: ExerciseProgressStore) {
+  return Object.entries(progress)
+    .map(([key, item]) => ({
+      key,
+      label: item.label || '',
+      history: [...(item.history || [])]
+        .map((entry) => ({
+          date: entry.date,
+          weight: entry.weight,
+          reps: entry.reps,
+          ...(entry.updatedAt ? { updatedAt: entry.updatedAt } : {}),
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+export function sameExerciseProgress(
+  left: ExerciseProgressStore,
+  right: ExerciseProgressStore,
+): boolean {
+  return JSON.stringify(canonicalExerciseProgress(left)) === JSON.stringify(canonicalExerciseProgress(right));
+}
+
 function nutritionProfileRef(userId: string) {
   return doc(db, 'users', userId, 'appState', NUTRITION_PROFILE_DOC);
 }
@@ -228,6 +258,14 @@ function foodLibraryMetaRef(userId: string) {
 
 function notificationPreferencesRef(userId: string) {
   return doc(db, 'users', userId, 'appState', NOTIFICATION_PREFS_DOC);
+}
+
+function exerciseProgressRef(userId: string) {
+  return collection(db, 'users', userId, EXERCISE_PROGRESS_COLLECTION);
+}
+
+function exerciseProgressMetaRef(userId: string) {
+  return doc(db, 'users', userId, 'appState', EXERCISE_PROGRESS_META_DOC);
 }
 
 export async function bootstrapNutritionCloud(
@@ -463,4 +501,88 @@ export function subscribeNotificationPreferencesCloud(
 // Kept explicit rather than a generic delete helper so accidental calls cannot erase whole domains.
 export async function clearNotificationPreferencesCloud(userId: string): Promise<void> {
   await deleteDoc(notificationPreferencesRef(userId));
+}
+
+
+function exerciseStoreFromCloud(
+  docs: Array<{ id: string; data: () => Record<string, unknown> }>,
+): ExerciseProgressStore {
+  const store: ExerciseProgressStore = {};
+  docs.forEach((snapshot) => {
+    const data = snapshot.data();
+    const key = typeof data.key === 'string' && data.key
+      ? data.key
+      : decodeURIComponent(snapshot.id);
+    if (!key) return;
+    store[key] = {
+      ...(data as unknown as ExerciseProgressStore[string]),
+      label: typeof data.label === 'string' ? data.label : key,
+    };
+  });
+  return store;
+}
+
+export async function bootstrapExerciseProgressCloud(
+  userId: string,
+  local: ExerciseProgressStore,
+): Promise<ExerciseProgressStore> {
+  const [metaSnapshot, progressSnapshot] = await Promise.all([
+    getDoc(exerciseProgressMetaRef(userId)),
+    getDocs(exerciseProgressRef(userId)),
+  ]);
+
+  if (!metaSnapshot.exists()) {
+    await syncExerciseProgressCloud(userId, {}, local, true);
+    return local;
+  }
+
+  const remote = exerciseStoreFromCloud(progressSnapshot.docs);
+  const merged = mergeExerciseProgressStores(remote, local);
+  if (!sameExerciseProgress(remote, merged)) {
+    await syncExerciseProgressCloud(userId, remote, merged);
+  }
+  return merged;
+}
+
+export async function syncExerciseProgressCloud(
+  userId: string,
+  previous: ExerciseProgressStore,
+  next: ExerciseProgressStore,
+  ensureInitialized = false,
+): Promise<void> {
+  const previousRows = Object.entries(previous).map(([key, progress]) => ({ key, progress }));
+  const nextRows = Object.entries(next).map(([key, progress]) => ({ key, progress }));
+  const diff = diffByKey(previousRows, nextRows, (row) => row.key);
+  const operations: BatchOperation[] = [];
+
+  diff.upserts.forEach(({ key, progress }) => {
+    operations.push((batch) => batch.set(
+      doc(exerciseProgressRef(userId), safeDocId(key)),
+      firestoreSafe({ key, ...progress }),
+    ));
+  });
+  diff.deletes.forEach(({ key }) => {
+    operations.push((batch) => batch.delete(doc(exerciseProgressRef(userId), safeDocId(key))));
+  });
+
+  if (ensureInitialized) {
+    operations.push((batch) => batch.set(exerciseProgressMetaRef(userId), { initialized: true }));
+  }
+
+  await commitOperations(operations);
+}
+
+export function subscribeExerciseProgressCloud(
+  userId: string,
+  onData: (progress: ExerciseProgressStore) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return onSnapshot(
+    exerciseProgressRef(userId),
+    (snapshot) => onData(exerciseStoreFromCloud(snapshot.docs)),
+    (error) => {
+      console.warn('Exercise progress realtime sync failed:', error);
+      onError?.(error);
+    },
+  );
 }

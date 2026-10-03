@@ -25,6 +25,9 @@ export function applyAppTheme(theme: AppTheme): void {
   const themeColor = theme === 'dark' ? '#0b0d12' : '#fafbfc';
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) meta.content = themeColor;
+
+  const statusBar = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (statusBar) statusBar.content = theme === 'dark' ? 'black-translucent' : 'default';
 }
 
 export function saveAppTheme(theme: AppTheme): void {

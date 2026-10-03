@@ -74,7 +74,7 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/40 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/40 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:items-center sm:p-4"
       onClick={onClose}
     >
       <section

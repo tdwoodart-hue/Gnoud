@@ -1,20 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
+  bootstrapExerciseProgressCloud,
   bootstrapFoodLibraryCloud,
   bootstrapNotificationPreferencesCloud,
   bootstrapNutritionCloud,
+  sameExerciseProgress,
   sameFoodLibrary,
   sameNotificationPreferences,
   sameNutritionState,
+  subscribeExerciseProgressCloud,
   subscribeFoodLibraryCloud,
   subscribeNotificationPreferencesCloud,
   subscribeNutritionCloud,
+  syncExerciseProgressCloud,
   syncFoodLibraryCloud,
   syncNotificationPreferencesCloud,
   syncNutritionCloud,
 } from '../../services/accountDataSyncService';
 import { loadFoodLibrary, type FoodItem } from '../../services/foodLibraryService';
+import {
+  loadExerciseProgress,
+  mergeExerciseProgressStores,
+  persistExerciseProgress,
+  type ExerciseProgressStore,
+} from '../../services/exerciseService';
 import {
   getNotificationPreferences,
   type NotificationPreferences,
@@ -29,7 +39,7 @@ const FOOD_STORAGE_KEY = 'lich_song_food_library_v2';
 const NOTIFICATION_STORAGE_KEY = 'lich_song_notification_preferences_v1';
 const POLL_MS = 700;
 
-type RefreshDomain = 'nutrition' | 'foods' | 'preferences';
+type RefreshDomain = 'nutrition' | 'foods' | 'preferences' | 'exercise';
 
 const emitRefresh = (domain: RefreshDomain) => {
   window.dispatchEvent(new CustomEvent(ACCOUNT_DATA_REFRESH_EVENT, { detail: { domain } }));
@@ -63,6 +73,7 @@ export const AccountDataSyncBridge: React.FC = () => {
   const nutritionRef = useRef<NutritionState | null>(null);
   const foodsRef = useRef<FoodItem[] | null>(null);
   const preferencesRef = useRef<NotificationPreferences | null>(null);
+  const exerciseRef = useRef<ExerciseProgressStore | null>(null);
   const failedRef = useRef(false);
   const tasksRef = useRef(tasks);
 
@@ -75,6 +86,7 @@ export const AccountDataSyncBridge: React.FC = () => {
       nutritionRef.current = null;
       foodsRef.current = null;
       preferencesRef.current = null;
+      exerciseRef.current = null;
       failedRef.current = false;
       return;
     }
@@ -83,6 +95,7 @@ export const AccountDataSyncBridge: React.FC = () => {
     let unsubscribeNutrition: (() => void) | null = null;
     let unsubscribeFoods: (() => void) | null = null;
     let unsubscribePreferences: (() => void) | null = null;
+    let unsubscribeExercise: (() => void) | null = null;
     let timer: number | null = null;
 
     const reportFailure = (error: unknown) => {
@@ -122,16 +135,36 @@ export const AccountDataSyncBridge: React.FC = () => {
       }
     };
 
+    const applyExerciseFromCloud = (remote: ExerciseProgressStore, refresh = true) => {
+      const local = loadExerciseProgress(user.uid);
+      const merged = mergeExerciseProgressStores(remote, local);
+      const previous = exerciseRef.current;
+      exerciseRef.current = merged;
+
+      if (!sameExerciseProgress(local, merged)) {
+        persistExerciseProgress(merged, user.uid);
+        if (refresh) emitRefresh('exercise');
+      } else if (refresh && previous && !sameExerciseProgress(previous, merged)) {
+        emitRefresh('exercise');
+      }
+
+      if (!sameExerciseProgress(remote, merged)) {
+        void syncExerciseProgressCloud(user.uid, remote, merged).catch(reportFailure);
+      }
+    };
+
     const initialize = async () => {
       try {
         const localNutrition = loadNutritionState();
         const localFoods = loadFoodLibrary();
         const localPreferences = getNotificationPreferences();
+        const localExercise = loadExerciseProgress(user.uid);
 
-        const [nutrition, foods, preferences] = await Promise.all([
+        const [nutrition, foods, preferences, exercise] = await Promise.all([
           bootstrapNutritionCloud(user.uid, localNutrition),
           bootstrapFoodLibraryCloud(user.uid, localFoods),
           bootstrapNotificationPreferencesCloud(user.uid, localPreferences),
+          bootstrapExerciseProgressCloud(user.uid, localExercise),
         ]);
         if (disposed) return;
 
@@ -139,6 +172,7 @@ export const AccountDataSyncBridge: React.FC = () => {
         nutritionRef.current = nutrition;
         foodsRef.current = foods;
         preferencesRef.current = preferences;
+        exerciseRef.current = exercise;
         if (!sameNutritionState(localNutrition, nutrition)) {
           cacheNutrition(nutrition);
           emitRefresh('nutrition');
@@ -152,6 +186,10 @@ export const AccountDataSyncBridge: React.FC = () => {
           emitRefresh('preferences');
           void syncNotificationTasks(tasksRef.current, preferences).catch(() => undefined);
         }
+        if (!sameExerciseProgress(localExercise, exercise)) {
+          persistExerciseProgress(exercise, user.uid);
+          emitRefresh('exercise');
+        }
 
         unsubscribeNutrition = subscribeNutritionCloud(user.uid, (next) => {
           if (disposed) return;
@@ -164,6 +202,10 @@ export const AccountDataSyncBridge: React.FC = () => {
         unsubscribePreferences = subscribeNotificationPreferencesCloud(user.uid, (next) => {
           if (disposed) return;
           applyPreferencesFromCloud(next);
+        }, reportFailure);
+        unsubscribeExercise = subscribeExerciseProgressCloud(user.uid, (next) => {
+          if (disposed) return;
+          applyExerciseFromCloud(next);
         }, reportFailure);
 
         timer = window.setInterval(() => {
@@ -198,6 +240,21 @@ export const AccountDataSyncBridge: React.FC = () => {
               reportFailure(error);
             });
           }
+
+          const localExerciseNow = loadExerciseProgress(user.uid);
+          const previousExercise = exerciseRef.current;
+          if (previousExercise && !sameExerciseProgress(previousExercise, localExerciseNow)) {
+            const mergedExercise = mergeExerciseProgressStores(previousExercise, localExerciseNow);
+            exerciseRef.current = mergedExercise;
+            if (!sameExerciseProgress(localExerciseNow, mergedExercise)) {
+              persistExerciseProgress(mergedExercise, user.uid);
+              emitRefresh('exercise');
+            }
+            void syncExerciseProgressCloud(user.uid, previousExercise, mergedExercise).catch((error) => {
+              exerciseRef.current = previousExercise;
+              reportFailure(error);
+            });
+          }
         }, POLL_MS);
       } catch (error) {
         reportFailure(error);
@@ -212,6 +269,7 @@ export const AccountDataSyncBridge: React.FC = () => {
       unsubscribeNutrition?.();
       unsubscribeFoods?.();
       unsubscribePreferences?.();
+      unsubscribeExercise?.();
     };
   }, [user?.uid, addToast]);
 

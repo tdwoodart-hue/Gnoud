@@ -4,6 +4,7 @@ import {
   applyWorkoutQuickAction,
   buildExerciseProgressStorageKey,
   DEFAULT_EXERCISE_LIBRARY,
+  mergeExerciseProgressStores,
   exerciseKey,
   shouldClaimLegacyExerciseProgress,
   updateExerciseProgress,
@@ -73,4 +74,33 @@ test('built-in exercise catalog covers main muscle groups without duplicate exer
   ['Bench Press', 'Lat Pulldown', 'Dumbbell Lateral Raise', 'Hammer Curl', 'Rope Pushdown', 'Leg Press', 'Romanian Deadlift', 'Cable Crunch'].forEach((label) => {
     assert.ok(DEFAULT_EXERCISE_LIBRARY.some((item) => item.label === label));
   });
+});
+
+
+test('exercise cloud merge keeps history from both devices and newer same-day values', () => {
+  const cloud = {
+    [exerciseKey('Bench Press')]: {
+      label: 'Bench Press',
+      history: [
+        { date: '2026-10-01', weight: '50', reps: '8', updatedAt: '2026-10-01T12:00:00.000Z' },
+        { date: '2026-10-03', weight: '55', reps: '8', updatedAt: '2026-10-03T06:00:00.000Z' },
+      ],
+    },
+  };
+  const local = {
+    [exerciseKey('Bench Press')]: {
+      label: 'Bench Press',
+      history: [
+        { date: '2026-10-02', weight: '52.5', reps: '9', updatedAt: '2026-10-02T12:00:00.000Z' },
+        { date: '2026-10-03', weight: '57.5', reps: '7', updatedAt: '2026-10-03T07:00:00.000Z' },
+      ],
+    },
+  };
+
+  const merged = mergeExerciseProgressStores(cloud, local);
+  const bench = merged[exerciseKey('Bench Press')];
+  assert.equal(bench?.history?.length, 3);
+  assert.equal(bench?.latest?.date, '2026-10-03');
+  assert.equal(bench?.latest?.weight, '57.5');
+  assert.equal(bench?.previous?.date, '2026-10-02');
 });

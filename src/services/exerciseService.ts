@@ -5,6 +5,7 @@ export interface ExerciseLogEntry {
   date: string;
   weight: string;
   reps: string;
+  updatedAt?: string;
 }
 
 export interface ExerciseProgress {
@@ -96,6 +97,8 @@ export const DEFAULT_EXERCISE_LIBRARY: ExerciseCatalogItem[] = [
 ];
 
 export const EXERCISE_PROGRESS_STORAGE_KEY = 'gnoud-exercise-progress-v1';
+export const EXERCISE_PROGRESS_CHANGE_EVENT = 'gnoud-exercise-progress-change';
+export const EXERCISE_PROGRESS_REFRESH_EVENT = 'gnoud-exercise-progress-refresh';
 const EXERCISE_PROGRESS_SCOPED_PREFIX = 'gnoud-exercise-progress-v2';
 
 export function buildExerciseProgressStorageKey(userId?: string | null): string {
@@ -128,7 +131,8 @@ function validLog(value: unknown): value is ExerciseLogEntry {
   return typeof row.date === 'string'
     && /^\d{4}-\d{2}-\d{2}$/.test(row.date)
     && typeof row.weight === 'string'
-    && typeof row.reps === 'string';
+    && typeof row.reps === 'string'
+    && (row.updatedAt === undefined || typeof row.updatedAt === 'string');
 }
 
 function normalizeHistory(progress?: ExerciseProgress): ExerciseLogEntry[] {
@@ -142,10 +146,15 @@ function normalizeHistory(progress?: ExerciseProgress): ExerciseLogEntry[] {
   const byDate = new Map<string, ExerciseLogEntry>();
   rows.forEach((row) => {
     const existing = byDate.get(row.date);
+    const existingStamp = existing?.updatedAt || '';
+    const rowStamp = row.updatedAt || '';
+    const preferRow = !existing || !existingStamp || (Boolean(rowStamp) && rowStamp >= existingStamp);
+    if (!preferRow) return;
     byDate.set(row.date, {
       date: row.date,
       weight: row.weight || existing?.weight || '',
       reps: row.reps || existing?.reps || '',
+      ...(row.updatedAt || existing?.updatedAt ? { updatedAt: row.updatedAt || existing?.updatedAt } : {}),
     });
   });
   return [...byDate.values()]
@@ -164,6 +173,22 @@ const mergeProgress = (left: ExerciseProgress | undefined, right: ExerciseProgre
     history,
   };
 };
+
+export function mergeExerciseProgressStores(
+  left: ExerciseProgressStore,
+  right: ExerciseProgressStore,
+): ExerciseProgressStore {
+  const result: ExerciseProgressStore = {};
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  keys.forEach((key) => {
+    const leftValue = left[key];
+    const rightValue = right[key];
+    if (leftValue && rightValue) result[key] = mergeProgress(leftValue, rightValue);
+    else if (rightValue) result[key] = mergeProgress(undefined, rightValue);
+    else if (leftValue) result[key] = mergeProgress(undefined, leftValue);
+  });
+  return result;
+}
 
 function normalizeStore(parsed: unknown): ExerciseProgressStore {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
@@ -220,6 +245,9 @@ export function persistExerciseProgress(progress: ExerciseProgressStore, userId?
   if (typeof window === 'undefined') return false;
   try {
     window.localStorage.setItem(buildExerciseProgressStorageKey(userId), JSON.stringify(progress));
+    window.dispatchEvent(new CustomEvent(EXERCISE_PROGRESS_CHANGE_EVENT, {
+      detail: { userId: userId || null },
+    }));
     return true;
   } catch {
     // Không chặn buổi tập nếu trình duyệt từ chối localStorage.
@@ -243,6 +271,7 @@ export function updateExerciseProgress(
     date,
     weight: sameDate?.weight || '',
     reps: sameDate?.reps || '',
+    updatedAt: new Date().toISOString(),
   };
 
   if (updates.weight !== undefined) nextEntry.weight = String(updates.weight);

@@ -53,6 +53,7 @@ import {
 import {
   applyWorkoutQuickAction,
   DEFAULT_EXERCISE_LIBRARY,
+  EXERCISE_PROGRESS_REFRESH_EVENT,
   exerciseKey,
   loadExerciseProgress,
   persistExerciseProgress,
@@ -571,6 +572,14 @@ export const TodayView: React.FC = () => {
     setExerciseProgress(loadExerciseProgress(user?.uid));
   }, [user?.uid]);
 
+  useEffect(() => {
+    const refreshExerciseProgress = () => {
+      setExerciseProgress(loadExerciseProgress(user?.uid));
+    };
+    window.addEventListener(EXERCISE_PROGRESS_REFRESH_EVENT, refreshExerciseProgress);
+    return () => window.removeEventListener(EXERCISE_PROGRESS_REFRESH_EVENT, refreshExerciseProgress);
+  }, [user?.uid]);
+
   const today = getFormattedToday(0);
 
   const updateExerciseLog = (label: string, field: 'weight' | 'reps', value: string) => {
@@ -945,7 +954,7 @@ export const TodayView: React.FC = () => {
 
     return (
       <div data-testid="task-detail-page" className="fixed inset-0 z-[100] overflow-y-auto bg-[#fafbfc] text-slate-900">
-        <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
+        <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-2xl items-center gap-3 px-4 sm:px-5">
             <button
               type="button"
@@ -1440,7 +1449,7 @@ export const TodayView: React.FC = () => {
 
         {exercisePicker ? (
           <div
-            className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-950/35 backdrop-blur-xs sm:items-center sm:p-4"
+            className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-950/35 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:items-center sm:p-4"
             onClick={() => { setExercisePicker(null); setExercisePickerQuery(''); }}
           >
             <section

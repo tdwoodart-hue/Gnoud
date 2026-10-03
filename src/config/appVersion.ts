@@ -5,10 +5,21 @@ export interface AppRelease {
   changes: string[];
 }
 
-export const APP_VERSION = '0.9.34';
-export const APP_UPDATED_AT = '2026-10-03T14:05:00+07:00';
+export const APP_VERSION = '0.9.35';
+export const APP_UPDATED_AT = '2026-10-03T14:35:00+07:00';
 
 export const APP_RELEASES: AppRelease[] = [
+  {
+    version: '0.9.35',
+    updatedAt: '2026-10-03T14:35:00+07:00',
+    title: 'Ổn định dữ liệu và safe-area iPhone',
+    changes: [
+      'Ghi chú trong ngày giữ bản local khi mất mạng, tự retry cloud và không bị snapshot Firestore cũ ghi đè.',
+      'Ghi chú tự chuyển sang ngày mới khi qua 0h hoặc khi web app quay lại foreground.',
+      'Lịch sử kg/reps Gym được merge và đồng bộ theo tài khoản giữa các thiết bị.',
+      'Các màn chi tiết/modal chính tôn trọng safe-area iPhone; status bar đổi theo light/dark mode.',
+    ],
+  },
   {
     version: '0.9.34',
     updatedAt: '2026-10-03T14:05:00+07:00',

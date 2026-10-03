@@ -29,7 +29,7 @@ jobs:
         run: npm run lint
 
       - name: Regression tests
-        run: node --import tsx --test test/mobile-modal-layering.test.ts test/report-service.test.ts test/exercise-service.test.ts test/reader-service.test.ts test/reader-ui.test.ts test/daily-note-prompts.test.ts
+        run: node --import tsx --test test/mobile-modal-layering.test.ts test/report-service.test.ts test/exercise-service.test.ts test/reader-service.test.ts test/reader-ui.test.ts test/daily-note-prompts.test.ts test/daily-notes-sync.test.ts test/account-data-sync.test.ts
 
       - name: Build
         run: npm run build
